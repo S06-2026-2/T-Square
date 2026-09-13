@@ -1,0 +1,197 @@
+// Modelo de dados do sistema de gestao da firma de gesso.
+// Depois de alterar este arquivo rode: npm run db:migrate --workspace apps/api
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Papel {
+  ADMIN
+  OPERADOR
+}
+
+/// Funil da obra: aguardando o cliente -> fechada -> em execucao -> finalizada
+enum StatusObra {
+  ORCAMENTO
+  FECHADA
+  ANDAMENTO
+  CONCLUIDA
+  CANCELADA
+}
+
+enum FormaPagamento {
+  PIX
+  DINHEIRO
+  CARTAO_CREDITO
+  CARTAO_DEBITO
+  BOLETO
+  TRANSFERENCIA
+}
+
+/// CREDITO  = valor que a firma passou a dever ao gesseiro (gerado ao concluir a obra)
+/// VALE     = adiantamento que o gesseiro pegou
+/// PAGAMENTO= acerto final/parcial pago ao gesseiro
+enum TipoLancamento {
+  CREDITO
+  VALE
+  PAGAMENTO
+}
+
+enum TipoMovimentacao {
+  ENTRADA
+  SAIDA
+}
+
+// ---------------------------------------------------------------------------
+// Acesso
+// ---------------------------------------------------------------------------
+
+model Usuario {
+  id        String   @id @default(uuid())
+  nome      String
+  email     String   @unique
+  senhaHash String
+  papel     Papel    @default(OPERADOR)
+  ativo     Boolean  @default(true)
+  criadoEm  DateTime @default(now())
+
+  @@map("usuarios")
+}
+
+// ---------------------------------------------------------------------------
+// Gesseiros
+// ---------------------------------------------------------------------------
+
+model Gesseiro {
+  id       String   @id @default(uuid())
+  nome     String
+  telefone String?
+  chavePix String?
+  ativo    Boolean  @default(true)
+  criadoEm DateTime @default(now())
+
+  alocacoes   ObraGesseiro[]
+  lancamentos Lancamento[]
+
+  @@map("gesseiros")
+}
+
+/// Ligacao entre uma obra e o gesseiro que vai executa-la,
+/// guardando quanto foi combinado de mao de obra para ele naquela obra.
+model ObraGesseiro {
+  id             String   @id @default(uuid())
+  obraId         String
+  gesseiroId     String
+  valorCombinado Decimal  @db.Decimal(12, 2)
+  funcao         String?
+  criadoEm       DateTime @default(now())
+
+  obra     Obra     @relation(fields: [obraId], references: [id], onDelete: Cascade)
+  gesseiro Gesseiro @relation(fields: [gesseiroId], references: [id])
+
+  @@unique([obraId, gesseiroId])
+  @@map("obra_gesseiros")
+}
+
+/// Extrato financeiro do gesseiro.
+/// saldo a receber = soma(CREDITO) - soma(VALE) - soma(PAGAMENTO)
+model Lancamento {
+  id         String         @id @default(uuid())
+  gesseiroId String
+  obraId     String?
+  tipo       TipoLancamento
+  valor      Decimal        @db.Decimal(12, 2)
+  descricao  String?
+  criadoEm   DateTime       @default(now())
+
+  gesseiro Gesseiro @relation(fields: [gesseiroId], references: [id], onDelete: Cascade)
+  obra     Obra?    @relation(fields: [obraId], references: [id])
+
+  @@index([gesseiroId])
+  @@map("lancamentos")
+}
+
+// ---------------------------------------------------------------------------
+// Obras
+// ---------------------------------------------------------------------------
+
+model Obra {
+  id              String     @id @default(uuid())
+  titulo          String
+  descricao       String?
+  clienteNome     String
+  clienteTelefone String?
+  endereco        String?
+  status          StatusObra @default(ORCAMENTO)
+  valorTotal      Decimal    @db.Decimal(12, 2)
+  /// URL/caminho da planta baixa enviada pelo cliente (opcional)
+  plantaBaixaUrl  String?
+  dataInicio      DateTime?
+  dataConclusao   DateTime?
+  criadoEm        DateTime   @default(now())
+  atualizadoEm    DateTime   @updatedAt
+
+  pagamento     Pagamento?
+  gesseiros     ObraGesseiro[]
+  lancamentos   Lancamento[]
+  movimentacoes MovimentacaoEstoque[]
+
+  @@index([status])
+  @@map("obras")
+}
+
+/// Como o cliente vai pagar aquela obra. 1 pagamento por obra.
+model Pagamento {
+  id           String         @id @default(uuid())
+  obraId       String         @unique
+  forma        FormaPagamento
+  parcelas     Int            @default(1)
+  valorEntrada Decimal        @default(0) @db.Decimal(12, 2)
+  observacao   String?
+
+  obra Obra @relation(fields: [obraId], references: [id], onDelete: Cascade)
+
+  @@map("pagamentos")
+}
+
+// ---------------------------------------------------------------------------
+// Estoque
+// ---------------------------------------------------------------------------
+
+model Material {
+  id            String   @id @default(uuid())
+  nome          String   @unique
+  unidade       String // saco, m2, un, kg...
+  saldoAtual    Decimal  @default(0) @db.Decimal(12, 2)
+  estoqueMinimo Decimal  @default(0) @db.Decimal(12, 2)
+  criadoEm      DateTime @default(now())
+
+  movimentacoes MovimentacaoEstoque[]
+
+  @@map("materiais")
+}
+
+model MovimentacaoEstoque {
+  id         String           @id @default(uuid())
+  materialId String
+  obraId     String?
+  tipo       TipoMovimentacao
+  quantidade Decimal          @db.Decimal(12, 2)
+  observacao String?
+  criadoEm   DateTime         @default(now())
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  obra     Obra?    @relation(fields: [obraId], references: [id])
+
+  @@index([materialId])
+  @@map("movimentacoes_estoque")
+}
