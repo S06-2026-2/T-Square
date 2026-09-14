@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, NotImplementedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  NotImplementedException,
+} from '@nestjs/common';
 import { TipoLancamento } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,13 +12,13 @@ import { CreateLancamentoDto } from './dto/create-lancamento.dto';
 import { UpdateGesseiroDto } from './dto/update-gesseiro.dto';
 
 /**
- * ESQUELETO. O que ja esta pronto:
- *   - findAll
+ * O que ja esta pronto:
+ *   - findAll, findOne
  *   - extrato / calculo de saldo (contraparte da regra de credito automatico)
+ *   - create, registrarLancamento (vale e pagamento)
  *
- * O que a equipe precisa implementar (veja ObrasService como modelo):
- *   - create, update, remove
- *   - registrarLancamento (vale e pagamento)
+ * O que a equipe ainda precisa implementar (veja ObrasService como modelo):
+ *   - update, remove
  */
 @Injectable()
 export class GesseirosService {
@@ -69,12 +74,39 @@ export class GesseirosService {
     };
   }
 
-  // --------------------------------------------------------------------- TODO
-
-  async create(_dto: CreateGesseiroDto) {
-    // TODO(equipe): this.prisma.gesseiro.create({ data: _dto })
-    throw new NotImplementedException('create ainda nao implementado');
+  async create(dto: CreateGesseiroDto) {
+    return this.prisma.gesseiro.create({ data: dto });
   }
+
+  /**
+   * Registra um vale (adiantamento) ou pagamento para o gesseiro.
+   * CREDITO nunca pode ser criado por aqui — so nasce automaticamente em
+   * ObrasService.concluir(), quando a obra e finalizada.
+   */
+  async registrarLancamento(gesseiroId: string, dto: CreateLancamentoDto) {
+    if (dto.tipo === TipoLancamento.CREDITO) {
+      throw new BadRequestException(
+        'CREDITO e gerado automaticamente pela conclusao da obra, nao pode ser criado manualmente',
+      );
+    }
+
+    if (dto.valor <= 0) {
+      throw new BadRequestException('valor deve ser maior que zero');
+    }
+
+    await this.findOne(gesseiroId);
+
+    if (dto.obraId) {
+      const obra = await this.prisma.obra.findUnique({ where: { id: dto.obraId } });
+      if (!obra) {
+        throw new NotFoundException(`Obra ${dto.obraId} nao encontrada`);
+      }
+    }
+
+    return this.prisma.lancamento.create({ data: { gesseiroId, ...dto } });
+  }
+
+  // --------------------------------------------------------------------- TODO
 
   async update(_id: string, _dto: UpdateGesseiroDto) {
     // TODO(equipe): validar existencia com findOne e depois prisma.gesseiro.update
@@ -84,11 +116,5 @@ export class GesseirosService {
   async remove(_id: string) {
     // TODO(equipe): preferir desativar (ativo = false) a apagar, por causa do historico
     throw new NotImplementedException('remove ainda nao implementado');
-  }
-
-  async registrarLancamento(_gesseiroId: string, _dto: CreateLancamentoDto) {
-    // TODO(equipe): bloquear a criacao manual de CREDITO — esse tipo so deve nascer
-    // automaticamente em ObrasService.concluir()
-    throw new NotImplementedException('registrarLancamento ainda nao implementado');
   }
 }
