@@ -121,21 +121,6 @@ Todas as rotas exigem `Authorization: Bearer <token>`, exceto as marcadas como p
 
 A documentação completa e testável fica em `/docs` (Swagger).
 
-## Divisão de trabalho sugerida
-
-O módulo **Obras** está implementado ponta a ponta de propósito: use
-`obras.service.ts`, `obras.controller.ts`, os DTOs e `obras.service.spec.ts` como
-modelo. Os outros módulos têm a estrutura pronta e `TODO(equipe)` marcando o que falta.
-
-| Frente                 | O que fazer                                                              |
-| ---------------------- | ------------------------------------------------------------------------ |
-| Gesseiros (API)        | `create`, `update`, `remove` e `registrarLancamento` (vale/pagamento)     |
-| Estoque (API)          | `criarMaterial`, `movimentar` (transação que atualiza saldo) e `abaixoDoMinimo` |
-| Front — formulários    | Cadastro de obra, alocação de gesseiro, vale/pagamento, movimentação      |
-| Front — dashboard      | Consumir `/obras/resumo` e montar a visão geral                          |
-| Upload de planta baixa | Hoje é só uma URL no banco; avaliar upload de arquivo                     |
-| Testes                 | Cobrir os serviços novos seguindo `obras.service.spec.ts`                 |
-
 ## Convenções
 
 - Branches: `main` (estável) e `develop` (integração); features em `feat/<nome>`.
