@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  api:
+    name: API (lint, test, build)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gesso
+          POSTGRES_PASSWORD: gesso
+          POSTGRES_DB: gesso
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gesso -d gesso"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://gesso:gesso@localhost:5432/gesso?schema=public
+      JWT_SECRET: ci-test-secret
+      JWT_EXPIRES_IN: 7d
+      PORT: 3000
+      CORS_ORIGIN: http://localhost:5173
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Gerar Prisma Client
+        run: npm run prisma:generate --workspace apps/api
+
+      - name: Aplicar migrations (prisma migrate deploy)
+        run: npm run db:deploy --workspace apps/api
+
+      - name: Lint
+        run: npm run lint --workspace apps/api --if-present
+
+      - name: Testes
+        run: npm run test --workspace apps/api --if-present
+
+      - name: Build
+        run: npm run build --workspace apps/api --if-present
+
+  web:
+    name: Web (lint, test, build)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint --workspace apps/web --if-present
+
+      - name: Testes
+        run: npm run test --workspace apps/web --if-present
+
+      - name: Build
+        run: npm run build --workspace apps/web --if-present
