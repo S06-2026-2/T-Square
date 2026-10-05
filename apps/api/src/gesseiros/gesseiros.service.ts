@@ -2,23 +2,27 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  NotImplementedException,
 } from '@nestjs/common';
-import { TipoLancamento } from '@prisma/client';
+import { StatusObra, TipoLancamento } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateGesseiroDto } from './dto/create-gesseiro.dto';
 import { CreateLancamentoDto } from './dto/create-lancamento.dto';
 import { UpdateGesseiroDto } from './dto/update-gesseiro.dto';
 
+/** Obra nesses status ainda nao terminou — alocacao aqui bloqueia a desativacao. */
+const STATUS_EM_ABERTO: StatusObra[] = [
+  StatusObra.ORCAMENTO,
+  StatusObra.FECHADA,
+  StatusObra.ANDAMENTO,
+];
+
 /**
  * O que ja esta pronto:
  *   - findAll, findOne
  *   - extrato / calculo de saldo (contraparte da regra de credito automatico)
  *   - create, registrarLancamento (vale e pagamento)
- *
- * O que a equipe ainda precisa implementar (veja ObrasService como modelo):
- *   - update, remove
+ *   - update, remove (soft delete: nunca apaga a linha)
  */
 @Injectable()
 export class GesseirosService {
@@ -108,13 +112,45 @@ export class GesseirosService {
 
   // --------------------------------------------------------------------- TODO
 
-  async update(_id: string, _dto: UpdateGesseiroDto) {
-    // TODO(equipe): validar existencia com findOne e depois prisma.gesseiro.update
-    throw new NotImplementedException('update ainda nao implementado');
+  async update(id: string, dto: UpdateGesseiroDto) {
+    if (Object.keys(dto).length === 0) {
+      throw new BadRequestException('Nenhum dado fornecido para atualização');
+    }
+
+    await this.findOne(id);
+
+    return this.prisma.gesseiro.update({
+      where: { id },
+      data: dto
+    });
   }
 
-  async remove(_id: string) {
-    // TODO(equipe): preferir desativar (ativo = false) a apagar, por causa do historico
-    throw new NotImplementedException('remove ainda nao implementado');
+  async remove(id: string) {
+    const gesseiro = await this.findOne(id);
+
+    // Separa o cadastro das listas que vieram pelo include, para que os dois
+    // caminhos de sucesso devolvam exatamente o mesmo formato.
+    const { alocacoes, lancamentos, ...cadastro } = gesseiro;
+
+    if (!gesseiro.ativo) {
+      return cadastro;
+    }
+
+    const emAberto = alocacoes.filter((alocacao) =>
+      STATUS_EM_ABERTO.includes(alocacao.obra.status),
+    );
+
+    if (emAberto.length > 0) {
+      const titulos = emAberto.map((alocacao) => alocacao.obra.titulo).join(', ');
+      throw new BadRequestException(
+        `Não é possível desativar: o gesseiro ainda está alocado em ${titulos}. ` +
+          'Remova-o dessas obras antes de desativar.',
+      );
+    }
+
+    return this.prisma.gesseiro.update({
+      where: { id },
+      data: { ativo: false },
+    });
   }
 }
