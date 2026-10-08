@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import Icone from '../components/Icone';
 import { api, auth } from '../lib/api';
 import type { LoginResponse } from '../types';
 
@@ -30,38 +31,59 @@ export default function Login() {
 
   return (
     <div className="login">
-      <form className="card login-card" onSubmit={entrar}>
-        <h1>Gesso Manager</h1>
-        <p className="subtitulo">Entre para gerenciar obras, gesseiros e estoque.</p>
+      <section className="login-marca">
+        <span className="marca-icone marca-icone-grande">
+          <Icone nome="marca" tamanho={28} />
+        </span>
+        <h2>Gesso Manager</h2>
+        <p>Obras, equipe e estoque da sua firma de gesso em um so lugar.</p>
+        <ul>
+          <li>
+            <Icone nome="obras" /> Funil de obras do orcamento a conclusao
+          </li>
+          <li>
+            <Icone nome="gesseiros" /> Vales, pagamentos e saldo de cada gesseiro
+          </li>
+          <li>
+            <Icone nome="estoque" /> Materiais com alerta de reposicao
+          </li>
+        </ul>
+      </section>
 
-        <label>
-          E-mail
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="username"
-          />
-        </label>
+      <div className="login-area">
+        <form className="card login-card" onSubmit={entrar}>
+          <h1>Gesso Manager</h1>
+          <p className="subtitulo">Entre para gerenciar obras, gesseiros e estoque.</p>
 
-        <label>
-          Senha
-          <input
-            type="password"
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-            required
-            autoComplete="current-password"
-          />
-        </label>
+          <label>
+            E-mail
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="username"
+            />
+          </label>
 
-        {erro && <p className="erro">{erro}</p>}
+          <label>
+            Senha
+            <input
+              type="password"
+              value={senha}
+              onChange={(e) => setSenha(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+          </label>
 
-        <button type="submit" className="btn" disabled={carregando}>
-          {carregando ? 'Entrando...' : 'Entrar'}
-        </button>
-      </form>
+          {erro && <p className="erro">{erro}</p>}
+
+          <button type="submit" className="btn" disabled={carregando}>
+            {carregando ? 'Entrando...' : 'Entrar'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

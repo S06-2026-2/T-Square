@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react';
 
+import AlocarGesseiroForm from '../components/forms/AlocarGesseiroForm';
+import NovaObraForm from '../components/forms/NovaObraForm';
+import Icone from '../components/Icone';
 import StatusBadge from '../components/StatusBadge';
 import { api } from '../lib/api';
 import { moeda } from '../lib/formato';
-import type { Obra, StatusObra } from '../types';
+import type { Gesseiro, Obra, StatusObra } from '../types';
+
+/** Obra concluida ja gerou os creditos; alocar depois nunca credita o gesseiro (AD-005). */
+const aceitaAlocacao: StatusObra[] = ['ORCAMENTO', 'FECHADA', 'ANDAMENTO'];
 
 const filtros: Array<{ valor: StatusObra | 'TODAS'; rotulo: string }> = [
   { valor: 'TODAS', rotulo: 'Todas' },
@@ -18,6 +24,8 @@ export default function Obras() {
   const [filtro, setFiltro] = useState<StatusObra | 'TODAS'>('TODAS');
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
+  const [gesseiros, setGesseiros] = useState<Gesseiro[]>([]);
+  const [mostrarForm, setMostrarForm] = useState(false);
 
   async function carregar() {
     setCarregando(true);
@@ -37,6 +45,24 @@ export default function Obras() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtro]);
 
+  useEffect(() => {
+    api
+      .get<Gesseiro[]>('/gesseiros')
+      .then(setGesseiros)
+      .catch((e) => setErro(e instanceof Error ? e.message : 'Erro ao carregar gesseiros'));
+  }, []);
+
+  async function obraCriada() {
+    setMostrarForm(false);
+    // A obra nova nasce ORCAMENTO; com outro filtro ativo ela sumiria da lista.
+    // Se o filtro ja e TODAS, o useEffect nao dispara de novo, entao recarrega direto.
+    if (filtro === 'TODAS') {
+      await carregar();
+    } else {
+      setFiltro('TODAS');
+    }
+  }
+
   async function concluir(id: string) {
     try {
       await api.patch(`/obras/${id}/concluir`);
@@ -49,9 +75,21 @@ export default function Obras() {
   return (
     <section>
       <div className="cabecalho-pagina">
-        <h1>Obras</h1>
-        {/* TODO(equipe): botao "Nova obra" abrindo o formulario de cadastro */}
+        <div>
+          <h1>Obras</h1>
+          <p className="subtitulo-pagina">Acompanhe o funil, do orcamento a conclusao.</p>
+        </div>
+        <button
+          type="button"
+          className={mostrarForm ? 'btn btn-secundario' : 'btn'}
+          onClick={() => setMostrarForm((aberto) => !aberto)}
+        >
+          {!mostrarForm && <Icone nome="mais" />}
+          {mostrarForm ? 'Fechar' : 'Nova obra'}
+        </button>
       </div>
+
+      {mostrarForm && <NovaObraForm gesseiros={gesseiros} onSalvo={obraCriada} />}
 
       <div className="filtros">
         {filtros.map((opcao) => (
@@ -67,11 +105,11 @@ export default function Obras() {
       </div>
 
       {erro && <p className="erro">{erro}</p>}
-      {carregando && <p>Carregando...</p>}
+      {carregando && <p className="carregando">Carregando...</p>}
 
       <div className="grade">
         {obras.map((obra) => (
-          <article key={obra.id} className="card">
+          <article key={obra.id} className="card card-obra" data-status={obra.status}>
             <header className="card-topo">
               <h2>{obra.titulo}</h2>
               <StatusBadge status={obra.status} />
@@ -111,15 +149,33 @@ export default function Obras() {
             )}
 
             {obra.status !== 'CONCLUIDA' && obra.status !== 'CANCELADA' && (
-              <button type="button" className="btn" onClick={() => concluir(obra.id)}>
-                Concluir obra
-              </button>
+              <div className="card-acoes">
+                <button
+                  type="button"
+                  className="btn btn-secundario"
+                  onClick={() => concluir(obra.id)}
+                >
+                  Concluir obra
+                </button>
+              </div>
+            )}
+
+            {aceitaAlocacao.includes(obra.status) && (
+              <details>
+                <summary>Alocar gesseiro</summary>
+                <AlocarGesseiroForm obraId={obra.id} gesseiros={gesseiros} onSalvo={carregar} />
+              </details>
             )}
           </article>
         ))}
       </div>
 
-      {!carregando && obras.length === 0 && <p>Nenhuma obra neste filtro.</p>}
+      {!carregando && obras.length === 0 && (
+        <div className="estado-vazio">
+          <Icone nome="vazio" tamanho={28} />
+          <p>Nenhuma obra neste filtro.</p>
+        </div>
+      )}
     </section>
   );
 }
