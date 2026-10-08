@@ -26,6 +26,22 @@
 - **Date**: 2026-09-14
 - **Status**: active
 
+### AD-004
+- **Decision**: Seletores de gesseiro no front para ações novas (criar obra, alocar) mostram só gesseiros com `ativo=true`, filtrando no cliente a resposta de `GET /gesseiros`.
+- **Reason**: Aplica o AD-003 ("listagens ativas filtram `ativo`") sem alterar o backend desta vez — `GesseirosService.findAll` devolve todos e `ObrasService.alocarGesseiro` não checa `ativo`.
+- **Trade-off**: A regra vive só no front; uma chamada direta à API (Swagger) ainda consegue alocar um inativo. Uma feature futura pode mover o filtro/validação para o backend.
+- **Scope**: `front-formularios`.
+- **Date**: 2026-10-07
+- **Status**: active
+
+### AD-005
+- **Decision**: O front não oferece alocação de gesseiro em obra `CONCLUIDA` ou `CANCELADA`.
+- **Reason**: Os créditos são gerados uma única vez em `ObrasService.concluir()`; alocar depois disso nunca credita o gesseiro e deixa o registro enganoso.
+- **Trade-off**: Também só no front — o endpoint `POST /obras/:id/gesseiros` continua aceitando qualquer status.
+- **Scope**: `front-formularios`.
+- **Date**: 2026-10-07
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: nenhuma em execução — apenas a fase Specify rodou para 4 features (`gesseiros-crud-financeiro`, `estoque-materiais-movimentacao`, `front-formularios`, `front-dashboard-resumo`)
@@ -36,3 +52,4 @@
 - **Blockers**: none
 - **Uncommitted files**: `.specs/` inteiro é novo e não commitado (ver nota abaixo sobre commits)
 - **Branch**: main
+- **front-formularios (2026-10-07)**: Fases 1–2 (T1–T6, P1) implementadas e verificadas (Verifier rodada 2: PASS, 28 testes, 13/13 mutantes mortos; ver `validation.md`). Pendentes: Independent Test manual de T6, Fase 3 (Gesseiros) e Fase 4 (Estoque, bloqueada pela EST). Repaginação visual (sidebar) aplicada fora da spec, aguardando aprovação do usuário. Nada commitado.

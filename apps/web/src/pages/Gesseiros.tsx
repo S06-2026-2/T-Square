@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 
+import Icone from '../components/Icone';
 import { api } from '../lib/api';
-import { moeda } from '../lib/formato';
+import { iniciais, moeda } from '../lib/formato';
 import type { Extrato, Gesseiro } from '../types';
 
 export default function Gesseiros() {
@@ -28,26 +29,40 @@ export default function Gesseiros() {
   return (
     <section>
       <div className="cabecalho-pagina">
-        <h1>Gesseiros</h1>
+        <div>
+          <h1>Gesseiros</h1>
+          <p className="subtitulo-pagina">Equipe, vales, pagamentos e saldo a receber de cada um.</p>
+        </div>
         {/* TODO(equipe): botao "Novo gesseiro" e formulario de vale/pagamento */}
       </div>
 
       {erro && <p className="erro">{erro}</p>}
 
       <div className="duas-colunas">
-        <ul className="lista">
+        <ul className="lista lista-pessoas">
           {gesseiros.map((gesseiro) => (
-            <li key={gesseiro.id}>
-              <button type="button" className="btn-texto" onClick={() => abrirExtrato(gesseiro.id)}>
-                {gesseiro.nome}
-              </button>
-              <span className="secundario">{gesseiro.telefone ?? 'sem telefone'}</span>
+            <li
+              key={gesseiro.id}
+              className={extrato?.gesseiro.id === gesseiro.id ? 'selecionado' : undefined}
+            >
+              <span className="avatar">{iniciais(gesseiro.nome)}</span>
+              <span className="pessoa">
+                <button type="button" className="btn-texto" onClick={() => abrirExtrato(gesseiro.id)}>
+                  {gesseiro.nome}
+                </button>
+                <span className="secundario">{gesseiro.telefone ?? 'sem telefone'}</span>
+              </span>
             </li>
           ))}
         </ul>
 
         <div className="card">
-          {!extrato && <p>Selecione um gesseiro para ver vale, haver e saldo.</p>}
+          {!extrato && (
+            <div className="estado-vazio">
+              <Icone nome="gesseiros" tamanho={28} />
+              <p>Selecione um gesseiro para ver vale, haver e saldo.</p>
+            </div>
+          )}
 
           {extrato && (
             <>

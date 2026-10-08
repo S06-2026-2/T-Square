@@ -3,9 +3,10 @@
 ## Problem Statement
 
 As três telas do front (Obras, Gesseiros, Estoque) hoje só **leem** dados da API — não existe
-nenhum formulário. Mesmo os endpoints já prontos (`POST /obras`, `POST /obras/:id/gesseiros`) não
-têm como ser chamados pela UI. Sem formulários, o time só consegue popular dados via seed/Swagger,
-o que não é utilizável no dia a dia da firma.
+nenhum formulário. Mesmo os endpoints já prontos (`POST /obras`, `POST /obras/:id/gesseiros`,
+`POST /gesseiros`, `POST /gesseiros/:id/lancamentos`) não têm como ser chamados pela UI. Sem
+formulários, o time só consegue popular dados via seed/Swagger, o que não é utilizável no dia a dia
+da firma.
 
 ## Goals
 
@@ -14,14 +15,27 @@ o que não é utilizável no dia a dia da firma.
 - [ ] Operador cadastra gesseiro e registra vale/pagamento pela UI
 - [ ] Operador cadastra material e registra entrada/saída de estoque pela UI
 
+## Dependências
+
+| Spec / módulo | Situação (2026-10-07) | Stories afetadas |
+| --- | --- | --- |
+| `obras` (`POST /obras`, `POST /obras/:id/gesseiros`) | Pronto no backend | P1 (FRM-01..05) — liberadas |
+| `gesseiros-crud-financeiro` | Implementada e verificada (GES-01..11) | P2 Gesseiros (FRM-06, FRM-07) — liberadas |
+| `estoque-materiais-movimentacao` | **Não implementada** (`EstoqueService.criarMaterial`/`movimentar` lançam `NotImplementedException`) | P2 Estoque (FRM-08, FRM-09) — **bloqueadas** até o backend existir |
+| `front-dashboard-resumo` | Independente | Nenhuma — só compartilha `App.tsx`/`Layout.tsx`, que esta spec não altera |
+
 ## Out of Scope
 
 | Feature | Reason |
 | --- | --- |
-| Upload de arquivo de planta baixa | Decisão de projeto: continua sendo um campo de URL |
-| Editar obra já criada (além do fluxo de concluir já existente) | Não pedido; `UpdateObraDto`/`PATCH /obras/:id` já existe no backend mas não faz parte deste formulário |
+| Upload de arquivo de planta baixa | AD-001: continua sendo um campo de URL |
+| Editar obra já criada (além do fluxo de concluir já existente) | Não pedido; `PATCH /obras/:id` existe no backend mas não faz parte deste formulário |
 | Campo de data de início na criação de obra | `CreateObraDto` atual não aceita `dataInicio` — fora do escopo desta spec alterar o DTO |
 | Máscara de moeda formatada (R$) nos inputs de valor | Inputs numéricos simples (`type="number"`); formatação BRL já existe só para exibição, via `moeda()` |
+| Desalocar gesseiro de uma obra (`DELETE /obras/:id/gesseiros/:gesseiroId`) | Não pedido nesta spec; fica para uma spec futura. Consequência conhecida: o caminho de "remover da obra antes de desativar" (GES-11) continua só via Swagger |
+| Editar / desativar gesseiro pela UI (`PATCH`/`DELETE /gesseiros/:id`) | Backend pronto (GES-07/08), mas a UI fica para uma spec futura |
+| Vincular obra a um vale/pagamento (`obraId` em `CreateLancamentoDto`) | Vale é adiantamento geral na maioria dos casos; `descricao` livre cobre a necessidade agora |
+| Redirecionar automaticamente para `/login` ao receber 401 | Mudança no cliente HTTP compartilhado (`lib/api.ts`); comportamento atual (logout + mensagem) é suficiente — ver Edge Cases |
 
 ---
 
@@ -29,13 +43,20 @@ o que não é utilizável no dia a dia da firma.
 
 | Assumption / decision | Chosen default | Rationale | Confirmed? |
 | --- | --- | --- | --- |
-| Gerência de estado dos formulários | `useState` local por página/formulário, sem Context/Redux | Consistente com o padrão já usado em `Obras.tsx`/`Gesseiros.tsx`/`Estoque.tsx` | y |
+| Gerência de estado dos formulários | `useState` local por formulário, sem Context/Redux nem biblioteca de formulário | Consistente com `Obras.tsx`/`Gesseiros.tsx`/`Estoque.tsx`; `apps/web` não tem dependências além de React/Router | y |
 | Pós-submit bem-sucedido | Recarrega a lista (re-fetch) em vez de atualização otimista local | Mesmo padrão já usado em `concluir()` (`Obras.tsx`) | y |
-| Fonte de verdade da validação | Client-side é best-effort (evita submit obviamente inválido); erros 400 da API são exibidos no mesmo padrão `erro` já usado nas páginas | Evita duplicar toda a lógica de validação do `class-validator` no front | y |
-| Status da obra no formulário de criação | Não aparece como campo — toda obra nasce `ORCAMENTO` (default do DTO) | Mudança de status já é feita pelos fluxos existentes (filtro do funil, botão "Concluir obra") | y |
-| Alocação de gesseiros na criação da obra | Opcional — o formulário de nova obra permite adicionar 0+ gesseiros já na criação, reaproveitando `gesseiros` do `CreateObraDto`; também dá pra alocar depois via formulário de alocação separado | `POST /obras/:id/gesseiros` já existe como upsert, então os dois caminhos coexistem sem conflito | y |
-| Opções de `tipo` no formulário de vale/pagamento | Select mostra só `VALE` e `PAGAMENTO` — nunca `CREDITO` como opção | Espelha a regra de negócio de `gesseiros-crud-financeiro` (CREDITO só nasce automático); a UI não deve nem oferecer a opção inválida | y |
-| Dependência das specs de backend | As stories de Gesseiros/Estoque desta spec (P2) dependem de `gesseiros-crud-financeiro` e `estoque-materiais-movimentacao` estarem implementadas — a spec já pode ser escrita e revisada agora, mas a execução delas espera esse backend existir | Formulário sem endpoint funcional não é demonstrável | y |
+| Fonte de verdade da validação | Client-side é best-effort (`required`, `min`, `minLength` do HTML5); erros 400/404/409 da API são exibidos no padrão `erro` já usado nas páginas | Evita duplicar toda a lógica de validação do `class-validator` no front | y |
+| Formato numérico do corpo | Todo campo numérico vai como `number` JSON (via `Number()`), e campo numérico **opcional vazio é omitido** do corpo | `ValidationPipe` usa `transform` sem `enableImplicitConversion`: string em campo `@IsNumber()` vira 400; `""` em opcional também | y |
+| Campos extras no corpo | O corpo enviado contém só campos do DTO (nenhum id/chave interna de UI) | `ValidationPipe` usa `forbidNonWhitelisted: true` — campo desconhecido vira 400 | y |
+| Status da obra no formulário de criação | Não aparece como campo — toda obra nasce `ORCAMENTO` (default do DTO) | Mudança de status já é feita pelos fluxos existentes | y |
+| Obra recém-criada com filtro ativo | Após criar, o filtro volta para "Todas" antes do re-fetch | Com filtro "Fechadas" ativo, a obra nova (`ORCAMENTO`) sumiria e o operador acharia que falhou | y |
+| Alocação de gesseiros na criação da obra | Opcional — 0+ linhas reaproveitando `gesseiros` do `CreateObraDto`; também dá pra alocar depois via formulário separado | `POST /obras/:id/gesseiros` já é upsert, então os dois caminhos coexistem | y |
+| Gesseiro repetido nas linhas da nova obra | O seletor de cada linha não oferece gesseiro já escolhido em outra linha | A unique `obraId_gesseiroId` faria o Prisma lançar P2002, que chega ao usuário como 500 | y |
+| Gesseiros inativos nos seletores | Seletores de gesseiro (nova obra, alocação) listam só `ativo=true`, filtrando no cliente | AD-003: listagens "ativas" filtram `ativo`; `GET /gesseiros` devolve todos e o backend aceita alocar inativo. Ver AD-004 | y |
+| Onde fica o formulário de alocação | Inline no card da obra em `Obras.tsx` (não existe tela de detalhe) | Evita criar rota nova só para isso | y |
+| Alocação em obra finalizada | Formulário de alocação só aparece em obras `ORCAMENTO`, `FECHADA` ou `ANDAMENTO` | Obra `CONCLUIDA` já gerou os créditos; alocar depois nunca credita o gesseiro. Ver AD-005 | y |
+| Opções de `tipo` no formulário de vale/pagamento | Select mostra só `VALE` e `PAGAMENTO` — nunca `CREDITO` | Espelha GES-04 (CREDITO só nasce automático) | y |
+| Testes do front | Cada formulário tem teste de componente (Jest + Testing Library), com `lib/api` mockado, cobrindo os ACs e edge cases desta spec | Padrão de `StatusBadge.test.tsx`; testes não dependem do backend estar no ar | y |
 
 **Open questions:** none - all resolved or logged above.
 
@@ -53,11 +74,12 @@ do Swagger.
 
 **Acceptance Criteria**:
 
-1. WHEN o operador preenche `titulo`, `clienteNome` e `valorTotal` (campos obrigatórios do `CreateObraDto`) e confirma THEN the system SHALL chamar `POST /obras`, exibir a nova obra na lista e limpar o formulário.
-2. WHEN o operador seleciona uma forma de pagamento (`PIX`, `DINHEIRO`, `CARTAO_CREDITO`, `CARTAO_DEBITO`, `BOLETO` ou `TRANSFERENCIA`) e informa parcelas/valor de entrada THEN the system SHALL enviar esses dados aninhados em `pagamento` no corpo da requisição.
-3. WHERE o cliente disponibilizou uma planta baixa THEN the system SHALL aceitar uma URL no campo `plantaBaixaUrl` e enviá-la junto com a criação da obra.
-4. WHERE o operador já sabe quais gesseiros vão trabalhar na obra THEN the system SHALL permitir adicionar 0 ou mais linhas de gesseiro (seleção do gesseiro + valor combinado + função opcional) enviadas em `gesseiros` no corpo da requisição.
-5. IF a API retornar 400 (ex.: `titulo` com menos de 3 caracteres) THEN the system SHALL exibir a mensagem de erro sem fechar o formulário nem perder os dados já preenchidos.
+1. WHEN o operador preenche `titulo`, `clienteNome` e `valorTotal` (obrigatórios do `CreateObraDto`) e confirma THEN the system SHALL chamar `POST /obras`, voltar o filtro para "Todas", recarregar a lista (a obra nova aparece com status `ORCAMENTO`) e limpar o formulário.
+2. WHERE o operador informa os campos opcionais `descricao`, `clienteTelefone` ou `endereco` THEN the system SHALL enviá-los no corpo; WHEN algum deles está vazio THEN the system SHALL omiti-lo.
+3. WHEN o operador seleciona uma forma de pagamento (`PIX`, `DINHEIRO`, `CARTAO_CREDITO`, `CARTAO_DEBITO`, `BOLETO` ou `TRANSFERENCIA`) THEN the system SHALL enviar `pagamento: { forma, parcelas?, valorEntrada? }`; WHEN nenhuma forma é selecionada THEN the system SHALL omitir `pagamento` do corpo.
+4. WHERE o cliente disponibilizou uma planta baixa THEN the system SHALL aceitar uma URL no campo `plantaBaixaUrl` (input `type="url"`) e enviá-la junto com a criação da obra.
+5. WHERE o operador já sabe quais gesseiros vão trabalhar na obra THEN the system SHALL permitir adicionar e remover 0 ou mais linhas (gesseiro ativo + `valorCombinado` + `funcao` opcional), enviadas em `gesseiros`, sem oferecer numa linha um gesseiro já escolhido em outra.
+6. IF a API retornar erro (ex.: 400 por `titulo` com menos de 3 caracteres) THEN the system SHALL exibir a mensagem da API sem fechar o formulário nem perder os dados preenchidos.
 
 **Independent Test**: preencher o formulário com dados válidos, confirmar, ver a obra nova aparecer na lista de `Obras.tsx` com status `ORCAMENTO`.
 
@@ -68,15 +90,16 @@ do Swagger.
 **User Story**: Como operador, eu quero alocar um gesseiro numa obra que já existe, para que o
 combinado de mão de obra fique registrado antes da obra ser concluída.
 
-**Why P1**: Necessário mesmo depois da criação da obra — equipe pode mudar ao longo do tempo, e é pré-requisito para o crédito automático funcionar na conclusão.
+**Why P1**: Equipe pode mudar ao longo do tempo, e a alocação é pré-requisito para o crédito automático funcionar na conclusão.
 
 **Acceptance Criteria**:
 
-1. WHEN o operador seleciona um gesseiro existente, informa `valorCombinado` e confirma na tela de detalhe/card de uma obra THEN the system SHALL chamar `POST /obras/:id/gesseiros` e mostrar o gesseiro na lista de alocados daquela obra.
-2. WHEN o gesseiro selecionado já está alocado naquela obra THEN the system SHALL atualizar o `valorCombinado`/`funcao` existentes em vez de duplicar a alocação (reflete o `upsert` já implementado no backend).
-3. IF a API retornar 404 (gesseiro inexistente) THEN the system SHALL exibir a mensagem de erro sem alterar a lista local.
+1. WHEN o operador, no card de uma obra, seleciona um gesseiro ativo, informa `valorCombinado` (e opcionalmente `funcao`) e confirma THEN the system SHALL chamar `POST /obras/:id/gesseiros` e recarregar a lista, mostrando o gesseiro entre os alocados daquela obra.
+2. WHEN o gesseiro selecionado já está alocado naquela obra THEN the system SHALL atualizar o `valorCombinado`/`funcao` existentes em vez de duplicar a alocação (reflete o `upsert` do backend).
+3. WHILE a obra está `CONCLUIDA` ou `CANCELADA` the system SHALL não exibir o formulário de alocação naquele card.
+4. IF a API retornar erro (ex.: 404 de obra ou gesseiro inexistente) THEN the system SHALL exibir a mensagem sem alterar a lista nem perder os dados do formulário.
 
-**Independent Test**: alocar um gesseiro numa obra `ORCAMENTO`; ele aparece na lista `gesseiros` daquele card com o valor combinado exibido.
+**Independent Test**: alocar um gesseiro numa obra `ORCAMENTO`; ele aparece na lista de gesseiros daquele card com o valor combinado exibido.
 
 ---
 
@@ -84,12 +107,13 @@ combinado de mão de obra fique registrado antes da obra ser concluída.
 
 **User Story**: Como operador, eu quero cadastrar um gesseiro pela UI, para que eu não precise usar o Swagger para popular a equipe.
 
-**Why P2**: Depende de `gesseiros-crud-financeiro` estar implementada; não bloqueia o fluxo de obras.
+**Why P2**: Não bloqueia o fluxo de obras (que pode usar gesseiros do seed).
 
 **Acceptance Criteria**:
 
-1. WHEN o operador preenche `nome` (mínimo 3 caracteres) e confirma na tela de Gesseiros THEN the system SHALL chamar `POST /gesseiros`, adicionar o gesseiro à lista e limpar o formulário.
-2. WHERE o operador tem telefone/chave Pix do gesseiro THEN the system SHALL aceitá-los como campos opcionais.
+1. WHEN o operador preenche `nome` (mínimo 3 caracteres) e confirma na tela de Gesseiros THEN the system SHALL chamar `POST /gesseiros`, recarregar a lista (o novo gesseiro aparece) e limpar o formulário.
+2. WHERE o operador tem telefone/chave Pix do gesseiro THEN the system SHALL aceitá-los como campos opcionais, omitindo-os do corpo quando vazios.
+3. IF a API retornar erro THEN the system SHALL exibir a mensagem sem perder os dados preenchidos.
 
 **Independent Test**: cadastrar um gesseiro novo pela UI; ele aparece na lista de `Gesseiros.tsx` e fica selecionável para ver o extrato.
 
@@ -99,15 +123,16 @@ combinado de mão de obra fique registrado antes da obra ser concluída.
 
 **User Story**: Como operador, eu quero registrar um vale ou pagamento para o gesseiro selecionado, para que o saldo a receber dele fique correto sem eu mexer direto no banco.
 
-**Why P2**: Depende de `gesseiros-crud-financeiro` estar implementada; é a contraparte de UI da regra financeira central.
+**Why P2**: É a contraparte de UI da regra financeira central (GES-03/04).
 
 **Acceptance Criteria**:
 
-1. WHEN o operador, com um gesseiro selecionado, escolhe `VALE` ou `PAGAMENTO`, informa um `valor > 0` e confirma THEN the system SHALL chamar `POST /gesseiros/:id/lancamentos` e recarregar o extrato exibido.
+1. WHEN o operador, com um gesseiro selecionado (extrato aberto), escolhe `VALE` ou `PAGAMENTO`, informa `valor > 0` (e opcionalmente `descricao`) e confirma THEN the system SHALL chamar `POST /gesseiros/:id/lancamentos` e recarregar o extrato exibido.
 2. The system SHALL oferecer apenas `VALE` e `PAGAMENTO` como opções no seletor de tipo — nunca `CREDITO`.
-3. IF a API retornar 400 (ex.: valor inválido) THEN the system SHALL exibir a mensagem de erro sem fechar o formulário.
+3. WHILE nenhum gesseiro está selecionado the system SHALL não exibir o formulário de lançamento.
+4. IF a API retornar erro (ex.: 400 por valor inválido) THEN the system SHALL exibir a mensagem sem fechar o formulário nem perder os dados.
 
-**Independent Test**: registrar um `VALE` de R$100 para um gesseiro com saldo a receber de R$100; após o submit, o extrato recarregado mostra `saldoAReceber: 0`.
+**Independent Test**: registrar um `VALE` de R$100 para um gesseiro com saldo a receber de R$100; após o submit, o extrato recarregado mostra saldo a receber R$ 0,00.
 
 ---
 
@@ -115,14 +140,15 @@ combinado de mão de obra fique registrado antes da obra ser concluída.
 
 **User Story**: Como operador, eu quero cadastrar um material novo pela UI, para que ele possa ser movimentado sem passar pelo Swagger.
 
-**Why P2**: Depende de `estoque-materiais-movimentacao` estar implementada; não bloqueia o fluxo de obras/gesseiros.
+**Why P2**: **Bloqueada** por `estoque-materiais-movimentacao` (EST-01/02); não bloqueia o fluxo de obras/gesseiros.
 
 **Acceptance Criteria**:
 
-1. WHEN o operador preenche `nome`, `unidade` e opcionalmente `estoqueMinimo` e confirma na tela de Estoque THEN the system SHALL chamar `POST /estoque/materiais`, adicionar o material à tabela e limpar o formulário.
-2. IF a API retornar 409 (nome duplicado) THEN the system SHALL exibir a mensagem de erro sem fechar o formulário.
+1. WHEN o operador preenche `nome` (mínimo 2 caracteres), `unidade` e opcionalmente `estoqueMinimo` e confirma na tela de Estoque THEN the system SHALL chamar `POST /estoque/materiais`, recarregar a tabela e limpar o formulário.
+2. WHEN `estoqueMinimo` está vazio THEN the system SHALL omiti-lo do corpo (o backend usa 0).
+3. IF a API retornar 409 (nome duplicado) ou outro erro THEN the system SHALL exibir a mensagem sem fechar o formulário nem perder os dados.
 
-**Independent Test**: cadastrar um material novo; ele aparece na tabela de `Estoque.tsx` com `saldoAtual: 0`.
+**Independent Test**: cadastrar um material novo; ele aparece na tabela de `Estoque.tsx` com saldo 0.
 
 ---
 
@@ -130,23 +156,24 @@ combinado de mão de obra fique registrado antes da obra ser concluída.
 
 **User Story**: Como operador, eu quero registrar uma entrada ou saída de material, para que o saldo em estoque fique correto e a obra que consumiu o material fique rastreada.
 
-**Why P2**: Depende de `estoque-materiais-movimentacao` estar implementada; completa o ciclo do módulo de estoque.
+**Why P2**: **Bloqueada** por `estoque-materiais-movimentacao` (EST-03..07); completa o ciclo do módulo de estoque.
 
 **Acceptance Criteria**:
 
-1. WHEN o operador seleciona um material, escolhe `ENTRADA` ou `SAIDA`, informa `quantidade > 0` e confirma THEN the system SHALL chamar `POST /estoque/movimentacoes` e recarregar a tabela de materiais com o novo `saldoAtual`.
-2. WHERE a movimentação é uma `SAIDA` ligada a uma obra THEN the system SHALL permitir selecionar opcionalmente a obra que consumiu o material.
-3. IF a API retornar 400 (saldo insuficiente para `SAIDA`) THEN the system SHALL exibir a mensagem de erro sem fechar o formulário nem alterar a tabela.
+1. WHEN o operador seleciona um material, escolhe `ENTRADA` ou `SAIDA`, informa `quantidade > 0` (e opcionalmente `observacao`) e confirma THEN the system SHALL chamar `POST /estoque/movimentacoes` e recarregar a tabela de materiais com o novo saldo.
+2. WHERE a movimentação é uma `SAIDA` THEN the system SHALL permitir selecionar opcionalmente a obra que consumiu o material (enviada como `obraId`); WHEN o tipo é `ENTRADA` THEN the system SHALL não enviar `obraId`.
+3. IF a API retornar 400 (ex.: saldo insuficiente para `SAIDA`) ou outro erro THEN the system SHALL exibir a mensagem sem fechar o formulário nem alterar a tabela.
 
-**Independent Test**: registrar uma `SAIDA` dentro do saldo disponível; a tabela recarregada mostra o `saldoAtual` decrementado.
+**Independent Test**: registrar uma `SAIDA` dentro do saldo disponível; a tabela recarregada mostra o saldo decrementado.
 
 ---
 
 ## Edge Cases
 
-- IF qualquer chamada à API retornar 401 THEN the system SHALL usar o comportamento já existente em `lib/api.ts` (logout automático + redirecionamento pro login) — nenhum formulário precisa tratar isso por conta própria.
-- IF o usuário submeter um formulário com um campo obrigatório vazio THEN the system SHALL bloquear o submit no client antes de chamar a API (validação HTML5 `required` é suficiente).
-- WHILE uma requisição de submit está em andamento the system SHALL desabilitar o botão de confirmar, evitando duplo-submit.
+- IF o usuário submeter um formulário com um campo obrigatório vazio THEN the system SHALL bloquear o submit no client antes de chamar a API (`required` do HTML5).
+- WHILE uma requisição de submit está em andamento the system SHALL desabilitar o botão de confirmar daquele formulário, evitando duplo-submit.
+- WHEN qualquer formulário monta o corpo da requisição THEN the system SHALL enviar campos numéricos como `number`, omitir opcionais vazios e não incluir nenhum campo fora do DTO.
+- IF qualquer chamada retornar 401 THEN the system SHALL seguir o comportamento existente de `lib/api.ts`: limpa a sessão e exibe "Sessao expirada. Faca login novamente." no `erro` da página; a próxima navegação cai no login via `RotaPrivada`. Nenhum formulário trata 401 por conta própria.
 
 ---
 
@@ -154,25 +181,30 @@ combinado de mão de obra fique registrado antes da obra ser concluída.
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| FRM-01 | P1: Criar nova obra | Design | Pending |
-| FRM-02 | P1: Criar nova obra (pagamento) | Design | Pending |
-| FRM-03 | P1: Criar nova obra (planta baixa) | Design | Pending |
-| FRM-04 | P1: Criar nova obra (equipe inicial) | Design | Pending |
-| FRM-05 | P1: Alocar gesseiro em obra existente | Design | Pending |
-| FRM-06 | P2: Cadastrar gesseiro | Design | Pending |
-| FRM-07 | P2: Registrar vale/pagamento | Design | Pending |
-| FRM-08 | P2: Cadastrar material | Design | Pending |
-| FRM-09 | P2: Registrar movimentação de estoque | Design | Pending |
+| FRM-01 | P1: Criar nova obra (obrigatórios + reset de filtro) | Execute | Verified |
+| FRM-02 | P1: Criar nova obra (pagamento) | Execute | Verified |
+| FRM-03 | P1: Criar nova obra (planta baixa + opcionais) | Execute | Verified |
+| FRM-04 | P1: Criar nova obra (equipe inicial sem duplicata, só ativos) | Execute | Verified |
+| FRM-05 | P1: Alocar gesseiro em obra existente (inclui upsert e bloqueio em obra finalizada) | Execute | Verified |
+| FRM-06 | P2: Cadastrar gesseiro | Tasks | In Tasks |
+| FRM-07 | P2: Registrar vale/pagamento | Tasks | In Tasks |
+| FRM-08 | P2: Cadastrar material (bloqueada por EST) | Tasks | In Tasks |
+| FRM-09 | P2: Registrar movimentação de estoque (bloqueada por EST) | Tasks | In Tasks |
+| FRM-10 | Edge: erro da API preserva os dados do formulário (todos os forms) | Execute | Implementing (Obras verificado; Gesseiros/Estoque pendentes) |
+| FRM-11 | Edge: botão desabilitado durante submit (todos os forms) | Execute | Implementing (Obras verificado; Gesseiros/Estoque pendentes) |
+| FRM-12 | Edge: corpo só com campos do DTO, números como `number`, opcionais vazios omitidos | Execute | Implementing (Obras verificado; Gesseiros/Estoque pendentes) |
 
 **ID format:** `FRM-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 9 total, 0 mapped to tasks, 9 unmapped ⚠️ (Tasks phase ainda não rodou)
+**Coverage:** 12 total, 12 mapped to tasks (T1–T12 em `tasks.md`), 0 unmapped. FRM-08/09 mapeados para a Fase 4, bloqueada pela EST.
 
 ---
 
 ## Success Criteria
 
-- [ ] Um operador consegue criar uma obra, alocar um gesseiro, cadastrar material e registrar vale/movimentação inteiramente pela UI, sem tocar no Swagger
-- [ ] Nenhum formulário perde os dados preenchidos quando a API retorna erro de validação
+- [ ] Um operador consegue criar uma obra, alocar um gesseiro, cadastrar gesseiro e registrar vale inteiramente pela UI, sem tocar no Swagger
+- [ ] Depois que `estoque-materiais-movimentacao` for implementada: cadastrar material e registrar movimentação pela UI
+- [ ] Nenhum formulário perde os dados preenchidos quando a API retorna erro
+- [ ] Nenhum formulário gera 500 por corpo malformado (duplicata, string em campo numérico, campo extra)
