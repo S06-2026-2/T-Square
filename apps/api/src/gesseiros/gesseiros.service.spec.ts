@@ -18,7 +18,7 @@ describe('GesseirosService', () => {
       update: jest.Mock;
       delete: jest.Mock;
     };
-    lancamento: { create: jest.Mock };
+    lancamento: { create: jest.Mock; groupBy: jest.Mock };
     obra: { findUnique: jest.Mock };
   };
 
@@ -30,7 +30,7 @@ describe('GesseirosService', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
-      lancamento: { create: jest.fn() },
+      lancamento: { create: jest.fn(), groupBy: jest.fn() },
       obra: { findUnique: jest.fn() },
     };
 
@@ -172,6 +172,7 @@ describe('GesseirosService', () => {
       });
       expect(resultado.nome).toBe('Joao Ferreira');
       expect(resultado.ativo).toBe(true);
+      expect(resultado.telefone).toBe('(35) 98888-7777');
     });
 
     it('lanca 404 quando o gesseiro nao existe', async () => {
@@ -257,6 +258,113 @@ describe('GesseirosService', () => {
 
       expect(prisma.gesseiro.update).not.toHaveBeenCalled();
       expect(prisma.gesseiro.delete).not.toHaveBeenCalled();
+    });
+
+    it('bloqueia tambem por obra em ORCAMENTO ou FECHADA, nao so ANDAMENTO', async () => {
+      prisma.gesseiro.findUnique.mockResolvedValue({
+        id: 'g-1',
+        nome: 'Joao Ferreira',
+        ativo: true,
+        alocacoes: [
+          { obra: { titulo: 'Sanca Apto 302', status: StatusObra.ORCAMENTO } },
+          { obra: { titulo: 'Forro Loja Centro', status: StatusObra.FECHADA } },
+        ],
+        lancamentos: [],
+      });
+
+      const chamada = service.remove('g-1');
+
+      await expect(chamada).rejects.toBeInstanceOf(BadRequestException);
+      await expect(chamada).rejects.toThrow('Sanca Apto 302');
+      await expect(chamada).rejects.toThrow('Forro Loja Centro');
+
+      expect(prisma.gesseiro.update).not.toHaveBeenCalled();
+    });
+
+    it('nao bloqueia por obra CANCELADA', async () => {
+      prisma.gesseiro.findUnique.mockResolvedValue({
+        id: 'g-1',
+        nome: 'Joao Ferreira',
+        ativo: true,
+        alocacoes: [{ obra: { titulo: 'Obra Cancelada', status: StatusObra.CANCELADA } }],
+        lancamentos: [],
+      });
+      prisma.gesseiro.update.mockResolvedValue({ id: 'g-1', nome: 'Joao Ferreira', ativo: false });
+
+      const resultado = await service.remove('g-1');
+
+      expect(resultado.ativo).toBe(false);
+      expect(prisma.gesseiro.update).toHaveBeenCalledWith({
+        where: { id: 'g-1' },
+        data: { ativo: false },
+      });
+    });
+  });
+
+    // extrato -----------------------------------------------------------------
+
+  describe('extrato', () => {
+    it('calcula creditos, vales, pagamentos e o saldo a receber', async () => {
+      prisma.gesseiro.findUnique.mockResolvedValue({
+        id: 'g-1',
+        nome: 'Joao Ferreira',
+        ativo: true,
+        alocacoes: [],
+        lancamentos: [{ id: 'l-1' }, { id: 'l-2' }],
+      });
+
+      // O Prisma devolve Decimal como string, nao como number — por isso os
+      // valores aqui sao strings. Os tres sao diferentes entre si de proposito.
+      prisma.lancamento.groupBy.mockResolvedValue([
+        { tipo: TipoLancamento.CREDITO, _sum: { valor: '4300.75' } },
+        { tipo: TipoLancamento.VALE, _sum: { valor: '800.25' } },
+        { tipo: TipoLancamento.PAGAMENTO, _sum: { valor: '0.50' } },
+      ]);
+
+      const resultado = await service.extrato('g-1');
+
+      expect(prisma.lancamento.groupBy).toHaveBeenCalledWith({
+        by: ['tipo'],
+        where: { gesseiroId: 'g-1' },
+        _sum: { valor: true },
+      });
+
+      expect(resultado.creditos).toBe(4300.75);
+      expect(resultado.vales).toBe(800.25);
+      expect(resultado.pagamentos).toBe(0.5);
+      expect(resultado.saldoAReceber).toBe(3500);
+      expect(resultado.gesseiro).toEqual({ id: 'g-1', nome: 'Joao Ferreira' });
+      expect(resultado.lancamentos).toHaveLength(2);
+    });
+
+    it('trata como zero o tipo que nao tem nenhum lancamento', async () => {
+      prisma.gesseiro.findUnique.mockResolvedValue({
+        id: 'g-1',
+        nome: 'Joao Ferreira',
+        ativo: true,
+        alocacoes: [],
+        lancamentos: [],
+      });
+
+      // Gesseiro que nunca recebeu pagamento: o groupBy NAO devolve a linha de
+      // PAGAMENTO — nao vem com zero, simplesmente nao vem.
+      prisma.lancamento.groupBy.mockResolvedValue([
+        { tipo: TipoLancamento.CREDITO, _sum: { valor: '2500' } },
+        { tipo: TipoLancamento.VALE, _sum: { valor: '500' } },
+      ]);
+
+      const resultado = await service.extrato('g-1');
+
+      expect(resultado.pagamentos).toBe(0);
+      expect(resultado.saldoAReceber).toBe(2000);
+    });
+
+    it('lanca 404 quando o gesseiro nao existe, sem consultar os lancamentos', async () => {
+    prisma.gesseiro.findUnique.mockResolvedValue(null);
+
+    await expect(service.extrato('nao-existe')).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(prisma.lancamento.groupBy).not.toHaveBeenCalled();
     });
   });
 });
