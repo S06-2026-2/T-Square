@@ -1,4 +1,186 @@
-# Front — Formulários Validation (Fases 1–2: T1–T6) — Rodada 2
+# Front — Formulários Validation
+
+> Relatórios em ordem do mais recente para o mais antigo. A seção das Fases 1–2 (rodada 2) fica abaixo como histórico, sem alteração.
+
+---
+
+## Fases 3–4 (T7–T12) — Rodada 1
+
+**Verdict**: PASS ✅
+
+**Date**: 2026-10-19
+**Spec**: `.claude/specs/features/front-formularios/spec.md`
+**Diff range**: working tree vs `HEAD` (`0514661`), sem commits da feature. Superfície das Fases 3–4 (todas untracked, exceto as páginas, que são `M`): `components/forms/NovoGesseiroForm.tsx` + `.test.tsx`, `components/forms/LancamentoForm.tsx` + `.test.tsx`, `components/forms/NovoMaterialForm.tsx` + `.test.tsx`, `components/forms/MovimentacaoForm.tsx` + `.test.tsx`, `pages/Gesseiros.tsx` + `Gesseiros.test.tsx`, `pages/Estoque.tsx` + `Estoque.test.tsx`. Os outros arquivos alterados no tree (`App.tsx`, `Dashboard*`, `lib/status*`, `Login*`, `Layout.tsx`, `Icone.tsx`, `types.ts`) são da feature `front-dashboard-resumo` e ficaram fora.
+**Escopo**: FRM-06, FRM-07, FRM-08, FRM-09; FRM-10/11/12 e os edge cases para os 4 forms novos. DTOs de referência: `apps/api/src/gesseiros/dto/create-gesseiro.dto.ts`, `create-lancamento.dto.ts`, `apps/api/src/estoque/dto/create-material.dto.ts`, `create-movimentacao.dto.ts`; `apps/api/src/main.ts:18-22` confirma `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })`.
+**Verifier**: sub-agente independente (author ≠ verifier)
+
+> Paths abaixo são relativos a `apps/web/src/`, salvo indicação.
+
+### Task Completion
+
+| Task | Status | Notes |
+| ---- | ------ | ----- |
+| T7 NovoGesseiroForm | ✅ Done | `required` + `minLength={3}` (`NovoGesseiroForm.tsx:42`); corpo via `semVazios`/`textoOpcional` (`:23-27`) |
+| T8 LancamentoForm | ✅ Done | só `VALE`/`PAGAMENTO` (`LancamentoForm.tsx:13-16`); `valor: numero(valor)` (`:32`) |
+| T9 Gesseiros.tsx | ✅ Done (automatizado) | `carregar()` extraído (`:16-22`), re-fetch no cadastro (`:28-31`), `LancamentoForm` só dentro de `extrato &&` (`:89-117`). TODO do cabeçalho removido. Manual FRM-06/07 `[ ]` |
+| T10 NovoMaterialForm | ✅ Done | `minLength={2}` (`:42`), `unidade` `required` (`:50`), `numeroOpcional(estoqueMinimo)` (`:26`) |
+| T11 MovimentacaoForm | ✅ Done | obra só em `SAIDA` (`:83`), `obraId` limpo ao voltar para `ENTRADA` (`:27`) e guardado no corpo (`:39`) |
+| T12 Estoque.tsx | ✅ Done (automatizado) | `carregar()` (`:17-23`), `GET /obras` (`:27-30`), `salvo()` recarrega (`:37-40`). TODO removido. Manual FRM-08/09 `[ ]` |
+
+Os itens manuais (Independent Tests de FRM-06..09 com `docker compose up`) estão pendentes de UAT humano. Isso não é FAIL: os resultados visíveis desses testes (gesseiro novo na lista, saldo do extrato, material com saldo 0, saldo decrementado) estão asseridos nos testes de página.
+
+### Spec-Anchored Acceptance Criteria
+
+#### P2: Cadastrar gesseiro (FRM-06)
+
+| Criterion | Spec-defined outcome | `file:line` + assertion | Result |
+| --- | --- | --- | --- |
+| AC1: `nome` mínimo 3 | `required`, `minLength=3` | `components/forms/NovoGesseiroForm.test.tsx:26` - `toBeRequired()`; `:27` - `toHaveAttribute('minLength', '3')` | ✅ |
+| AC1: chama `POST /gesseiros` | corpo exato, `nome` trimado | `NovoGesseiroForm.test.tsx:43-47` - `expect(post).toHaveBeenCalledWith('/gesseiros', { nome: 'Joao Ferreira', telefone: '(35) 99999-0001', chavePix: 'joao@pix.com' })` | ✅ |
+| AC1: limpa o formulário | 3 inputs vazios | `NovoGesseiroForm.test.tsx:48-50` - `toHaveValue('')` ×3 | ✅ |
+| AC1: recarrega a lista e o novo aparece | 2º `GET /gesseiros` e botão do novo gesseiro na lista | `pages/Gesseiros.test.tsx:48` - `findByRole('button', { name: 'Joao Ferreira' })`; `:49` - `expect(chamadas('/gesseiros')).toBe(2)` | ✅ |
+| AC2: telefone/Pix opcionais, omitidos quando vazios | não `required`; corpo `{ nome }` | `NovoGesseiroForm.test.tsx:28-29` - `not.toBeRequired()`; `:62` - `expect(post.mock.calls[0][1]).toEqual({ nome: 'Joao Ferreira' })` (telefone `'   '` omitido) | ✅ |
+| AC3: erro exibido sem perder dados | mensagem com classe `erro`, `onSalvo` não chamado, campos intactos | `NovoGesseiroForm.test.tsx:74` - `findByText(...)).toHaveClass('erro')`; `:75` - `onSalvo).not.toHaveBeenCalled()`; `:76-77` - `toHaveValue('Joao Ferreira')`, `toHaveValue('(35) 99999-0001')` | ✅ |
+
+#### P2: Registrar vale ou pagamento (FRM-07)
+
+| Criterion | Spec-defined outcome | `file:line` + assertion | Result |
+| --- | --- | --- | --- |
+| AC1: chama `POST /gesseiros/:id/lancamentos` | `{ tipo, valor: number, descricao? }` | `components/forms/LancamentoForm.test.tsx:51-55` - `toHaveBeenCalledWith('/gesseiros/g1/lancamentos', { tipo: 'PAGAMENTO', valor: 100, descricao: 'Acerto da semana' })`; `:66` - `toEqual({ tipo: 'VALE', valor: 50.5 })` | ✅ |
+| AC1: `valor > 0` | `min=0.01`, `required` | `LancamentoForm.test.tsx:35` - `toBeRequired()`; `:36` - `toHaveAttribute('min', '0.01')` | ✅ |
+| AC1: recarrega o extrato exibido | 2º `GET /gesseiros/g-ana/extrato` e saldo novo na tela | `pages/Gesseiros.test.tsx:83` - `expect(chamadas('/gesseiros/g-ana/extrato')).toBe(2)`; `:86` - `nextElementSibling).toHaveTextContent(/R\$\s0,00/)` (antes `R$ 100,00`, `:78`) — espelha o Independent Test | ✅ |
+| AC2: só `VALE` e `PAGAMENTO`, nunca `CREDITO` | opções exatas | `LancamentoForm.test.tsx:29` - `expect(valores).toEqual(['VALE', 'PAGAMENTO'])` | ✅ |
+| AC3: sem gesseiro selecionado, sem formulário | `Tipo` e botão `Registrar` ausentes; aparecem após abrir extrato | `pages/Gesseiros.test.tsx:60-61` - `queryByLabelText('Tipo')).not.toBeInTheDocument()`, `queryByRole('button', { name: 'Registrar' })).not.toBeInTheDocument()`; `:65` - `findByLabelText('Tipo')` | ✅ |
+| AC4: erro sem fechar nem perder dados | mensagem `erro`, `onSalvo` não chamado, tipo/valor/descrição intactos | `LancamentoForm.test.tsx:79-83` - `toHaveClass('erro')`, `not.toHaveBeenCalled()`, `toHaveValue('PAGAMENTO')`, `toHaveValue(100)`, `toHaveValue('Acerto')` | ✅ |
+
+#### P2: Cadastrar material (FRM-08)
+
+| Criterion | Spec-defined outcome | `file:line` + assertion | Result |
+| --- | --- | --- | --- |
+| AC1: `nome` mínimo 2, `unidade` obrigatória, `estoqueMinimo` opcional | atributos | `components/forms/NovoMaterialForm.test.tsx:26-29` - `toBeRequired()`, `toHaveAttribute('minLength', '2')`, `Unidade toBeRequired()`, `Estoque minimo not.toBeRequired()` | ✅ |
+| AC1: chama `POST /estoque/materiais` | `{ nome, unidade, estoqueMinimo: number }` | `NovoMaterialForm.test.tsx:43-47` - `toHaveBeenCalledWith('/estoque/materiais', { nome: 'Placa de gesso', unidade: 'un', estoqueMinimo: 10 })` | ✅ |
+| AC1: limpa o formulário | inputs vazios | `NovoMaterialForm.test.tsx:48-50` - `toHaveValue('')` ×2, `toHaveValue(null)` | ✅ |
+| AC1: recarrega a tabela (material aparece com saldo 0, Independent Test) | 2º `GET /estoque/materiais`; célula Saldo = `0` | `pages/Estoque.test.tsx:50` - `findByRole('cell', { name: 'Massa corrida' })`; `:51` - `expect(chamadasMateriais()).toBe(2)`; `:52` - `toHaveTextContent(/^0$/)` | ✅ |
+| AC2: `estoqueMinimo` vazio omitido | corpo `{ nome, unidade }` | `NovoMaterialForm.test.tsx:62` - `toEqual({ nome: 'Placa de gesso', unidade: 'un' })` | ✅ |
+| AC3: 409 exibido sem perder dados | mensagem `erro`, `onSalvo` não chamado, 3 campos intactos | `NovoMaterialForm.test.tsx:75-79` - `toHaveClass('erro')`, `not.toHaveBeenCalled()`, `toHaveValue('Placa de gesso')`, `toHaveValue('un')`, `toHaveValue(10)` | ✅ |
+
+#### P2: Registrar movimentação (FRM-09)
+
+| Criterion | Spec-defined outcome | `file:line` + assertion | Result |
+| --- | --- | --- | --- |
+| AC1: material/tipo/quantidade obrigatórios, `quantidade > 0`, tipos `ENTRADA`/`SAIDA` | atributos e opções | `components/forms/MovimentacaoForm.test.tsx:39-43` - `toBeRequired()` ×3, `toHaveAttribute('min', '0.01')`, `Observacao not.toBeRequired()`; `:47` - `toEqual(['ENTRADA', 'SAIDA'])` | ✅ |
+| AC1: chama `POST /estoque/movimentacoes` | `{ materialId, tipo, quantidade: number, observacao? }` | `MovimentacaoForm.test.tsx:60-65` - `toHaveBeenCalledWith('/estoque/movimentacoes', { materialId: 'm-placa', tipo: 'ENTRADA', quantidade: 20, observacao: 'Compra da semana' })` | ✅ |
+| AC1: recarrega a tabela com o novo saldo | 2º `GET /estoque/materiais`; Saldo 50 → 45 | `pages/Estoque.test.tsx:72` - `toHaveTextContent(/^50$/)`; `:80` - `chamadasMateriais()).toBe(2)`; `:81` - `toHaveTextContent(/^45$/)` | ✅ |
+| AC2: obra opcional só na `SAIDA`, enviada como `obraId` | select ausente em `ENTRADA`, presente e não obrigatório em `SAIDA`; corpo com `obraId` | `MovimentacaoForm.test.tsx:72` - `queryByLabelText('Obra')).not.toBeInTheDocument()`; `:74` - `not.toBeRequired()`; `:81-86` - `toEqual({ materialId: 'm-placa', tipo: 'SAIDA', quantidade: 5, obraId: 'o-forro' })` | ✅ |
+| AC2: `ENTRADA` não envia `obraId` | corpo sem `obraId` mesmo após escolher obra e voltar | `MovimentacaoForm.test.tsx:96` - select some; `:102` - `toEqual({ materialId: 'm-placa', tipo: 'ENTRADA', quantidade: 5 })` | ✅ |
+| AC2: página repassa as obras | opção da obra carregada no select | `pages/Estoque.test.tsx:60` - `getByRole('option', { name: 'Placa de gesso (un)' })`; `:62` - `getByRole('option', { name: 'Forro sala' })` | ✅ |
+| AC3: 400 exibido sem fechar nem alterar a tabela | mensagem `erro`, `onSalvo` não chamado, campos intactos; tabela não recarregada e saldo 50 | `MovimentacaoForm.test.tsx:115-122` - `toHaveClass('erro')`, `not.toHaveBeenCalled()`, `toHaveValue('SAIDA')`, `'m-placa'`, `80`, `'o-forro'`; `pages/Estoque.test.tsx:96` - `chamadasMateriais()).toBe(1)`; `:97` - `/^50$/`; `:98` - `Quantidade toHaveValue(80)` (form continua aberto) | ✅ |
+
+#### Edge cases e FRM-10/11/12 (forms novos)
+
+| Edge case | Spec-defined outcome | `file:line` + assertion | Result |
+| --- | --- | --- | --- |
+| Obrigatório vazio bloqueia submit (`required` HTML5) | `required` em todo campo obrigatório do DTO | `NovoGesseiroForm.test.tsx:26`; `LancamentoForm.test.tsx:35`; `NovoMaterialForm.test.tsx:26,28`; `MovimentacaoForm.test.tsx:39-41` - `toBeRequired()` | ✅ (atributo; o jsdom não executa a validação interativa — mesmo critério aceito nas Fases 1–2) |
+| FRM-11: botão desabilitado durante submit | `disabled` com promise pendente, `enabled` depois | `NovoGesseiroForm.test.tsx:88,90`; `LancamentoForm.test.tsx:94,96`; `NovoMaterialForm.test.tsx:91,93`; `MovimentacaoForm.test.tsx:134,136-138` | ✅ |
+| FRM-10: erro preserva dados | ver AC3/AC4 acima | `NovoGesseiroForm.test.tsx:76-77`; `LancamentoForm.test.tsx:81-83`; `NovoMaterialForm.test.tsx:77-79`; `MovimentacaoForm.test.tsx:119-122` | ✅ |
+| FRM-12: números como `number` | `valor: 100`/`50.5`, `estoqueMinimo: 10`, `quantidade: 20`/`5` | `LancamentoForm.test.tsx:53,66`; `NovoMaterialForm.test.tsx:46`; `MovimentacaoForm.test.tsx:63,84,102` | ✅ |
+| FRM-12: opcionais vazios omitidos | `toEqual` exato (pega chave `""`) | `NovoGesseiroForm.test.tsx:62`; `LancamentoForm.test.tsx:66`; `NovoMaterialForm.test.tsx:62`; `MovimentacaoForm.test.tsx:81,102` | ✅ |
+| FRM-12: nada fora do DTO | corpos exatos ⊂ `CreateGesseiroDto` (`nome, telefone, chavePix`), `CreateLancamentoDto` (`tipo, valor, descricao`; `obraId` fora de escopo pela spec), `CreateMaterialDto` (`nome, unidade, estoqueMinimo`), `CreateMovimentacaoDto` (`materialId, tipo, quantidade, obraId, observacao`) | mesmas linhas acima, todas com `toEqual`/`toHaveBeenCalledWith` por valor; M4 do sensor (campo extra) morto | ✅ |
+| 401 segue `lib/api.ts` | nenhum form trata 401 | `grep 401` nos 4 forms e 2 páginas: zero ocorrências; `useEnvio.ts:19` mostra o `message` do `ApiError` (`lib/api.ts:47-50`) | n/a (sem código novo) |
+
+**Payload/conjunction rule**: todos os `api.post` dos 4 forms são asseridos por valor (corpo inteiro), nas duas camadas (form e página).
+
+**Status**: ✅ todos os ACs de FRM-06..09 cobertos com evidência por valor; 1 ⚠️ spec-precision gap (texto do 401), não bloqueante.
+
+### Discrimination Sensor
+
+Isolamento: `git status --porcelain` gravado antes. Cópia de `apps/web` (sem `node_modules`/`dist`) em `C:\Users\Kaik\AppData\Local\Temp\claude\verifier-frm\web`, com junction `verifier-frm\node_modules` → `node_modules` da raiz (workspace hoisted). Baseline da cópia (forms + Gesseiros + Estoque): 8 suites, 43/43 verdes. Cada mutação aplicada só na cópia por script Node, `jest --testPathPattern` do form + página correspondente, arquivo restaurado byte a byte em seguida; depois do último mutante a cópia voltou a 43/43. Limpeza: junction removida com `rmdir` (alvo `node_modules\jest` conferido intacto), pasta apagada; porcelain do repo **idêntico** ao baseline. Linhas = arquivo real.
+
+| # | File:line | Mutação | Killed? (teste que matou) |
+| - | --------- | ------- | ------- |
+| M1 | `components/forms/LancamentoForm.tsx:15` | adiciona opção `CREDITO` | ✅ `oferece apenas VALE e PAGAMENTO...` |
+| M2 | `LancamentoForm.tsx:32` | `valor` enviado como string | ✅ 3 testes (form + página) |
+| M3 | `LancamentoForm.tsx:32` | `descricao` vazia enviada como `""` | ✅ `omite a descricao vazia...` + página |
+| M4 | `LancamentoForm.tsx:32` | campo fora do DTO (`gesseiroId`) no corpo | ✅ 3 testes |
+| M5 | `LancamentoForm.tsx:72` | `disabled={false}` | ✅ `desabilita o botao...` |
+| M24 | `LancamentoForm.tsx:35-39` | `onSalvo` chamado mesmo com erro | ✅ `mostra o 400 da API...` |
+| M6 | `NovoGesseiroForm.tsx:25` | telefone vazio enviado como `""` | ✅ form + página |
+| M7 | `NovoGesseiroForm.tsx:30-31` | `nome` limpo mesmo com erro | ✅ `mostra o erro da API...` |
+| M8 | `NovoGesseiroForm.tsx:42` | `minLength` 3 → 2 | ✅ `exige nome com pelo menos 3...` |
+| M9 | `NovoGesseiroForm.tsx:22` | endpoint `/gesseiro` | ✅ form + página |
+| M23 | `NovoGesseiroForm.tsx:33` | `chavePix` não limpa após sucesso | ✅ `cadastra o gesseiro... limpa o formulario` |
+| M10 | `NovoMaterialForm.tsx:26` | `estoqueMinimo` enviado como string | ✅ `cadastra o material com estoque minimo numerico...` |
+| M11 | `NovoMaterialForm.tsx:30-35` | `onSalvo` chamado mesmo com erro | ✅ `mostra o 409...` |
+| M12 | `NovoMaterialForm.tsx:50` | remove `required` de `unidade` | ✅ `exige nome (minimo 2) e unidade...` |
+| M13 | `MovimentacaoForm.tsx:39` | `obraId: textoOpcional(obraId)` sem guarda de tipo | ⚪ Sobreviveu — **equivalente**: `trocarTipo` (`:27`) zera `obraId` ao ir para `ENTRADA`, o estado inicial é `ENTRADA`/`''` e o sucesso zera `obraId` (`:46`); não existe estado alcançável com `tipo==='ENTRADA' && obraId!==''` |
+| M14 | `MovimentacaoForm.tsx:27` + `:39` | sem guarda no corpo **e** sem limpeza em `trocarTipo` | ✅ `nao envia obraId quando o tipo volta para ENTRADA...` |
+| M15 | `MovimentacaoForm.tsx:83` | select de obra exibido em `ENTRADA` | ✅ 2 testes |
+| M16 | `MovimentacaoForm.tsx:34` | endpoint `/estoque/movimentacao` | ✅ `registra uma entrada...` |
+| M17 | `MovimentacaoForm.tsx:38` | `quantidade` enviada como string | ✅ 3 testes |
+| M25 | `MovimentacaoForm.tsx:45` | `quantidade` não limpa após sucesso | ⚪ Sobreviveu — **fora do contrato**: FRM-09 não pede limpar o form, e `Estoque.tsx:38` fecha (desmonta) o form no sucesso, então não é observável |
+| M18 | `pages/Gesseiros.tsx:30` | não recarrega a lista após cadastro | ✅ `recarrega a lista... (FRM-06)` |
+| M19 | `pages/Gesseiros.tsx:116` | `onSalvo` do lançamento não recarrega o extrato | ✅ `recarrega o extrato... (FRM-07 AC1)` |
+| M20 | `pages/Gesseiros.tsx:85` | `LancamentoForm` renderizado também sem extrato | ✅ `so mostra o formulario de lancamento com um extrato aberto (FRM-07 AC3)` |
+| M21 | `pages/Estoque.tsx:39` | `salvo()` não recarrega materiais | ✅ 2 testes (FRM-08 AC1, FRM-09 AC1) |
+| M22 | `pages/Estoque.tsx:70` | `obras={[]}` | ✅ `passa os materiais e as obras carregados...` |
+
+**Sensor depth**: expandido (25 mutações nos 6 arquivos; ≥ 4 por form)
+**Result**: 23/25 killed; os 2 sobreviventes são equivalente (M13) e fora do contrato da spec (M25). Nenhum sobrevivente aponta teste fraco para AC em escopo — PASS ✅
+
+### Code Quality
+
+| Principle | Status |
+| --- | --- |
+| Minimum code | ✅ os 4 forms seguem o mesmo molde de `AlocarGesseiroForm` (`useState` + `useEnvio` + `semVazios`) |
+| Surgical changes | ✅ páginas: só `carregar()` extraído, toggle do form e integração |
+| No scope creep | ✅ sem `obraId` no lançamento, sem editar/desativar gesseiro (Out of Scope respeitado) |
+| Matches patterns | ✅ |
+| Spec-anchored outcome check | ✅ (1 spec-precision gap de texto, não bloqueante) |
+| Per-layer Coverage Expectation (`tasks.md`) | ✅ componentes: ACs + FRM-10/11/12 por valor; páginas: re-fetch com resultado visível, ocultação do lançamento, repasse de obras, erro não recarrega |
+| Every test maps to a spec requirement | ✅ 29 testes novos (5+6+5+6 nos forms, 3+4 nas páginas) mapeiam para FRM-06..12 ou Done-when de T7–T12 |
+| Documented guidelines followed: `CLAUDE.md` (Testes), Test Coverage Matrix de `tasks.md` | ✅ |
+
+### Gate Check
+
+- **Gate command**: `npm test --workspace apps/web` e `npm run build --workspace apps/web` (a partir da raiz)
+- **Test**: 16 suites, **67 passed, 0 failed, 0 skipped** — exit 0 (bate com o esperado)
+- **Build**: `tsc --noEmit && vite build` — exit 0
+- **Fases 1–2 continuam verdes**: `corpo.test.ts`, `useEnvio.test.ts`, `NovaObraForm.test.tsx`, `AlocarGesseiroForm.test.tsx`, `Obras.test.tsx` — PASS no mesmo run
+- **Contagem**: 28 (fim das Fases 1–2) + 29 (Fases 3–4) + 10 de `front-dashboard-resumo` (`App`, `Dashboard`, `Login`, `status`) = 67. Nenhum teste removido nem enfraquecido.
+- **validate_state.py**: não executado (Python ausente). Conferido lendo: o relatório existe, o verdict é PASS e há citações `file:line`.
+
+### Gaps e Fix Plans
+
+Nenhum bloqueante. Em ordem de prioridade:
+
+1. **`spec.md` linha 1 corrompida** (Minor, artefato): o título virou ` Execute | Implementing (aguardando Verifier) | Execute | ... |# Front — Formulários de Cadastro e Movimentação Specification` (confirmado com `git diff HEAD -- spec.md`). Provavelmente um replace da tabela de traceability que caiu no começo do arquivo. Pode quebrar o `check-specs`/`validate_spec.py` (seção de título). **Fix**: restaurar a linha 1 para `# Front — Formulários de Cadastro e Movimentação Specification`.
+2. **⚠️ Spec-precision gap no 401** (Minor, spec): o edge case diz que a mensagem aparece "no `erro` da página", mas o design (`design.md:182`) e o código (`useEnvio.ts:19`) mostram no `erro` do próprio form. Comportamento aceitável e igual ao das Fases 1–2. **Fix**: trocar na spec para "no `erro` do formulário (ou da página, para chamadas de leitura)".
+3. **Comportamento sem dono** (Cosmetic): `LancamentoForm.tsx:36-37` limpa `valor`/`descricao` após sucesso e o form continua montado (extrato aberto), mas nenhum AC pede isso e nenhum teste assere. Ajuda a evitar vale duplicado por engano. **Fix opcional**: adicionar a FRM-07 AC1 "e limpa valor/descrição" e asserir `toHaveValue(null)`/`''` em `LancamentoForm.test.tsx:50+`.
+4. **UAT manual** (pendente, não FAIL): Independent Tests de FRM-06..09 com `docker compose up` e marcar os itens de T9 e T12 em `tasks.md`.
+
+### Requirement Traceability Update
+
+| Requirement | Antes | Depois |
+| --- | --- | --- |
+| FRM-06 | Implementing | ✅ Verified (automatizado; UAT manual pendente) |
+| FRM-07 | Implementing | ✅ Verified (automatizado; UAT manual pendente) |
+| FRM-08 | Implementing | ✅ Verified (automatizado; UAT manual pendente) |
+| FRM-09 | Implementing | ✅ Verified (automatizado; UAT manual pendente) |
+| FRM-10/11/12 | Obras verificado | ✅ Verified em todos os forms |
+
+(Este Verifier não alterou `spec.md` nem `tasks.md`; a atualização de status fica com o orquestrador.)
+
+### Summary
+
+**Overall**: ✅ Ready (Fases 3–4), com UAT manual pendente
+
+**Spec-anchored check**: 25/25 critérios de FRM-06..09 com evidência por valor; 1 spec-precision gap (texto do 401)
+**Sensor**: 25 mutações, 23 killed, 2 sobreviventes justificados (1 equivalente, 1 fora do contrato)
+**Gate**: 67 passed, 0 failed; build ok
+
+---
+
+# Front — Formulários Validation (Fases 1–2: T1–T6) — Rodada 2 (histórico)
 
 **Verdict**: PASS ✅
 

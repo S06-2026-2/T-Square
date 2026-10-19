@@ -21,7 +21,7 @@ export default function Login() {
       const resposta = await api.post<LoginResponse>('/auth/login', { email, senha });
       auth.setToken(resposta.accessToken);
       auth.setUsuario(resposta.usuario);
-      navigate('/obras', { replace: true });
+      navigate('/', { replace: true });
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Nao foi possivel entrar');
     } finally {

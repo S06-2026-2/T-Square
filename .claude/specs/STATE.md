@@ -44,12 +44,17 @@
 
 ## Handoff
 
-- **Feature**: nenhuma em execução — apenas a fase Specify rodou para 4 features (`gesseiros-crud-financeiro`, `estoque-materiais-movimentacao`, `front-formularios`, `front-dashboard-resumo`)
-- **Phase / Task**: Specify concluída para as 4; Design/Tasks/Execute ainda não iniciadas para nenhuma
-- **Completed**: none
+- **Feature**: nenhuma em execução (2026-10-19)
+- **Phase / Task**: `front-dashboard-resumo` (T1–T5) e `front-formularios` (T1–T12) com Execute concluído e Verifier PASS
+- **Completed**:
+  - `front-dashboard-resumo`: DSH-01..03 Verified (Verifier rodada 2: PASS, 15/16 mutantes mortos; o sobrevivente, cards no carregamento, foi fechado com teste + edge case). Ver `features/front-dashboard-resumo/validation.md`.
+  - `front-formularios`: FRM-01..12 Verified. Fases 1–2 em 2026-10-07; Fases 3–4 (Gesseiros e Estoque) em 2026-10-19, Verifier PASS com 23/25 mutantes mortos (os 2 sobreviventes são equivalentes ou fora de contrato). Ver `features/front-formularios/validation.md`.
+  - Suite do web: 67 testes, build ok.
 - **In-progress**: none
-- **Next step**: time decide se roda Design/Tasks para as specs Large (`front-formularios`) antes de implementar, e quem assume qual feature; depois disso, Execute (implementação real) começa
+- **Next step**:
+  - UAT manual (Independent Tests) de FRM-01/05 (T6), FRM-06/07 (T9) e FRM-08/09 (T12) com `docker compose up`; marcar os itens "Manual" em `front-formularios/tasks.md`.
+  - Time confirmar a assumption "Login navega para `/` (dashboard)" em `front-dashboard-resumo/spec.md` e trocar para `y`.
+  - Rodar `lessons.py` quando houver Python (sinais: assumption derivada sem teste; estado de carregamento/erro não definido na spec; edição de spec por regex que corrompeu a linha 1).
 - **Blockers**: none
-- **Uncommitted files**: `.specs/` inteiro é novo e não commitado (ver nota abaixo sobre commits)
-- **Branch**: main
-- **front-formularios (2026-10-07)**: Fases 1–2 (T1–T6, P1) implementadas e verificadas (Verifier rodada 2: PASS, 28 testes, 13/13 mutantes mortos; ver `validation.md`). Pendentes: Independent Test manual de T6, Fase 3 (Gesseiros) e Fase 4 (Estoque, bloqueada pela EST). Repaginação visual (sidebar) aplicada fora da spec, aguardando aprovação do usuário. Nada commitado.
+- **Uncommitted files**: tudo das duas features em `apps/web/src/` e `.claude/specs/features/{front-dashboard-resumo,front-formularios}/`; o time commita manualmente (mensagens sugeridas por task nos `tasks.md`)
+- **Branch**: feat/front-formularios

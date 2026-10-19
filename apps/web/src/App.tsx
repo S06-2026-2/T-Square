@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 
 import Layout from './components/Layout';
 import { auth } from './lib/api';
+import Dashboard from './pages/Dashboard';
 import Estoque from './pages/Estoque';
 import Gesseiros from './pages/Gesseiros';
 import Login from './pages/Login';
@@ -22,7 +23,8 @@ export default function App() {
           </RotaPrivada>
         }
       >
-        <Route path="/" element={<Navigate to="/obras" replace />} />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/obras" element={<Obras />} />
         <Route path="/gesseiros" element={<Gesseiros />} />
         <Route path="/estoque" element={<Estoque />} />

@@ -45,6 +45,13 @@ export interface Obra {
   gesseiros?: AlocacaoGesseiro[];
 }
 
+/** Linha de GET /obras/resumo; status sem obra nenhuma nao vem na resposta. */
+export interface ResumoStatus {
+  status: StatusObra;
+  quantidade: number;
+  valorTotal: string | number;
+}
+
 export interface Lancamento {
   id: string;
   tipo: TipoLancamento;

@@ -5,6 +5,7 @@ import { iniciais } from '../lib/formato';
 import Icone, { type NomeIcone } from './Icone';
 
 const abas: Array<{ para: string; rotulo: string; icone: NomeIcone }> = [
+  { para: '/dashboard', rotulo: 'Visao geral', icone: 'painel' },
   { para: '/obras', rotulo: 'Obras', icone: 'obras' },
   { para: '/gesseiros', rotulo: 'Gesseiros', icone: 'gesseiros' },
   { para: '/estoque', rotulo: 'Estoque', icone: 'estoque' },
