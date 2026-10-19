@@ -11,7 +11,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: `.claude/specs/features/front-formularios/design.md`
-**Status**: In Progress (Fases 1–2 concluídas; 3–4 pendentes)
+**Status**: Done (Fases 1–4 verificadas pelo Verifier; testes manuais de T6, T9 e T12 pendentes)
 
 ---
 
@@ -77,9 +77,9 @@ T7 → T9
 T8 → T9
 ```
 
-### Phase 4: Estoque (P2) — BLOQUEADA até `estoque-materiais-movimentacao` estar implementada
+### Phase 4: Estoque (P2) — liberada (backend implementado no commit `af03bd2`)
 
-Os componentes e os testes (API mockada) podem ser escritos antes, mas a fase só fecha depois do Independent Test manual com o backend real.
+A fase só fecha depois do Independent Test manual com o backend real.
 
 ```
 T1 → T10
@@ -269,7 +269,7 @@ T11 → T12
 
 ---
 
-### T7: NovoGesseiroForm
+### T7: NovoGesseiroForm ✅
 
 **What**: Componente de cadastro de gesseiro.
 **Where**: `apps/web/src/components/forms/NovoGesseiroForm.tsx`
@@ -284,12 +284,12 @@ T11 → T12
 
 **Done when**:
 
-- [ ] Submit chama `api.post('/gesseiros', { nome, telefone?, chavePix? })`, omitindo opcionais vazios, chama `onSalvo` e limpa os campos (FRM-06)
-- [ ] `nome` tem `required` e `minLength=3`
-- [ ] Erro preserva os dados; botão desabilitado durante o envio (FRM-10/11)
-- [ ] `NovoGesseiroForm.test.tsx` cobre os itens acima
-- [ ] Gate check passes: `npm test --workspace apps/web`
-- [ ] Test count: anteriores + novos passam
+- [x] Submit chama `api.post('/gesseiros', { nome, telefone?, chavePix? })`, omitindo opcionais vazios, chama `onSalvo` e limpa os campos (FRM-06)
+- [x] `nome` tem `required` e `minLength=3`
+- [x] Erro preserva os dados; botão desabilitado durante o envio (FRM-10/11)
+- [x] `NovoGesseiroForm.test.tsx` cobre os itens acima
+- [x] Gate check passes: `npm test --workspace apps/web`
+- [x] Test count: anteriores + novos passam
 
 **Tests**: unit
 **Gate**: quick
@@ -298,7 +298,7 @@ T11 → T12
 
 ---
 
-### T8: LancamentoForm
+### T8: LancamentoForm ✅
 
 **What**: Componente de registro de vale/pagamento.
 **Where**: `apps/web/src/components/forms/LancamentoForm.tsx`
@@ -313,12 +313,12 @@ T11 → T12
 
 **Done when**:
 
-- [ ] O select de tipo tem exatamente as opções `VALE` e `PAGAMENTO`, sem `CREDITO` (FRM-07 AC2)
-- [ ] Submit chama `api.post('/gesseiros/<id>/lancamentos', { tipo, valor: number, descricao? })` e `onSalvo` (FRM-07 AC1)
-- [ ] Erro preserva os dados; botão desabilitado durante o envio (FRM-07 AC4, FRM-10/11)
-- [ ] `LancamentoForm.test.tsx` cobre os itens acima
-- [ ] Gate check passes: `npm test --workspace apps/web`
-- [ ] Test count: anteriores + novos passam
+- [x] O select de tipo tem exatamente as opções `VALE` e `PAGAMENTO`, sem `CREDITO` (FRM-07 AC2)
+- [x] Submit chama `api.post('/gesseiros/<id>/lancamentos', { tipo, valor: number, descricao? })` e `onSalvo` (FRM-07 AC1)
+- [x] Erro preserva os dados; botão desabilitado durante o envio (FRM-07 AC4, FRM-10/11)
+- [x] `LancamentoForm.test.tsx` cobre os itens acima
+- [x] Gate check passes: `npm test --workspace apps/web`
+- [x] Test count: anteriores + novos passam
 
 **Tests**: unit
 **Gate**: quick
@@ -327,7 +327,7 @@ T11 → T12
 
 ---
 
-### T9: Integrar formulários em Gesseiros.tsx
+### T9: Integrar formulários em Gesseiros.tsx ✅
 
 **What**: Extrai `carregar()`, renderiza `NovoGesseiroForm` no cabeçalho e `LancamentoForm` dentro do extrato, com re-fetch do extrato no `onSalvo`.
 **Where**: `apps/web/src/pages/Gesseiros.tsx`
@@ -342,13 +342,13 @@ T11 → T12
 
 **Done when**:
 
-- [ ] Depois do cadastro, `GET /gesseiros` é chamado de novo (FRM-06 AC1)
-- [ ] Sem extrato aberto, o formulário de lançamento não aparece (FRM-07 AC3)
-- [ ] Depois de um lançamento, `GET /gesseiros/<id>/extrato` é chamado de novo (FRM-07 AC1)
-- [ ] O TODO do cabeçalho foi removido
-- [ ] `Gesseiros.test.tsx` cobre os itens acima
-- [ ] Gate check passes: `npm run build --workspace apps/web && npm test --workspace apps/web`
-- [ ] Test count: anteriores + novos passam
+- [x] Depois do cadastro, `GET /gesseiros` é chamado de novo (FRM-06 AC1)
+- [x] Sem extrato aberto, o formulário de lançamento não aparece (FRM-07 AC3)
+- [x] Depois de um lançamento, `GET /gesseiros/<id>/extrato` é chamado de novo (FRM-07 AC1)
+- [x] O TODO do cabeçalho foi removido
+- [x] `Gesseiros.test.tsx` cobre os itens acima
+- [x] Gate check passes: `npm run build --workspace apps/web && npm test --workspace apps/web`
+- [x] Test count: anteriores + novos passam
 - [ ] Manual: Independent Tests de FRM-06 e FRM-07 com `docker compose up`
 
 **Tests**: unit
@@ -358,7 +358,7 @@ T11 → T12
 
 ---
 
-### T10: NovoMaterialForm
+### T10: NovoMaterialForm ✅
 
 **What**: Componente de cadastro de material.
 **Where**: `apps/web/src/components/forms/NovoMaterialForm.tsx`
@@ -373,12 +373,12 @@ T11 → T12
 
 **Done when**:
 
-- [ ] Submit chama `api.post('/estoque/materiais', { nome, unidade, estoqueMinimo? })` e omite `estoqueMinimo` quando vazio (FRM-08 AC1/AC2)
-- [ ] Um 409 mostra a mensagem e preserva os dados (FRM-08 AC3)
-- [ ] Botão desabilitado durante o envio (FRM-11)
-- [ ] `NovoMaterialForm.test.tsx` cobre os itens acima
-- [ ] Gate check passes: `npm test --workspace apps/web`
-- [ ] Test count: anteriores + novos passam
+- [x] Submit chama `api.post('/estoque/materiais', { nome, unidade, estoqueMinimo? })` e omite `estoqueMinimo` quando vazio (FRM-08 AC1/AC2)
+- [x] Um 409 mostra a mensagem e preserva os dados (FRM-08 AC3)
+- [x] Botão desabilitado durante o envio (FRM-11)
+- [x] `NovoMaterialForm.test.tsx` cobre os itens acima
+- [x] Gate check passes: `npm test --workspace apps/web`
+- [x] Test count: anteriores + novos passam
 
 **Tests**: unit
 **Gate**: quick
@@ -387,7 +387,7 @@ T11 → T12
 
 ---
 
-### T11: MovimentacaoForm
+### T11: MovimentacaoForm ✅
 
 **What**: Componente de entrada/saída de material com obra opcional na saída.
 **Where**: `apps/web/src/components/forms/MovimentacaoForm.tsx`
@@ -402,13 +402,13 @@ T11 → T12
 
 **Done when**:
 
-- [ ] Submit chama `api.post('/estoque/movimentacoes', { materialId, tipo, quantidade: number, obraId?, observacao? })` e `onSalvo` (FRM-09 AC1)
-- [ ] O select de obra só aparece com `SAIDA`; ao trocar para `ENTRADA`, o corpo não leva `obraId` (FRM-09 AC2)
-- [ ] Um 400 (saldo insuficiente) mostra a mensagem, não chama `onSalvo` e preserva os dados (FRM-09 AC3)
-- [ ] Botão desabilitado durante o envio (FRM-11)
-- [ ] `MovimentacaoForm.test.tsx` cobre os itens acima
-- [ ] Gate check passes: `npm test --workspace apps/web`
-- [ ] Test count: anteriores + novos passam
+- [x] Submit chama `api.post('/estoque/movimentacoes', { materialId, tipo, quantidade: number, obraId?, observacao? })` e `onSalvo` (FRM-09 AC1)
+- [x] O select de obra só aparece com `SAIDA`; ao trocar para `ENTRADA`, o corpo não leva `obraId` (FRM-09 AC2)
+- [x] Um 400 (saldo insuficiente) mostra a mensagem, não chama `onSalvo` e preserva os dados (FRM-09 AC3)
+- [x] Botão desabilitado durante o envio (FRM-11)
+- [x] `MovimentacaoForm.test.tsx` cobre os itens acima
+- [x] Gate check passes: `npm test --workspace apps/web`
+- [x] Test count: anteriores + novos passam
 
 **Tests**: unit
 **Gate**: quick
@@ -417,7 +417,7 @@ T11 → T12
 
 ---
 
-### T12: Integrar formulários em Estoque.tsx
+### T12: Integrar formulários em Estoque.tsx ✅
 
 **What**: Extrai `carregar()`, busca `GET /obras` e renderiza `NovoMaterialForm` + `MovimentacaoForm` com re-fetch no `onSalvo`.
 **Where**: `apps/web/src/pages/Estoque.tsx`
@@ -432,13 +432,13 @@ T11 → T12
 
 **Done when**:
 
-- [ ] Depois de cadastrar material ou movimentar, `GET /estoque/materiais` é chamado de novo (FRM-08 AC1, FRM-09 AC1)
-- [ ] `MovimentacaoForm` recebe os materiais e as obras carregados
-- [ ] O TODO do cabeçalho foi removido
-- [ ] `Estoque.test.tsx` cobre os itens acima
-- [ ] Gate check passes: `npm run build --workspace apps/web && npm test --workspace apps/web`
-- [ ] Test count: anteriores + novos passam
-- [ ] Manual (**só depois da EST implementada**): Independent Tests de FRM-08 e FRM-09
+- [x] Depois de cadastrar material ou movimentar, `GET /estoque/materiais` é chamado de novo (FRM-08 AC1, FRM-09 AC1)
+- [x] `MovimentacaoForm` recebe os materiais e as obras carregados
+- [x] O TODO do cabeçalho foi removido
+- [x] `Estoque.test.tsx` cobre os itens acima
+- [x] Gate check passes: `npm run build --workspace apps/web && npm test --workspace apps/web`
+- [x] Test count: anteriores + novos passam
+- [ ] Manual: Independent Tests de FRM-08 e FRM-09 com `docker compose up`
 
 **Tests**: unit
 **Gate**: build
@@ -453,7 +453,7 @@ T11 → T12
 Phase 1:  T1 | T2 | T3                       (independentes)
 Phase 2:  T4, T5  =>  T6                     (Obras, P1)
 Phase 3:  T7, T8  =>  T9                     (Gesseiros, P2)
-Phase 4:  T10, T11 => T12                    (Estoque, P2, bloqueada pela EST)
+Phase 4:  T10, T11 => T12                    (Estoque, P2)
 ```
 
 Execution is strictly sequential - a single agent works one task at a time, in order. Com 12 tasks, o Execute vai oferecer sub-agentes por lote (~2 lotes: Fases 1–2 e Fases 3–4).

@@ -6,6 +6,7 @@ import Icone from '../components/Icone';
 import StatusBadge from '../components/StatusBadge';
 import { api } from '../lib/api';
 import { moeda } from '../lib/formato';
+import { STATUS_FUNIL, rotuloPlural } from '../lib/status';
 import type { Gesseiro, Obra, StatusObra } from '../types';
 
 /** Obra concluida ja gerou os creditos; alocar depois nunca credita o gesseiro (AD-005). */
@@ -13,10 +14,10 @@ const aceitaAlocacao: StatusObra[] = ['ORCAMENTO', 'FECHADA', 'ANDAMENTO'];
 
 const filtros: Array<{ valor: StatusObra | 'TODAS'; rotulo: string }> = [
   { valor: 'TODAS', rotulo: 'Todas' },
-  { valor: 'ORCAMENTO', rotulo: 'Aguardando cliente' },
-  { valor: 'FECHADA', rotulo: 'Fechadas' },
-  { valor: 'ANDAMENTO', rotulo: 'Em andamento' },
-  { valor: 'CONCLUIDA', rotulo: 'Concluidas' },
+  ...STATUS_FUNIL.filter((status) => status !== 'CANCELADA').map((status) => ({
+    valor: status,
+    rotulo: rotuloPlural[status],
+  })),
 ];
 
 export default function Obras() {
