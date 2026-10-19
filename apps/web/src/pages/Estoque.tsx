@@ -1,19 +1,43 @@
 import { useEffect, useState } from 'react';
 
+import MovimentacaoForm from '../components/forms/MovimentacaoForm';
+import NovoMaterialForm from '../components/forms/NovoMaterialForm';
 import Icone from '../components/Icone';
 import { api } from '../lib/api';
-import type { Material } from '../types';
+import type { Material, Obra } from '../types';
+
+type FormAberto = 'material' | 'movimentacao' | null;
 
 export default function Estoque() {
   const [materiais, setMateriais] = useState<Material[]>([]);
+  const [obras, setObras] = useState<Obra[]>([]);
   const [erro, setErro] = useState<string | null>(null);
+  const [formAberto, setFormAberto] = useState<FormAberto>(null);
+
+  async function carregar() {
+    try {
+      setMateriais(await api.get<Material[]>('/estoque/materiais'));
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao carregar estoque');
+    }
+  }
 
   useEffect(() => {
+    void carregar();
     api
-      .get<Material[]>('/estoque/materiais')
-      .then(setMateriais)
-      .catch((e) => setErro(e instanceof Error ? e.message : 'Erro ao carregar estoque'));
+      .get<Obra[]>('/obras')
+      .then(setObras)
+      .catch((e) => setErro(e instanceof Error ? e.message : 'Erro ao carregar obras'));
   }, []);
+
+  function alternar(form: Exclude<FormAberto, null>) {
+    setFormAberto((atual) => (atual === form ? null : form));
+  }
+
+  async function salvo() {
+    setFormAberto(null);
+    await carregar();
+  }
 
   return (
     <section>
@@ -22,8 +46,29 @@ export default function Estoque() {
           <h1>Estoque</h1>
           <p className="subtitulo-pagina">Saldo de materiais e alerta de reposicao.</p>
         </div>
-        {/* TODO(equipe): botoes de "Novo material" e "Registrar entrada/saida" */}
+        <div className="acoes">
+          <button
+            type="button"
+            className={formAberto === 'movimentacao' ? 'btn' : 'btn btn-secundario'}
+            onClick={() => alternar('movimentacao')}
+          >
+            Registrar entrada/saida
+          </button>
+          <button
+            type="button"
+            className={formAberto === 'material' ? 'btn btn-secundario' : 'btn'}
+            onClick={() => alternar('material')}
+          >
+            {formAberto !== 'material' && <Icone nome="mais" />}
+            {formAberto === 'material' ? 'Fechar' : 'Novo material'}
+          </button>
+        </div>
       </div>
+
+      {formAberto === 'material' && <NovoMaterialForm onSalvo={salvo} />}
+      {formAberto === 'movimentacao' && (
+        <MovimentacaoForm materiais={materiais} obras={obras} onSalvo={salvo} />
+      )}
 
       {erro && <p className="erro">{erro}</p>}
 

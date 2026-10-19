@@ -322,6 +322,36 @@ h1 {
   border-left-color: var(--alerta);
 }
 
+.grade-resumo {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.card-resumo {
+  border-left: 4px solid var(--borda-forte);
+}
+
+.card-resumo .valor {
+  margin-top: 8px;
+}
+
+.card-resumo[data-status='ORCAMENTO'] {
+  border-left-color: #e0a43a;
+}
+.card-resumo[data-status='FECHADA'] {
+  border-left-color: #4a73c9;
+}
+.card-resumo[data-status='ANDAMENTO'] {
+  border-left-color: var(--primaria);
+}
+.card-resumo[data-status='CONCLUIDA'] {
+  border-left-color: #3f8f45;
+}
+.card-resumo[data-status='CANCELADA'] {
+  border-left-color: var(--alerta);
+}
+
 .card-acoes {
   display: flex;
   flex-wrap: wrap;

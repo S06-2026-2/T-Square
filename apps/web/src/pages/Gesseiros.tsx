@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import LancamentoForm from '../components/forms/LancamentoForm';
+import NovoGesseiroForm from '../components/forms/NovoGesseiroForm';
 import Icone from '../components/Icone';
 import { api } from '../lib/api';
 import { iniciais, moeda } from '../lib/formato';
@@ -9,13 +11,24 @@ export default function Gesseiros() {
   const [gesseiros, setGesseiros] = useState<Gesseiro[]>([]);
   const [extrato, setExtrato] = useState<Extrato | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [mostrarForm, setMostrarForm] = useState(false);
+
+  async function carregar() {
+    try {
+      setGesseiros(await api.get<Gesseiro[]>('/gesseiros'));
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao carregar gesseiros');
+    }
+  }
 
   useEffect(() => {
-    api
-      .get<Gesseiro[]>('/gesseiros')
-      .then(setGesseiros)
-      .catch((e) => setErro(e instanceof Error ? e.message : 'Erro ao carregar gesseiros'));
+    void carregar();
   }, []);
+
+  async function gesseiroCriado() {
+    setMostrarForm(false);
+    await carregar();
+  }
 
   async function abrirExtrato(id: string) {
     setErro(null);
@@ -33,8 +46,17 @@ export default function Gesseiros() {
           <h1>Gesseiros</h1>
           <p className="subtitulo-pagina">Equipe, vales, pagamentos e saldo a receber de cada um.</p>
         </div>
-        {/* TODO(equipe): botao "Novo gesseiro" e formulario de vale/pagamento */}
+        <button
+          type="button"
+          className={mostrarForm ? 'btn btn-secundario' : 'btn'}
+          onClick={() => setMostrarForm((aberto) => !aberto)}
+        >
+          {!mostrarForm && <Icone nome="mais" />}
+          {mostrarForm ? 'Fechar' : 'Novo gesseiro'}
+        </button>
       </div>
+
+      {mostrarForm && <NovoGesseiroForm onSalvo={gesseiroCriado} />}
 
       {erro && <p className="erro">{erro}</p>}
 
@@ -86,6 +108,13 @@ export default function Gesseiros() {
                   <dd>{moeda(extrato.saldoAReceber)}</dd>
                 </div>
               </dl>
+
+              <h3>Registrar vale ou pagamento</h3>
+              <LancamentoForm
+                key={extrato.gesseiro.id}
+                gesseiroId={extrato.gesseiro.id}
+                onSalvo={() => abrirExtrato(extrato.gesseiro.id)}
+              />
 
               <h3>Lancamentos</h3>
               <ul className="lista">
