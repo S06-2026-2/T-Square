@@ -334,8 +334,8 @@ T26 → T27
 
 **Done when**:
 
-- [ ] Spec cobre: lista só ATIVO com material; `ultimaAnalise` ignora `EM_ANDAMENTO` e é `null` sem análises; dispensar grava `DISPENSADO` + `dispensadoEm`; resolver grava `RESOLVIDO` + `OPERADOR` + `resolvidoEm`; não ativo → 400 `Alerta <id> não está ativo`; inexistente → 404 `Alerta <id> não encontrado`
-- [ ] Gate check passes: `npm run test --workspace apps/api`
+- [x] Spec cobre: lista só ATIVO com material; `ultimaAnalise` ignora `EM_ANDAMENTO` e é `null` sem análises; dispensar grava `DISPENSADO` + `dispensadoEm`; resolver grava `RESOLVIDO` + `OPERADOR` + `resolvidoEm`; não ativo → 400 `Alerta <id> não está ativo`; inexistente → 404 `Alerta <id> não encontrado`
+- [x] Gate check passes: `npm run test --workspace apps/api`
 
 **Tests**: unit
 **Gate**: quick
@@ -358,9 +358,9 @@ T26 → T27
 
 **Done when**:
 
-- [ ] `POST /api/estoque/agente/analisar` (201), `GET /api/estoque/agente/alertas`, `PATCH .../alertas/:id/dispensar` e `.../resolver` aparecem no Swagger
-- [ ] Módulo registrado em `app.module.ts`
-- [ ] Gate check passes: `npm run build && npm test`
+- [x] `POST /api/estoque/agente/analisar` (201), `GET /api/estoque/agente/alertas`, `PATCH .../alertas/:id/dispensar` e `.../resolver` aparecem no Swagger
+- [x] Módulo registrado em `app.module.ts`
+- [x] Gate check passes: `npm run build && npm test`
 
 **Tests**: none
 **Gate**: build
@@ -383,9 +383,9 @@ T26 → T27
 
 **Done when**:
 
-- [ ] `npm install @nestjs/schedule --workspace apps/api` (com o OK do usuário); versão compatível com Nest 10 conferida
-- [ ] Spec cobre: flag `true` → `addCronJob` com `0 0 6 * * *` e fuso `America/Sao_Paulo`; flag `false` ou ausente → nada registrado e nenhum catch-up; última análise há > 24h ou inexistente → `analisar(CATCH_UP)`; há < 24h → não dispara; tick do cron chama `analisar(AGENDADA)`
-- [ ] Gate check passes: `npm run test --workspace apps/api`
+- [x] `npm install @nestjs/schedule --workspace apps/api` (com o OK do usuário); versão compatível com Nest 10 conferida
+- [x] Spec cobre: flag `true` → `addCronJob` com `0 0 6 * * *` e fuso `America/Sao_Paulo`; flag `false` ou ausente → nada registrado e nenhum catch-up; última análise há > 24h ou inexistente → `analisar(CATCH_UP)`; há < 24h → não dispara; tick do cron chama `analisar(AGENDADA)`
+- [x] Gate check passes: `npm run test --workspace apps/api`
 
 **Tests**: unit
 **Gate**: quick
@@ -408,9 +408,9 @@ T26 → T27
 
 **Done when**:
 
-- [ ] `.env.example`, `docker-compose.yml` e seção do README atualizados; `.env` real não é tocado nem commitado
-- [ ] `docker compose config` mostra as 3 variáveis no serviço `api`
-- [ ] Gate check passes: `npm run build && npm test`
+- [x] `.env.example`, `docker-compose.yml` e seção do README atualizados; `.env` real não é tocado nem commitado
+- [x] `docker compose config` mostra as 3 variáveis no serviço `api`
+- [x] Gate check passes: `npm run build && npm test`
 
 **Tests**: none
 **Gate**: build
@@ -433,9 +433,9 @@ T26 → T27
 
 **Done when**:
 
-- [ ] Spec cobre: substituição em `ORCAMENTO`/`FECHADA`/`ANDAMENTO`; lista vazia remove tudo; `CONCLUIDA`/`CANCELADA` → 400 `Não é possível alterar materiais previstos de uma obra com status <STATUS>`; material repetido → 400 sem gravar; material inexistente → 404 sem gravar; obra inexistente → 404; `listarComUtilizado` com pendente, excedente e devolução
-- [ ] Spec do DTO cobre: `quantidade` 0, negativa e com 3 casas → erro; 0,01 e 2 casas → ok
-- [ ] Gate check passes: `npm run test --workspace apps/api`
+- [x] Spec cobre: substituição em `ORCAMENTO`/`FECHADA`/`ANDAMENTO`; lista vazia remove tudo; `CONCLUIDA`/`CANCELADA` → 400 `Não é possível alterar materiais previstos de uma obra com status <STATUS>`; material repetido → 400 sem gravar; material inexistente → 404 sem gravar; obra inexistente → 404; `listarComUtilizado` com pendente, excedente e devolução
+- [x] Spec do DTO cobre: `quantidade` 0, negativa e com 3 casas → erro; 0,01 e 2 casas → ok
+- [x] Gate check passes: `npm run test --workspace apps/api`
 
 **Tests**: unit
 **Gate**: quick
@@ -458,9 +458,9 @@ T26 → T27
 
 **Done when**:
 
-- [ ] `obras.service.spec.ts` ganha: criação com previstos grava aninhado; sem previstos mantém o comportamento atual; material repetido/inexistente rejeita antes de criar a obra
-- [ ] Testes existentes de `ObrasService` continuam passando
-- [ ] Gate check passes: `npm run test --workspace apps/api`
+- [x] `obras.service.spec.ts` ganha: criação com previstos grava aninhado; sem previstos mantém o comportamento atual; material repetido/inexistente rejeita antes de criar a obra
+- [x] Testes existentes de `ObrasService` continuam passando
+- [x] Gate check passes: `npm run test --workspace apps/api`
 
 **Tests**: unit
 **Gate**: quick
@@ -483,8 +483,8 @@ T26 → T27
 
 **Done when**:
 
-- [ ] Rotas no Swagger; `PUT` usa `SubstituirMateriaisPrevistosDto`
-- [ ] Gate check passes: `npm run build && npm test`
+- [x] Rotas no Swagger; `PUT` usa `SubstituirMateriaisPrevistosDto`
+- [x] Gate check passes: `npm run build && npm test`
 
 **Tests**: none
 **Gate**: build

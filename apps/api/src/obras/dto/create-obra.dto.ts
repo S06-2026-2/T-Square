@@ -14,6 +14,8 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+import { MaterialPrevistoDto } from './materiais-previstos.dto';
+
 export class PagamentoDto {
   @ApiProperty({ enum: FormaPagamento })
   @IsEnum(FormaPagamento)
@@ -107,4 +109,14 @@ export class CreateObraDto {
   @ValidateNested({ each: true })
   @Type(() => AlocacaoGesseiroDto)
   gesseiros?: AlocacaoGesseiroDto[];
+
+  @ApiPropertyOptional({
+    type: [MaterialPrevistoDto],
+    description: 'Materiais que a obra deve consumir, gravados junto com a obra',
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MaterialPrevistoDto)
+  materiaisPrevistos?: MaterialPrevistoDto[];
 }

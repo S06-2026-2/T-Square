@@ -52,17 +52,15 @@
 
 ## Handoff
 
-- **Feature**: nenhuma em execução (2026-10-19)
-- **Phase / Task**: `front-dashboard-resumo` (T1–T5) e `front-formularios` (T1–T12) com Execute concluído e Verifier PASS
+- **Feature**: `estoque-agente-proativo` em Execute (2026-10-28)
+- **Phase / Task**: Fases 1–4 concluídas (T1–T16); próxima é a Fase 5 (T17 → T18 → T19 → T20, Dashboard web), que só começa com o "segue" do usuário
 - **Completed**:
-  - `front-dashboard-resumo`: DSH-01..03 Verified (Verifier rodada 2: PASS, 15/16 mutantes mortos; o sobrevivente, cards no carregamento, foi fechado com teste + edge case). Ver `features/front-dashboard-resumo/validation.md`.
-  - `front-formularios`: FRM-01..12 Verified. Fases 1–2 em 2026-10-07; Fases 3–4 (Gesseiros e Estoque) em 2026-10-19, Verifier PASS com 23/25 mutantes mortos (os 2 sobreviventes são equivalentes ou fora de contrato). Ver `features/front-formularios/validation.md`.
-  - Suite do web: 67 testes, build ok.
+  - Fases 1–2 (T1–T9) commitadas em `b5e2ba6` na branch `feat/agente-estoque`.
+  - Fases 3–4 (T10–T16) implementadas e revisadas; pacote de commit entregue ao usuário. API 214 testes, web 67, build ok.
 - **In-progress**: none
-- **Next step**:
-  - UAT manual (Independent Tests) de FRM-01/05 (T6), FRM-06/07 (T9) e FRM-08/09 (T12) com `docker compose up`; marcar os itens "Manual" em `front-formularios/tasks.md`.
-  - Time confirmar a assumption "Login navega para `/` (dashboard)" em `front-dashboard-resumo/spec.md` e trocar para `y`.
-  - Rodar `lessons.py` quando houver Python (sinais: assumption derivada sem teste; estado de carregamento/erro não definido na spec; edição de spec por regex que corrompeu a linha 1).
+- **Next step**: Fases 5–6 por sub-agente (uma por vez, parando para revisão), depois pacote de commit das Fases 5–6; Fase 7 (avisar antes da T27, que consome créditos da API) e o Verifier no fim.
+- **Regras do usuário**: uma fase por sub-agente, em sequência, parando ao fim de cada fase para revisão; sem commit/push/`git add` pelo agente; nenhuma dependência nova sem perguntar; `ANTHROPIC_API_KEY` só no `.env`.
 - **Blockers**: none
-- **Uncommitted files**: tudo das duas features em `apps/web/src/` e `.claude/specs/features/{front-dashboard-resumo,front-formularios}/`; o time commita manualmente (mensagens sugeridas por task nos `tasks.md`)
-- **Branch**: feat/front-formularios
+- **Uncommitted files**: se o commit das Fases 3–4 ainda não foi feito, conferir `git status`. Fora da feature, nunca commitar junto: `CLAUDE.md`, `migration_lock.toml` (só fim de linha), `.claude/specs/features/obras-transicoes-status/`.
+- **Dados de teste no banco local**: obra "[SMOKE agente-estoque T14-T16] Obra de teste" (`e8603a2f-b394-4633-bc46-04f2ae0cd02a`, ORCAMENTO) e 1 `AnaliseEstoque` FALHA do smoke da Fase 3.
+- **Branch**: feat/agente-estoque

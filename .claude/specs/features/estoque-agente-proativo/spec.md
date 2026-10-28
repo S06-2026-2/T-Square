@@ -146,7 +146,7 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 **Acceptance Criteria**:
 
 1. WHERE `AGENTE_AUTOMATICO=true` the system SHALL disparar uma análise com origem `AGENDADA` todo dia às 06:00 no fuso `America/Sao_Paulo`.
-2. WHERE `AGENTE_AUTOMATICO=true`, WHEN a API sobe e a última análise terminada começou há mais de 24h (ou nunca houve análise) the system SHALL disparar uma análise com origem `CATCH_UP`.
+2. WHERE `AGENTE_AUTOMATICO=true`, WHEN a API sobe e a última análise terminada começou há mais de 24h, estritamente (exatamente 24h não dispara), ou nunca houve análise, the system SHALL disparar uma análise com origem `CATCH_UP`.
 3. WHERE `AGENTE_AUTOMATICO` é `false` ou ausente the system SHALL não registrar o cron e não executar o catch-up.
 4. WHEN um usuário autenticado chama `POST /estoque/agente/analisar` THEN the system SHALL executar uma análise com origem `MANUAL` e responder 201 com a `AnaliseEstoque` finalizada, qualquer que seja o valor de `AGENTE_AUTOMATICO`.
 5. IF `POST /estoque/agente/analisar` é chamado enquanto existe uma análise `EM_ANDAMENTO` THEN the system SHALL responder 409 com a mensagem `Já existe uma análise de estoque em andamento` sem iniciar outra.
@@ -166,7 +166,7 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 
 **Acceptance Criteria**:
 
-1. WHEN o operador acessa `/dashboard` THEN the system SHALL chamar `GET /estoque/agente/alertas` e exibir um card por alerta ATIVO com material, unidade, quantidade sugerida, situação em dias e justificativa.
+1. WHEN o operador acessa `/dashboard` THEN the system SHALL chamar `GET /estoque/agente/alertas` e exibir um card por alerta ATIVO com material, unidade, quantidade sugerida, situação em dias e justificativa, na ordem de urgência devolvida pela API: abaixo do mínimo (`saldoLivre < estoqueMinimo`) → no mínimo com consumo (`saldoLivre = estoqueMinimo`) → previsão (`diasAteMinimo` crescente; sem dias por último) → `INFORMATIVO`; empate por `criadoEm` crescente.
 2. The system SHALL exibir no card os valores numéricos dos campos gravados no alerta, e nunca números extraídos da justificativa.
 3. WHEN o alerta tem `saldoLivre <= estoqueMinimo` THEN the system SHALL exibir "abaixo do mínimo" no lugar dos dias; WHEN tem `ritmoDiario > 0` e `saldoLivre > estoqueMinimo` THEN the system SHALL exibir "cruza o mínimo em ~N dias", com `N = floor(diasAteMinimo)`; WHEN tem `ritmoDiario = 0` e `saldoLivre > estoqueMinimo` THEN the system SHALL exibir "sem consumo recente".
 4. WHEN o alerta tem `origemTexto = PADRAO` THEN the system SHALL exibir o selo "sem agente — alerta básico" no card.

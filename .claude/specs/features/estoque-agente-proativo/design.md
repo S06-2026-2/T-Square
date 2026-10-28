@@ -156,7 +156,7 @@ Fluxo de uma análise:
 - **Purpose**: Leitura e ações do operador sobre alertas.
 - **Location**: `apps/api/src/agente-estoque/alertas-estoque.service.ts`
 - **Interfaces**:
-  - `listarAtivos(): Promise<{ ultimaAnalise: AnaliseEstoque | null; alertas: AlertaComMaterial[] }>` — `ultimaAnalise` = a última que terminou (não `EM_ANDAMENTO`)
+  - `listarAtivos(): Promise<{ ultimaAnalise: AnaliseEstoque | null; alertas: AlertaComMaterial[] }>` — `ultimaAnalise` = a última que terminou (não `EM_ANDAMENTO`); `alertas` ordenados por urgência a partir dos números gravados: `ABAIXO_DO_MINIMO` → `NO_MINIMO_COM_CONSUMO` → `PREVISAO` (`diasAteMinimo` crescente, sem dias por último) → `INFORMATIVO`; empate por `criadoEm` crescente (consulta ordenada por `criadoEm` + sort estável no service)
   - `dispensar(id)` / `resolver(id)` — 404 `Alerta <id> não encontrado`; 400 `Alerta <id> não está ativo`
 
 ### AgenteEstoqueController

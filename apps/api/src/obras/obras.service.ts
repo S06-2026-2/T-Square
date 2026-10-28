@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AlocacaoGesseiroDto, CreateObraDto } from './dto/create-obra.dto';
 import { QueryObraDto } from './dto/query-obra.dto';
 import { UpdateObraDto } from './dto/update-obra.dto';
+import { MateriaisPrevistosService } from './materiais-previstos.service';
 
 /**
  * Modulo de referencia do projeto: use este arquivo como modelo
@@ -12,7 +13,10 @@ import { UpdateObraDto } from './dto/update-obra.dto';
  */
 @Injectable()
 export class ObrasService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly materiaisPrevistos: MateriaisPrevistosService,
+  ) {}
 
   private readonly include = {
     pagamento: true,
@@ -20,13 +24,27 @@ export class ObrasService {
   } satisfies Prisma.ObraInclude;
 
   async create(dto: CreateObraDto) {
-    const { pagamento, gesseiros, ...dadosObra } = dto;
+    const { pagamento, gesseiros, materiaisPrevistos, ...dadosObra } = dto;
 
+    // Material repetido (400) ou inexistente (404) recusa antes de criar a obra.
+    if (materiaisPrevistos?.length) {
+      await this.materiaisPrevistos.validarItens(materiaisPrevistos);
+    }
+
+    // Escrita aninhada: obra e previstos entram na mesma operacao atomica do Prisma.
     return this.prisma.obra.create({
       data: {
         ...dadosObra,
         pagamento: pagamento ? { create: pagamento } : undefined,
         gesseiros: gesseiros?.length ? { create: gesseiros } : undefined,
+        materiaisPrevistos: materiaisPrevistos?.length
+          ? {
+              create: materiaisPrevistos.map(({ materialId, quantidade }) => ({
+                materialId,
+                quantidade,
+              })),
+            }
+          : undefined,
       },
       include: this.include,
     });
