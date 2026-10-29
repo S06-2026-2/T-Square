@@ -6,6 +6,7 @@ import { dataHora } from '../lib/formato';
 import type { AlertaEstoque, RespostaAlertasEstoque, StatusAnaliseEstoque } from '../types';
 import CardAlertaEstoque from './CardAlertaEstoque';
 import Icone from './Icone';
+import SilenciadosEstoque from './SilenciadosEstoque';
 
 /** Status de análise que pedem aviso junto dos alertas (EAP-33). */
 const avisoStatus: Partial<Record<StatusAnaliseEstoque, string>> = {
@@ -61,7 +62,7 @@ export default function AlertasEstoque() {
       await api.post('/estoque/agente/analisar');
       await carregar();
     } catch (e) {
-      // 409 (análise em andamento) e 429 (limite de 5 min) chegam com a mensagem da API.
+      // 409 (análise em andamento) e 429 (limite de 1 min) chegam com a mensagem da API.
       setErro(e instanceof Error ? e.message : 'Erro ao rodar a análise');
     } finally {
       setAnalisando(false);
@@ -100,14 +101,17 @@ export default function AlertasEstoque() {
             </p>
           )}
         </div>
-        <button
-          type="button"
-          className="btn"
-          disabled={analisando}
-          onClick={() => void rodarAnalise()}
-        >
-          {analisando ? 'Analisando...' : 'Rodar análise agora'}
-        </button>
+        <div className="acoes-secao">
+          <SilenciadosEstoque />
+          <button
+            type="button"
+            className="btn"
+            disabled={analisando}
+            onClick={() => void rodarAnalise()}
+          >
+            {analisando ? 'Analisando...' : 'Rodar análise agora'}
+          </button>
+        </div>
       </div>
 
       {erro && <p className="erro">{erro}</p>}

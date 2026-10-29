@@ -17,13 +17,18 @@ interface Props {
   status: StatusObra;
 }
 
-/** Linhas do editor a partir da tabela: o previsto vai como texto para o campo, sem conversão. */
+/**
+ * Linhas do editor a partir da tabela: o previsto vai como texto para o campo, sem conversão.
+ * Material usado sem previsão fica só na tabela; não vira item previsto (EAP-70).
+ */
 function paraLinhasEditor(linhas: LinhaPrevistoUtilizado[]): LinhaMaterialPrevisto[] {
-  return linhas.map((linha) => ({ materialId: linha.materialId, quantidade: linha.previsto }));
+  return linhas
+    .filter((linha) => !linha.semPrevisao)
+    .map((linha) => ({ materialId: linha.materialId, quantidade: linha.previsto }));
 }
 
 /**
- * Previsto x utilizado de uma obra (tabela) e, em status editável, o editor que substitui a
+ * Previsto x utilizado de uma obra (tabela), incluindo materiais usados sem previsão, e, em status editável, o editor que substitui a
  * lista inteira por PUT /obras/:id/materiais-previstos. Os números da tabela vêm prontos da
  * API e só são formatados para exibição.
  */
@@ -92,9 +97,9 @@ export default function MateriaisPrevistosForm({ obraId, status }: Props) {
                   <td>
                     {linha.material} ({linha.unidade})
                   </td>
-                  <td className="num">{numero(linha.previsto)}</td>
+                  <td className="num">{linha.semPrevisao ? '—' : numero(linha.previsto)}</td>
                   <td className="num">{numero(linha.utilizado)}</td>
-                  <td>{situacaoPrevisto(linha)}</td>
+                  <td>{linha.semPrevisao ? 'não previsto' : situacaoPrevisto(linha)}</td>
                 </tr>
               ))}
             </tbody>

@@ -11,11 +11,11 @@ Todas as opções entregam o mesmo escopo; muda só quem controla o loop de tool
 
 | Opção | Como funciona | Prós | Contras |
 | --- | --- | --- | --- |
-| **A. Loop manual sobre uma interface `ClienteLlm` (recomendada)** | O service chama `client.messages.create` em `while`, executa as ferramentas, conta chamadas e confere o relógio a cada iteração | Controle exato do limite de **20 chamadas de ferramenta** (não de turnos) e dos **2 min**; cada passo vai para `AnaliseEstoque.passos` no momento em que acontece; os testes trocam `ClienteLlm` por um roteiro determinístico, sem mockar o SDK; não depende de API beta | Mais código nosso (~80 linhas de loop) |
+| **A. Loop manual sobre uma interface `ClienteLlm` (recomendada)** | O service chama `client.messages.create` em `while`, executa as ferramentas, conta chamadas e confere o relógio a cada iteração | Controle exato do limite de **50 chamadas de ferramenta** (eram 20 até a AD-008) (não de turnos) e dos **2 min**; cada passo vai para `AnaliseEstoque.passos` no momento em que acontece; os testes trocam `ClienteLlm` por um roteiro determinístico, sem mockar o SDK; não depende de API beta | Mais código nosso (~80 linhas de loop) |
 | B. Tool Runner do SDK (`client.beta.messages.toolRunner`) | O SDK roda o loop; as ferramentas viram `betaZodTool` | Menos código de loop | `max_iterations` conta turnos, não chamadas; parar no meio por tempo e manter as sugestões aceitas exige hooks; API beta; mock de teste fica acoplado ao SDK; acrescenta `zod` |
 | C. Managed Agents | A Anthropic hospeda o loop e o ambiente | Zero loop no nosso código | Os dados do estoque teriam de ir para um sandbox externo; exagero para 5 ferramentas; difícil de testar offline |
 
-**Recomendação: A.** Os limites da spec (20 chamadas, 2 min, status `PARCIAL` mantendo o que foi aceito) e a regra "testes nunca chamam a API" são exatamente o que o loop manual controla melhor.
+**Recomendação: A.** Os limites da spec (50 chamadas, 2 min, status `PARCIAL` mantendo o que foi aceito) e a regra "testes nunca chamam a API" são exatamente o que o loop manual controla melhor.
 
 ---
 
@@ -28,7 +28,7 @@ graph TD
     CTRL --> SVC[AgenteEstoqueService<br/>lock, rate limit, ciclo da análise]
     SVC --> PREV[PrevisaoEstoqueService<br/>lê Prisma, monta indicadores]
     PREV --> CALC[calculo-estoque.ts<br/>funções puras, Prisma.Decimal]
-    SVC --> LOOP[loop do agente<br/>até 20 chamadas / 2 min]
+    SVC --> LOOP[loop do agente<br/>até 50 chamadas / 2 min]
     LOOP --> LLM[ClienteLlm<br/>AnthropicClienteLlm]
     LOOP --> FERR[FerramentasAgente<br/>4 leituras + sugerirReposicao]
     FERR --> PREV
@@ -46,7 +46,7 @@ graph TD
 
 Fluxo de uma análise:
 
-1. `AgenteEstoqueService.analisar(origem)` checa o lock em memória, fecha análise travada (> 5 min), aplica o limite de 5 min da manual e cria `AnaliseEstoque` `EM_ANDAMENTO`.
+1. `AgenteEstoqueService.analisar(origem)` checa o lock em memória, fecha análise travada (> 5 min), aplica o limite de 1 min da manual e cria `AnaliseEstoque` `EM_ANDAMENTO`.
 2. `PrevisaoEstoqueService.montarSnapshot()` lê materiais, movimentações, previstos e alertas recentes uma vez e calcula os indicadores de cada material. As ferramentas leem esse snapshot (os números não mudam no meio da análise).
 3. O loop roda com a `ClienteLlm`. Cada `sugerirReposicao` aceita entra numa lista em memória; nada é gravado durante o loop.
 4. Ao fim (sucesso, limite, falha ou recusa), uma única `$transaction` grava as sugestões aceitas, roda a rede de segurança, aplica silêncio/reabertura, fecha alertas não repetidos (só em `SUCESSO`/`PARCIAL`) e finaliza a `AnaliseEstoque`.
@@ -137,6 +137,7 @@ Fluxo de uma análise:
   - `executar(nome, input, ctx: ContextoFerramentas): { conteudo: string; erro: boolean }`
   - `ctx` = snapshot + `MapaMarcadores` + lista de sugestões aceitas + consultas feitas por material (EAP-67)
 - **Visão geral x investigação (T28)**: `listarMateriais` devolve só `saldoAtual`, `estoqueMinimo`, `risco` (`motivo` do indicador ou `SEM_RISCO`), `obrigatorio`, `temReserva` e `temPrevisao` (previsão de obra `FECHADA`/`ANDAMENTO`); `calculado`, `saldoLivre` e a faixa aceita (`minimoAceito`/`maximoAceito`, `null` com `calculado <= 0`) vêm em `consumoDoMaterial`. `sugerirReposicao` recusa, depois do silêncio e antes da faixa, se faltar `consumoDoMaterial`, `reservadoPorObras` (com reserva) ou `previstoVsUtilizado` (com previsão) para o material. A rede de segurança lê o snapshot direto e não depende das consultas.
+- **Uso sem previsão (T30, T31)**: saídas para uma obra que não prevê o material continuam no consumo solto (o cálculo não muda). O snapshot guarda essa parte em `usoSemPrevisao` (obra não cancelada, `utilizado` líquido e `saidasNaJanela`); `listarMateriais` mostra `temUsoSemPrevisao`, `consumoDoMaterial` mostra `consumoEmObrasSemPrevisao`, `previstoVsUtilizado` detalha por marcador, a trava exige `previstoVsUtilizado` e o texto padrão cita as obras. `GET /obras/:id/materiais-previstos` acrescenta essas linhas com `semPrevisao: true` depois das previstas; o editor de previstos as ignora.
 - **Regras**: leituras devolvem JSON só com nome do material, unidade e números; obras aparecem só como marcador. `sugerirReposicao` valida faixa 50–200% (`REPOSICAO`), `calculado <= 0` (só `INFORMATIVO`), `calculado > 0` (recusa `INFORMATIVO`), silêncio por tipo: `REPOSICAO` dispensado (5 dias) ou resolvido pelo operador (3 dias) segura tudo; `INFORMATIVO` dispensado (5 dias) ou resolvido pelo operador (3 dias) segura só novos `INFORMATIVO` (um `REPOSICAO` sempre pode aparecer). `previstoVsUtilizado` devolve também o `status` da obra (enum). Material inexistente ou input inválido → erro de ferramenta.
 
 ### AgenteEstoqueService
@@ -148,8 +149,8 @@ Fluxo de uma análise:
   - `executarLoop(ctx, deadline): Promise<{ status, passos, chamadas }>` (privado)
   - `persistir(analise, snapshot, aceitas, status): Promise<AnaliseEstoque>` (privado, uma `$transaction`)
 - **Dependencies**: `PrismaService`, `PrevisaoEstoqueService`, `CLIENTE_LLM`, `FerramentasAgente`
-- **Controle de execução**: flag `emExecucao` em memória (instância única, Out of Scope multi-instância) + registro `EM_ANDAMENTO`. Manual com flag ligada → 409; automática → `null`. Antes de começar, `EM_ANDAMENTO` com `iniciadoEm` > 5 min vira `FALHA` (`erro = 'abandonada'`). Manual com outra `MANUAL` iniciada < 5 min → 429.
-- **Status final**: `SUCESSO` (agente terminou com `end_turn` com 20 chamadas ou menos), `PARCIAL` (agente pediu a 21ª chamada, que não é executada, ou estourou 2 min, via `AbortController`), `FALHA` (sem chave, exceção do SDK, `stop_reason = refusal` ou `max_tokens`).
+- **Controle de execução**: flag `emExecucao` em memória (instância única, Out of Scope multi-instância) + registro `EM_ANDAMENTO`. Manual com flag ligada → 409; automática → `null`. Antes de começar, `EM_ANDAMENTO` com `iniciadoEm` > 5 min vira `FALHA` (`erro = 'abandonada'`). Manual com outra `MANUAL` iniciada < 1 min → 429.
+- **Status final**: `SUCESSO` (agente terminou com `end_turn` com 50 chamadas ou menos), `PARCIAL` (agente pediu a 51ª chamada, que não é executada, ou estourou 2 min, via `AbortController`), `FALHA` (sem chave, exceção do SDK, `stop_reason = refusal` ou `max_tokens`).
 - **Gravação dos alertas**: ATIVO existente do material → atualiza; senão, último alerta do **mesmo tipo** resolvido pelo operador há ≥ 3 dias → volta esse registro para ATIVO; senão (fechado pelo agente, dispensado há ≥ 5 dias ou nunca houve) → cria registro novo. Justificativa padrão sem consumo: "sem consumo nos últimos N dias", N = janela real (7 a 30).
 
 ### AlertasEstoqueService
@@ -294,11 +295,11 @@ model AlertaEstoque {
 | Sem `ANTHROPIC_API_KEY` | `disponivel() = false`; pula o loop; rede de segurança; status `FALHA` (`erro = 'sem chave'`) | Aviso "Última análise: falha" + alertas com selo "sem agente — alerta básico" |
 | Exceção do SDK (rede, 401, 429, 5xx) | Capturada no loop; mantém aceitas; rede de segurança; `FALHA` com a classe do erro em `erro` | Mesmo aviso; a API continua respondendo |
 | `stop_reason = refusal` ou `max_tokens` | Tratado como `FALHA` | Idem |
-| 20 chamadas ou 2 min | Para o loop (`AbortController` cancela a requisição em curso); `PARCIAL` | Aviso "parcial" + alertas aceitos e obrigatórios |
+| 50 chamadas ou 2 min | Para o loop (`AbortController` cancela a requisição em curso); `PARCIAL` | Aviso "parcial" + alertas aceitos e obrigatórios |
 | Ferramenta com input inválido / inexistente | `tool_result` com `is_error: true`; conta no limite | Nenhum |
 | Falha na `$transaction` de persistência | Nada do resultado é gravado; a análise vira `FALHA` numa escrita separada | Alertas anteriores continuam |
 | Crash da API no meio | Fica `EM_ANDAMENTO`; vira `FALHA` na próxima tentativa após 5 min | Nenhum até a próxima análise |
-| Manual concorrente / antes de 5 min | 409 `Já existe uma análise de estoque em andamento` / 429 `Aguarde 5 minutos entre análises manuais` | Mensagem no `erro` da seção |
+| Manual concorrente / antes de 1 min | 409 `Já existe uma análise de estoque em andamento` / 429 `Aguarde 1 minuto entre análises manuais` | Mensagem no `erro` da seção |
 | Previstos inválidos | 400/404 antes de gravar (DTO + service) | Mensagem no formulário |
 
 ---
@@ -316,7 +317,7 @@ model AlertaEstoque {
 | Material apagado entre `validarItens` e o `obra.create` aninhado | `apps/api/src/obras/obras.service.ts` (`create`) | A FK falha e a API responde 500 em vez de 404 | Risco conhecido e aceito (revisão da Fase 4): janela mínima e hoje não existe rota de exclusão de material; a obra não é criada (gravação atômica) |
 | Hot-reload não confiável no OneDrive | `CLAUDE.md` (Ambiente) | Teste manual vê código antigo | `docker restart gesso_api` antes do UAT |
 | Nenhum teste de controller/e2e no repo | `apps/api/test/app.e2e-spec.ts` | Rotas novas sem teste HTTP | Controllers ficam finos (só delegam); regras 100% cobertas nos `.spec.ts` dos services, como no resto do projeto |
-| Custo da API sem limite externo | — | Uso indevido do botão | Limite de 1 manual / 5 min + teto de 20 chamadas; `AGENTE_AUTOMATICO=false` por padrão |
+| Custo da API sem limite externo | — | Uso indevido do botão | Limite de 1 manual por minuto + teto de 50 chamadas; `AGENTE_AUTOMATICO=false` por padrão |
 
 ---
 

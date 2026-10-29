@@ -814,6 +814,77 @@ h1 {
   margin: 0;
 }
 
+/* Ancora o painel dos silenciados, que abre por cima do conteúdo. */
+.acoes-secao {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-icone {
+  padding: 9px;
+}
+
+.btn-icone[aria-expanded='true'] {
+  border-color: var(--primaria);
+  color: var(--primaria);
+}
+
+.painel-silenciados {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 10;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  box-shadow: var(--sombra-lg);
+  padding: 14px 16px;
+}
+
+.painel-silenciados h4 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 10px;
+}
+
+.painel-silenciados ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.painel-silenciados li {
+  padding: 10px 0;
+  border-top: 1px solid var(--borda);
+}
+
+.painel-silenciados li p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--secundario);
+}
+
+.linha-silenciado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* No celular o cabeçalho quebra e as ações vão para a esquerda: o painel abre para a direita. */
+@media (max-width: 600px) {
+  .painel-silenciados {
+    left: 0;
+    right: auto;
+  }
+}
+
 .aviso {
   color: #8a5a00;
   background: #fdf4e1;

@@ -61,7 +61,7 @@ describe('PrevisaoEstoqueService', () => {
     tipo,
     quantidade: dec(quantidade),
     criadoEm: diasAtras(haDias),
-    obra: o ? { status: o.status } : null,
+    obra: o ? { titulo: o.titulo, status: o.status } : null,
   });
 
   const saida = (materialId: string, q: number, haDias: number, o?: ReturnType<typeof obra>) =>
@@ -90,7 +90,12 @@ describe('PrevisaoEstoqueService', () => {
 
   beforeEach(async () => {
     prisma = {
-      material: { findMany: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
+      material: {
+        findMany: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+      },
       materialPrevistoObra: { findMany: jest.fn(), create: jest.fn(), createMany: jest.fn() },
       movimentacaoEstoque: { findMany: jest.fn(), create: jest.fn(), createMany: jest.fn() },
       alertaEstoque: {
@@ -179,6 +184,59 @@ describe('PrevisaoEstoqueService', () => {
 
       expect(cal.diasJanela).toBe(30);
       expect(cal.consumoSolto.toString()).toBe('3');
+    });
+
+    it('SAIDA para obra sem previsao continua no consumo solto e aparece em usoSemPrevisao (EAP-71)', async () => {
+      const loja = obra('o7', StatusObra.ANDAMENTO);
+      dados({
+        materiais: [material('fita', 0, 5)],
+        movimentacoes: [
+          saida('fita', 15, 6),
+          saida('fita', 7, 1, loja),
+          saida('fita', 4, 1, loja),
+          // devolucao antiga: abate o utilizado, nao o que saiu na janela
+          entrada('fita', 1, 40, loja),
+        ],
+      });
+
+      const fita = await snapshotDe('fita');
+
+      expect(fita.consumoSolto.toString()).toBe('26');
+      expect(
+        fita.usoSemPrevisao.map((u) => ({
+          ...u,
+          utilizado: u.utilizado.toString(),
+          saidasNaJanela: u.saidasNaJanela.toString(),
+        })),
+      ).toEqual([
+        {
+          obraId: 'o7',
+          titulo: 'Obra o7',
+          status: StatusObra.ANDAMENTO,
+          utilizado: '10',
+          saidasNaJanela: '11',
+        },
+      ]);
+    });
+
+    it('usoSemPrevisao ignora obra com previsao, obra CANCELADA e SAIDA fora da janela (EAP-71)', async () => {
+      const comPrevisao = obra('o1', StatusObra.ANDAMENTO);
+      const cancelada = obra('o2', StatusObra.CANCELADA);
+      const antiga = obra('o3', StatusObra.CONCLUIDA);
+      dados({
+        materiais: [material('fita', 100, 5)],
+        previstos: [previsto(comPrevisao, 'fita', 10)],
+        movimentacoes: [
+          saida('fita', 3, 2, comPrevisao),
+          saida('fita', 4, 2, cancelada),
+          saida('fita', 5, 31, antiga),
+        ],
+      });
+
+      const fita = await snapshotDe('fita');
+
+      expect(fita.usoSemPrevisao).toEqual([]);
+      expect(fita.consumoSolto.toString()).toBe('0');
     });
 
     it('material criado ha menos de 7 dias usa janela 7 no ritmo', async () => {
@@ -307,9 +365,7 @@ describe('PrevisaoEstoqueService', () => {
     const snapshot = await service.montarSnapshot(agora);
 
     expect(snapshot.materiais.find((m) => m.id === 'cal')?.ultimosAlertas).toEqual([alertaCal]);
-    expect(snapshot.materiais.find((m) => m.id === 'gesso')?.ultimosAlertas).toEqual([
-      alertaGesso,
-    ]);
+    expect(snapshot.materiais.find((m) => m.id === 'gesso')?.ultimosAlertas).toEqual([alertaGesso]);
   });
 
   it('banco sem materiais gera snapshot vazio', async () => {

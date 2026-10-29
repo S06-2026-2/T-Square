@@ -33,7 +33,7 @@ Setup e endpoints completos: `README.md`. Decisões de arquitetura: `docs/ARQUIT
 Specs de feature vivem em `.claude/specs/features/<slug>/spec.md` (formato EARS). Decisões de
 projeto ficam em `.claude/specs/STATE.md` (log `AD-NNN`). Leia o `spec.md` de uma feature antes de
 implementá-la. Specs existentes: `gesseiros-crud-financeiro`, `estoque-materiais-movimentacao`,
-`front-formularios`, `front-dashboard-resumo`.
+`front-formularios`, `front-dashboard-resumo`, `obras-transicoes-status`.
 
 ## Ambiente de desenvolvimento
 
@@ -43,11 +43,14 @@ implementá-la. Specs existentes: `gesseiros-crud-financeiro`, `estoque-materiai
   `Dockerfile.dev` (`RUN apk add --no-cache openssl`) — não remover essa linha.
 - **Portas**: `POSTGRES_PORT` no `.env` raiz pode precisar mudar se `5432` já estiver em uso por
   outro projeto local — checar `docker ps` antes de assumir a porta padrão.
-- **Hot-reload não confiável**: `nest start --watch` às vezes não recompila sozinho quando o
-  repositório está numa pasta sincronizada pelo OneDrive (o bind mount do Docker não recebe o
-  evento de mudança do arquivo). Se editar `apps/api/src/**` e a API continuar respondendo com o
-  comportamento antigo, rodar `docker restart gesso_api` e conferir de novo antes de investigar
-  qualquer outra coisa.
+- **Hot-reload não confiável (API e web)**: com o repositório numa pasta sincronizada pelo
+  OneDrive, o bind mount do Docker nem sempre recebe o evento de mudança do arquivo, então nem o
+  `nest start --watch` nem o Vite percebem a edição. Se editar `apps/api/src/**` e a API continuar
+  respondendo com o comportamento antigo, rodar `docker restart gesso_api`; se editar
+  `apps/web/src/**` e a tela não mudar, rodar `docker restart gesso_web` (e Ctrl+F5 no navegador).
+  Para confirmar que o Vite está servindo o código novo:
+  `curl -s http://localhost:5173/src/<caminho do arquivo> | grep "<trecho novo>"`. Conferir isso
+  antes de investigar qualquer outra coisa.
 
 ## Testes
 

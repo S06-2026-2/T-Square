@@ -9,6 +9,7 @@ import {
 
 import { MotivoIndicador } from '../estoque/calculo-estoque';
 import { PrismaService } from '../prisma/prisma.service';
+import { silencioDoMaterial } from './ferramentas-agente';
 
 type CamposUrgencia = Pick<
   AlertaEstoque,
@@ -80,6 +81,44 @@ export class AlertasEstoqueService {
       ultimaAnalise,
       alertas: ordenados.map((alerta) => ({ ...alerta, motivo: motivoAlerta(alerta) })),
     };
+  }
+
+  /**
+   * Materiais que o agente nao vai alertar agora porque o operador dispensou ou resolveu o
+   * ultimo alerta (mesma regra de silencioDoMaterial), o que termina primeiro no topo.
+   */
+  async listarSilenciados() {
+    const agora = new Date();
+    const ultimos = await this.prisma.alertaEstoque.findMany({
+      distinct: ['materialId', 'tipo'],
+      orderBy: { atualizadoEm: 'desc' },
+      include: { material: { select: { nome: true, unidade: true } } },
+    });
+
+    const porMaterial = new Map<string, typeof ultimos>();
+    for (const alerta of ultimos) {
+      porMaterial.set(alerta.materialId, [...(porMaterial.get(alerta.materialId) ?? []), alerta]);
+    }
+
+    const silenciados = [];
+    for (const alertas of porMaterial.values()) {
+      const silencio = silencioDoMaterial(alertas, agora);
+      if (!silencio.alerta || !silencio.ate) continue;
+      const alerta = alertas.find((a) => a.id === silencio.alerta!.id)!;
+      silenciados.push({
+        alertaId: alerta.id,
+        materialId: alerta.materialId,
+        material: alerta.material,
+        tipo: alerta.tipo,
+        acao: alerta.status,
+        em: alerta.dispensadoEm ?? alerta.resolvidoEm,
+        ate: silencio.ate,
+        // TUDO: nenhum alerta do material; INFORMATIVO: so novas observacoes ficam de fora.
+        abrangencia: silencio.tudo ? 'TUDO' : 'INFORMATIVO',
+      });
+    }
+
+    return silenciados.sort((a, b) => a.ate.getTime() - b.ate.getTime());
   }
 
   async dispensar(id: string) {

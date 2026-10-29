@@ -332,7 +332,7 @@ describe('AlertasEstoque: ações', () => {
 
   it.each([
     [409, 'Já existe uma análise de estoque em andamento'],
-    [429, 'Aguarde 5 minutos entre análises manuais'],
+    [429, 'Aguarde 1 minuto entre análises manuais'],
   ])(
     'POST com %i mostra a mensagem da API no padrão erro e mantém os alertas (EAP-36)',
     async (status, mensagem) => {

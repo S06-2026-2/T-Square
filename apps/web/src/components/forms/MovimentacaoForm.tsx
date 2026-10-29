@@ -3,7 +3,10 @@ import { FormEvent, useState } from 'react';
 import { api } from '../../lib/api';
 import { numero, semVazios, textoOpcional } from '../../lib/corpo';
 import { useEnvio } from '../../lib/useEnvio';
-import type { Material, Obra } from '../../types';
+import type { Material, Obra, StatusObra } from '../../types';
+
+/** A API recusa SAIDA para obra nesses status (EST-09), entao nem aparecem na lista. */
+const obraEncerrada: StatusObra[] = ['CONCLUIDA', 'CANCELADA'];
 
 interface Props {
   materiais: Material[];
@@ -91,7 +94,7 @@ export default function MovimentacaoForm({ materiais, obras, onSalvo, inicial }:
           Obra
           <select value={obraId} onChange={(e) => setObraId(e.target.value)}>
             <option value="">Nenhuma</option>
-            {obras.map((obra) => (
+            {obras.filter((obra) => !obraEncerrada.includes(obra.status)).map((obra) => (
               <option key={obra.id} value={obra.id}>
                 {obra.titulo}
               </option>

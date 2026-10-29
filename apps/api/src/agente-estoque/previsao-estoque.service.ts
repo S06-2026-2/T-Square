@@ -36,6 +36,20 @@ export interface PrevistoUtilizadoObra {
   excedente: Decimal;
 }
 
+/**
+ * Obra nao cancelada que recebeu SAIDA do material na janela sem prever o material (EAP-71).
+ * Essas saidas continuam no consumo solto; o agente so passa a saber de onde vieram.
+ */
+export interface UsoSemPrevisaoObra {
+  obraId: string;
+  titulo: string;
+  status: StatusObra;
+  /** SAIDA - ENTRADA da obra para o material, de todo o historico (piso 0). */
+  utilizado: Decimal;
+  /** SAIDAs para a obra dentro da janela: a parte do consumo solto que foi para ela. */
+  saidasNaJanela: Decimal;
+}
+
 export interface MaterialSnapshot {
   id: string;
   nome: string;
@@ -47,6 +61,7 @@ export interface MaterialSnapshot {
   indicador: IndicadorMaterial;
   obrasQueReservam: ObraReservando[];
   previstoVsUtilizado: PrevistoUtilizadoObra[];
+  usoSemPrevisao: UsoSemPrevisaoObra[];
   /** Ultimo alerta do material por tipo, mais recente primeiro (silencio/reabertura). */
   ultimosAlertas: AlertaEstoque[];
 }
@@ -81,7 +96,7 @@ export class PrevisaoEstoqueService {
           tipo: true,
           quantidade: true,
           criadoEm: true,
-          obra: { select: { status: true } },
+          obra: { select: { titulo: true, status: true } },
         },
       }),
       this.prisma.alertaEstoque.findMany({
@@ -107,17 +122,41 @@ export class PrevisaoEstoqueService {
       const janela = diasJanela(material.criadoEm, agora);
       const inicioJanela = agora.getTime() - janela * DIA_MS;
 
-      const consumoSolto = movimentacoes
-        .filter(
-          (m) =>
-            m.materialId === material.id &&
-            m.tipo === TipoMovimentacao.SAIDA &&
-            m.criadoEm.getTime() >= inicioJanela &&
-            (!m.obraId ||
-              (m.obra?.status !== StatusObra.CANCELADA &&
-                !comPrevisao.has(chave(m.obraId, material.id)))),
-        )
-        .reduce((soma, m) => soma.plus(m.quantidade), new Decimal(0));
+      const saidasSoltas = movimentacoes.filter(
+        (m) =>
+          m.materialId === material.id &&
+          m.tipo === TipoMovimentacao.SAIDA &&
+          m.criadoEm.getTime() >= inicioJanela &&
+          (!m.obraId ||
+            (m.obra?.status !== StatusObra.CANCELADA &&
+              !comPrevisao.has(chave(m.obraId, material.id)))),
+      );
+      const consumoSolto = saidasSoltas.reduce(
+        (soma, m) => soma.plus(m.quantidade),
+        new Decimal(0),
+      );
+
+      // Parte do consumo solto que foi para obras sem previsao do material (EAP-71).
+      const porObra = new Map<string, UsoSemPrevisaoObra>();
+      for (const m of saidasSoltas) {
+        if (!m.obraId || !m.obra) continue;
+        const k = chave(m.obraId, material.id);
+        const atual = porObra.get(m.obraId) ?? {
+          obraId: m.obraId,
+          titulo: m.obra.titulo,
+          status: m.obra.status,
+          utilizado: utilizadoObra(
+            saidasObra.get(k) ?? new Decimal(0),
+            entradasObra.get(k) ?? new Decimal(0),
+          ),
+          saidasNaJanela: new Decimal(0),
+        };
+        porObra.set(m.obraId, {
+          ...atual,
+          saidasNaJanela: atual.saidasNaJanela.plus(m.quantidade),
+        });
+      }
+      const usoSemPrevisao = [...porObra.values()];
 
       const previstoVsUtilizado = previstos
         .filter((p) => p.materialId === material.id)
@@ -161,6 +200,7 @@ export class PrevisaoEstoqueService {
         indicador,
         obrasQueReservam,
         previstoVsUtilizado,
+        usoSemPrevisao,
         ultimosAlertas: alertas.filter((a) => a.materialId === material.id),
       };
     });

@@ -39,6 +39,13 @@ describe('FerramentasAgente', () => {
         previsto: number;
         utilizado: number;
       }[];
+      semPrevisao?: {
+        obraId: string;
+        titulo: string;
+        status: StatusObra;
+        utilizado: number;
+        saidas: number;
+      }[];
     },
   ): MaterialSnapshot {
     const linhas = (o.obras ?? []).map((ob) => ({
@@ -70,6 +77,13 @@ describe('FerramentasAgente', () => {
       }),
       obrasQueReservam,
       previstoVsUtilizado: linhas,
+      usoSemPrevisao: (o.semPrevisao ?? []).map((u) => ({
+        obraId: u.obraId,
+        titulo: u.titulo,
+        status: u.status,
+        utilizado: dec(u.utilizado),
+        saidasNaJanela: dec(u.saidas),
+      })),
       ultimosAlertas: (o.alertas ?? []) as AlertaEstoque[],
     };
   }
@@ -188,6 +202,7 @@ describe('FerramentasAgente', () => {
           obrigatorio: false,
           temReserva: false,
           temPrevisao: false,
+          temUsoSemPrevisao: false,
         },
         // Previsão só de obra CONCLUIDA não conta como temPrevisao.
         expect.objectContaining({ materialId: 'gesso', risco: 'SEM_RISCO', temPrevisao: false }),
@@ -198,6 +213,7 @@ describe('FerramentasAgente', () => {
           obrigatorio: true,
           temReserva: true,
           temPrevisao: true,
+          temUsoSemPrevisao: false,
         }),
       ]);
       expect(JSON.stringify(lista)).not.toMatch(/calculado|saldoLivre|ritmoDiario|"reservado"/);
@@ -217,6 +233,7 @@ describe('FerramentasAgente', () => {
         unidade: 'saco',
         diasJanela: 30,
         consumoSolto: 55,
+        consumoEmObrasSemPrevisao: 0,
         ritmoDiario: 1.83,
         diasAteMinimo: 2.73,
         saldoLivre: 15,
@@ -325,6 +342,88 @@ describe('FerramentasAgente', () => {
 
       expect(r.conteudo).toContain('dispensado');
       expect(r.conteudo).not.toContain('consulte');
+    });
+  });
+
+  describe('uso sem previsão (EAP-71, EAP-72)', () => {
+    // Fita: 40 de consumo solto, dos quais 11 foram para uma obra que não prevê fita.
+    const fita = () =>
+      material('cal', {
+        saldo: 0,
+        minimo: 5,
+        consumo: 40,
+        semPrevisao: [
+          {
+            obraId: 'o-7',
+            titulo: 'Drywall - Loja Avenida',
+            status: StatusObra.ANDAMENTO,
+            utilizado: 11,
+            saidas: 11,
+          },
+        ],
+      });
+
+    it('listarMateriais avisa, consumoDoMaterial separa a parte das obras e previstoVsUtilizado detalha por marcador', () => {
+      const ctx = contexto(fita());
+
+      const [lista] = JSON.parse(ferramentas.executar('listarMateriais', {}, ctx).conteudo);
+      const consumo = JSON.parse(
+        ferramentas.executar('consumoDoMaterial', { materialId: 'cal' }, ctx).conteudo,
+      );
+      const previsto = ferramentas.executar('previstoVsUtilizado', { materialId: 'cal' }, ctx);
+
+      expect(lista).toEqual(
+        expect.objectContaining({ temPrevisao: false, temUsoSemPrevisao: true }),
+      );
+      expect(consumo).toEqual(
+        expect.objectContaining({ consumoSolto: 40, consumoEmObrasSemPrevisao: 11 }),
+      );
+      expect(JSON.parse(previsto.conteudo)).toEqual({
+        materialId: 'cal',
+        nome: 'CAL',
+        unidade: 'saco',
+        obras: [],
+        usoSemPrevisao: [
+          { obra: '{{OBRA_1}}', status: 'ANDAMENTO', utilizado: 11, saidasNaJanela: 11 },
+        ],
+      });
+      expect(previsto.conteudo).not.toContain('Loja Avenida');
+      expect(ctx.mapa.paraJson()).toEqual({ '{{OBRA_1}}': 'o-7' });
+    });
+
+    it('sem uso sem previsão, consumoEmObrasSemPrevisao é 0 e temUsoSemPrevisao é false', () => {
+      const ctx = contexto(calComFalta());
+
+      const [lista] = JSON.parse(ferramentas.executar('listarMateriais', {}, ctx).conteudo);
+      const consumo = JSON.parse(
+        ferramentas.executar('consumoDoMaterial', { materialId: 'cal' }, ctx).conteudo,
+      );
+
+      expect(lista.temUsoSemPrevisao).toBe(false);
+      expect(consumo.consumoEmObrasSemPrevisao).toBe(0);
+    });
+
+    it('trava: com uso sem previsão, sugerir exige previstoVsUtilizado', () => {
+      const ctx = contexto(fita());
+      ferramentas.executar('consumoDoMaterial', { materialId: 'cal' }, ctx);
+      const entrada = {
+        materialId: 'cal',
+        justificativa: 'texto',
+        tipo: 'REPOSICAO',
+        quantidade: 45,
+      };
+
+      const r1 = ferramentas.executar('sugerirReposicao', entrada, ctx);
+      ferramentas.executar('previstoVsUtilizado', { materialId: 'cal' }, ctx);
+      const r2 = ferramentas.executar('sugerirReposicao', entrada, ctx);
+
+      expect(r1).toEqual({
+        conteudo:
+          'Sugestão recusada: antes de sugerir para este material, consulte previstoVsUtilizado.',
+        erro: true,
+      });
+      expect(r2.erro).toBe(false);
+      expect(ctx.aceitas).toHaveLength(1);
     });
   });
 

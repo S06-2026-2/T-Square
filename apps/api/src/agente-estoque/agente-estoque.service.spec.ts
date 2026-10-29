@@ -99,6 +99,7 @@ describe('AgenteEstoqueService', () => {
       consumo?: number;
       alertas?: Partial<AlertaEstoque>[];
       obras?: { obraId: string; titulo: string; pendente: number }[];
+      semPrevisao?: { obraId: string; titulo: string; saidas: number }[];
     },
   ): MaterialSnapshot {
     const obrasQueReservam = (o.obras ?? []).map((ob) => ({ ...ob, pendente: dec(ob.pendente) }));
@@ -119,6 +120,13 @@ describe('AgenteEstoqueService', () => {
       }),
       obrasQueReservam,
       previstoVsUtilizado: [],
+      usoSemPrevisao: (o.semPrevisao ?? []).map((u) => ({
+        obraId: u.obraId,
+        titulo: u.titulo,
+        status: StatusObra.ANDAMENTO,
+        utilizado: dec(u.saidas),
+        saidasNaJanela: dec(u.saidas),
+      })),
       ultimosAlertas: (o.alertas ?? []) as AlertaEstoque[],
     };
   }
@@ -296,7 +304,7 @@ describe('AgenteEstoqueService', () => {
       });
     });
 
-    it('a 21ª chamada de ferramenta não executa: PARCIAL mantendo as aceitas', async () => {
+    it('a 51ª chamada de ferramenta não executa: PARCIAL mantendo as aceitas', async () => {
       const blocos = [
         consumo('cal'),
         ferramenta('sugerirReposicao', {
@@ -314,8 +322,8 @@ describe('AgenteEstoqueService', () => {
       const r = await loop(service, ctx);
 
       expect(r.status).toBe(StatusAnaliseEstoque.PARCIAL);
-      expect(r.chamadas).toBe(20);
-      expect(r.passos.filter((p) => p.tipo === 'ferramenta')).toHaveLength(20);
+      expect(r.chamadas).toBe(50);
+      expect(r.passos.filter((p) => p.tipo === 'ferramenta')).toHaveLength(50);
       expect(ctx.aceitas.map((s) => s.materialId)).toEqual(['cal']);
       expect(roteiro.requisicoes).toHaveLength(1);
     });
@@ -462,6 +470,30 @@ describe('AgenteEstoqueService', () => {
           justificativa:
             'Saldo livre de 3 saco, abaixo do mínimo de 10 saco; ' +
             'sem consumo nos últimos 12 dias. Repor 7 saco.',
+        }),
+      ]);
+    });
+
+    it('texto padrão cita as obras que receberam o material sem previsão (EAP-73)', async () => {
+      const fita = material('fita', {
+        saldo: 0,
+        minimo: 5,
+        consumo: 40,
+        semPrevisao: [{ obraId: 'o-7', titulo: 'Drywall - Loja Avenida', saidas: 11 }],
+      });
+      previsao.montarSnapshot.mockResolvedValue(snapshot(fita));
+      const service = await criar(new Roteiro([terminar()]));
+
+      await service.analisar(OrigemAnaliseEstoque.MANUAL);
+
+      expect(dadosCriados()).toEqual([
+        expect.objectContaining({
+          materialId: 'fita',
+          origemTexto: OrigemTextoAlerta.PADRAO,
+          justificativa:
+            'Saldo livre de 0 saco, abaixo do mínimo de 5 saco; consumo de 1,33 saco/dia. ' +
+            'Repor 45 saco cobre 30 dias. ' +
+            'Saídas para obras sem previsão: Drywall - Loja Avenida (11 saco).',
         }),
       ]);
     });
@@ -956,10 +988,10 @@ describe('AgenteEstoqueService', () => {
       expect(prisma.analiseEstoque.create).not.toHaveBeenCalled();
     });
 
-    it('manual menos de 5 min depois da última manual → 429 (EAP-23)', async () => {
+    it('manual menos de 1 min depois da última manual → 429 (EAP-23)', async () => {
       prisma.analiseEstoque.findFirst.mockImplementation(async ({ where }) =>
         where.origem === OrigemAnaliseEstoque.MANUAL
-          ? { id: 'an-0', iniciadoEm: new Date(Date.now() - 4 * MIN) }
+          ? { id: 'an-0', iniciadoEm: new Date(Date.now() - 59 * 1000) }
           : null,
       );
       const service = await criar(new Roteiro([terminar()]));
@@ -968,7 +1000,7 @@ describe('AgenteEstoqueService', () => {
 
       expect(erro).toBeInstanceOf(HttpException);
       expect(erro.getStatus()).toBe(429);
-      expect(erro.message).toBe('Aguarde 5 minutos entre análises manuais');
+      expect(erro.message).toBe('Aguarde 1 minuto entre análises manuais');
       expect(prisma.analiseEstoque.findFirst).toHaveBeenCalledWith({
         where: { origem: OrigemAnaliseEstoque.MANUAL },
         orderBy: { iniciadoEm: 'desc' },
@@ -976,10 +1008,10 @@ describe('AgenteEstoqueService', () => {
       expect(prisma.analiseEstoque.create).not.toHaveBeenCalled();
     });
 
-    it('manual 5 min ou mais depois da última manual roda; automática ignora o limite', async () => {
+    it('manual 1 min ou mais depois da última manual roda; automática ignora o limite', async () => {
       prisma.analiseEstoque.findFirst.mockImplementation(async ({ where }) =>
         where.origem === OrigemAnaliseEstoque.MANUAL
-          ? { id: 'an-0', iniciadoEm: new Date(Date.now() - 5 * MIN - 1000) }
+          ? { id: 'an-0', iniciadoEm: new Date(Date.now() - 1 * MIN - 1000) }
           : null,
       );
       const service = await criar(new Roteiro([terminar(), terminar()]));

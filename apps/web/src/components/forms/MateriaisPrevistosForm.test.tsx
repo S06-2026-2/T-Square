@@ -25,6 +25,7 @@ const linhas: LinhaPrevistoUtilizado[] = [
     utilizado: '8',
     pendente: '12',
     excedente: '0',
+    semPrevisao: false,
   },
   {
     materialId: 'm-gesso',
@@ -34,6 +35,7 @@ const linhas: LinhaPrevistoUtilizado[] = [
     utilizado: '15',
     pendente: '0',
     excedente: '5',
+    semPrevisao: false,
   },
   {
     materialId: 'm-placa',
@@ -43,6 +45,7 @@ const linhas: LinhaPrevistoUtilizado[] = [
     utilizado: '1250.5',
     pendente: '0',
     excedente: '0',
+    semPrevisao: false,
   },
 ];
 
@@ -60,7 +63,11 @@ function corpoDaTabela() {
   return within(tabela)
     .getAllByRole('row')
     .slice(1)
-    .map((linha) => within(linha).getAllByRole('cell').map((celula) => celula.textContent));
+    .map((linha) =>
+      within(linha)
+        .getAllByRole('cell')
+        .map((celula) => celula.textContent),
+    );
 }
 
 function salvar() {
@@ -91,6 +98,56 @@ describe('MateriaisPrevistosForm', () => {
     expect(get).toHaveBeenCalledWith('/obras/o1/materiais-previstos');
   });
 
+  describe('material usado sem previsão (EAP-70)', () => {
+    const fita: LinhaPrevistoUtilizado = {
+      materialId: 'm-fita',
+      material: 'Fita para juntas',
+      unidade: 'rolo',
+      previsto: '0',
+      utilizado: '11',
+      pendente: '0',
+      excedente: '11',
+      semPrevisao: true,
+    };
+
+    it('aparece na tabela com "—" no previsto e "não previsto" na situação', async () => {
+      responder([linhas[0], fita]);
+      render(<MateriaisPrevistosForm obraId="o1" status="ANDAMENTO" />);
+
+      await screen.findByRole('table');
+      expect(corpoDaTabela()).toEqual([
+        ['Cal (saco)', '20', '8', 'pendente: 12'],
+        ['Fita para juntas (rolo)', '—', '11', 'não previsto'],
+      ]);
+    });
+
+    it('obra só com material sem previsão mostra a tabela em vez de "Nenhum material previsto"', async () => {
+      responder([fita]);
+      render(<MateriaisPrevistosForm obraId="o1" status="ANDAMENTO" />);
+
+      await screen.findByRole('table');
+      expect(screen.queryByText('Nenhum material previsto')).not.toBeInTheDocument();
+    });
+
+    it('não entra no editor nem no PUT ao salvar', async () => {
+      responder([linhas[0], fita]);
+      put.mockResolvedValue([]);
+      render(<MateriaisPrevistosForm obraId="o1" status="ANDAMENTO" />);
+      await screen.findByRole('table');
+
+      expect(
+        screen.getAllByLabelText('Material').map((s) => (s as HTMLSelectElement).value),
+      ).toEqual(['m-cal']);
+      salvar();
+
+      await waitFor(() =>
+        expect(put).toHaveBeenCalledWith('/obras/o1/materiais-previstos', {
+          itens: [{ materialId: 'm-cal', quantidade: 20 }],
+        }),
+      );
+    });
+  });
+
   it('mostra "Nenhum material previsto" no lugar da tabela (EAP-57)', async () => {
     responder([]);
     render(<MateriaisPrevistosForm obraId="o1" status="ORCAMENTO" />);
@@ -112,9 +169,9 @@ describe('MateriaisPrevistosForm', () => {
       'm-gesso',
       'm-placa',
     ]);
-    expect(screen.getAllByLabelText('Quantidade').map((i) => (i as HTMLInputElement).value)).toEqual(
-      ['20', '10', '1250.5'],
-    );
+    expect(
+      screen.getAllByLabelText('Quantidade').map((i) => (i as HTMLInputElement).value),
+    ).toEqual(['20', '10', '1250.5']);
     // Tabela acima do formulário de edição (P3, critério 2).
     expect(
       tabela.compareDocumentPosition(selects[0]) & Node.DOCUMENT_POSITION_FOLLOWING,

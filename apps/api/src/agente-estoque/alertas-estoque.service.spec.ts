@@ -53,6 +53,109 @@ describe('AlertasEstoqueService', () => {
     jest.useRealTimers();
   });
 
+  describe('listarSilenciados', () => {
+    const DIA = 24 * 60 * 60 * 1000;
+    const haDias = (dias: number) => new Date(AGORA.getTime() - dias * DIA);
+    const fechado = (
+      id: string,
+      materialId: string,
+      tipo: TipoAlertaEstoque,
+      fechamento:
+        | { status: 'DISPENSADO'; em: Date }
+        | { status: 'RESOLVIDO'; em: Date; por: ResolvidoPor },
+    ) => ({
+      id,
+      materialId,
+      tipo,
+      status: fechamento.status,
+      dispensadoEm: fechamento.status === 'DISPENSADO' ? fechamento.em : null,
+      resolvidoEm: fechamento.status === 'RESOLVIDO' ? fechamento.em : null,
+      resolvidoPor: fechamento.status === 'RESOLVIDO' ? fechamento.por : null,
+      atualizadoEm: fechamento.em,
+      material: { nome: materialId, unidade: 'sc' },
+    });
+
+    it('lista o que o operador silenciou, com até quando, o que acaba primeiro no topo', async () => {
+      prisma.alertaEstoque.findMany.mockResolvedValue([
+        fechado('a-cal', 'Cal', TipoAlertaEstoque.REPOSICAO, {
+          status: 'DISPENSADO',
+          em: haDias(1),
+        }),
+        fechado('a-cola', 'Gesso cola', TipoAlertaEstoque.REPOSICAO, {
+          status: 'RESOLVIDO',
+          em: haDias(2),
+          por: ResolvidoPor.OPERADOR,
+        }),
+      ]);
+
+      const resultado = await service.listarSilenciados();
+
+      const consulta = prisma.alertaEstoque.findMany.mock.calls[0][0];
+      expect(consulta.distinct).toEqual(['materialId', 'tipo']);
+      expect(consulta.orderBy).toEqual({ atualizadoEm: 'desc' });
+      expect(resultado).toEqual([
+        {
+          alertaId: 'a-cola',
+          materialId: 'Gesso cola',
+          material: { nome: 'Gesso cola', unidade: 'sc' },
+          tipo: TipoAlertaEstoque.REPOSICAO,
+          acao: 'RESOLVIDO',
+          em: haDias(2),
+          ate: haDias(-1),
+          abrangencia: 'TUDO',
+        },
+        {
+          alertaId: 'a-cal',
+          materialId: 'Cal',
+          material: { nome: 'Cal', unidade: 'sc' },
+          tipo: TipoAlertaEstoque.REPOSICAO,
+          acao: 'DISPENSADO',
+          em: haDias(1),
+          ate: haDias(-4),
+          abrangencia: 'TUDO',
+        },
+      ]);
+    });
+
+    it('INFORMATIVO dispensado silencia só observações do material', async () => {
+      prisma.alertaEstoque.findMany.mockResolvedValue([
+        fechado('a-info', 'Fita', TipoAlertaEstoque.INFORMATIVO, {
+          status: 'DISPENSADO',
+          em: haDias(1),
+        }),
+      ]);
+
+      const [item] = await service.listarSilenciados();
+
+      expect(item.abrangencia).toBe('INFORMATIVO');
+    });
+
+    it('não lista silêncio vencido nem alerta fechado pelo agente', async () => {
+      prisma.alertaEstoque.findMany.mockResolvedValue([
+        fechado('a-vencido', 'Cal', TipoAlertaEstoque.REPOSICAO, {
+          status: 'RESOLVIDO',
+          em: haDias(3),
+          por: ResolvidoPor.OPERADOR,
+        }),
+        fechado('a-agente', 'Placa', TipoAlertaEstoque.REPOSICAO, {
+          status: 'RESOLVIDO',
+          em: haDias(1),
+          por: ResolvidoPor.AGENTE,
+        }),
+      ]);
+
+      expect(await service.listarSilenciados()).toEqual([]);
+    });
+
+    it('alerta ATIVO mais recente do mesmo tipo encerra o silêncio', async () => {
+      prisma.alertaEstoque.findMany.mockResolvedValue([
+        { ...alerta(StatusAlertaEstoque.ATIVO), materialId: 'Cal', atualizadoEm: haDias(0) },
+      ]);
+
+      expect(await service.listarSilenciados()).toEqual([]);
+    });
+  });
+
   describe('listarAtivos', () => {
     it('lista só os alertas ATIVO, com o material incluído', async () => {
       const ativos = [{ ...alerta(StatusAlertaEstoque.ATIVO), material: { nome: 'Cal' } }];

@@ -65,8 +65,8 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 | Silêncio ao dispensar um `INFORMATIVO` | Dispensar um `INFORMATIVO` silencia por 5 dias só novos `INFORMATIVO` daquele material; um `REPOSICAO` (inclusive obrigatório) ainda pode aparecer nesse período. Dispensar um `REPOSICAO` continua silenciando o material inteiro | Se a dispensa de uma observação silenciasse o material inteiro, uma falta real que aparecesse nos 5 dias seguintes ficaria escondida | y |
 | Alertas obrigatórios sem sugestão do agente | Ao fim da análise, o código cria os alertas obrigatórios que o agente não sugeriu, com a quantidade calculada e a justificativa padrão, marcados `origemTexto = PADRAO` (selo "sem agente — alerta básico") | Decidido na discussão (1.a, 1.b) | y |
 | Sem chave ou falha da Claude API | A análise termina com status `FALHA`, a rede de segurança roda e os alertas ATIVO existentes não são fechados. O Dashboard mostra um aviso mais os alertas ATIVO (os da última análise bem-sucedida mais os da rede de segurança) | Decidido na discussão (1.b) | y |
-| Limites do loop | No máximo 20 chamadas de ferramenta e 2 minutos por análise. Se estourar: para, mantém as sugestões aceitas, roda a rede de segurança e grava status `PARCIAL` | Decidido na discussão (1.c) | y |
-| Registro dos passos | `AnaliseEstoque` guarda a sequência de passos (ferramenta chamada, argumentos, resumo do resultado, texto do agente). Nada disso aparece na UI | Decidido na discussão (1.c) | y |
+| Limites do loop | No máximo 50 chamadas de ferramenta e 2 minutos por análise. Se estourar: para, mantém as sugestões aceitas, roda a rede de segurança e grava status `PARCIAL` | Decidido na discussão (1.c); teto subiu de 20 para 50 em 2026-10-29 (AD-008) | y |
+| Registro dos passos | `AnaliseEstoque` guarda a sequência de passos (ferramenta chamada, argumentos, resumo do resultado, texto do agente). Nada disso aparece na UI | Decidido na discussão (1.c); teto subiu de 20 para 50 em 2026-10-29 (AD-008) | y |
 | Números exibidos | O card mostra os campos numéricos gravados/validados (quantidade, dias, saldo livre), nunca números extraídos do texto | Decidido na discussão (1) | y |
 | Privacidade (marcadores) | As obras chegam à LLM só como `{{OBRA_n}}`; o sistema troca pelo título depois da resposta. Nenhum dado de cliente (`clienteNome`, `clienteTelefone`, `endereco`) é enviado | Decidido na discussão (J) | y |
 | Marcador alterado | Se a justificativa contiver qualquer trecho `{{…}}` que não seja exatamente um marcador emitido nesta análise (ex.: `{{OBRA 12}}`, `{{OBRA_99}}` não emitido), o texto é descartado e trocado pelo texto padrão (`origemTexto = PADRAO`) | Decidido na discussão (7) | y |
@@ -82,7 +82,7 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 | `AGENTE_AUTOMATICO` | `true` liga cron e catch-up; `false` (padrão no `.env.example`) desliga os dois. O botão manual e a rede de segurança funcionam com qualquer valor | Decidido na discussão (6) | y |
 | Concorrência | Uma análise por vez. Pedido manual com análise `EM_ANDAMENTO` recebe 409; disparo agendado/catch-up nessa situação é pulado sem erro. As gravações de alertas de uma análise acontecem em `prisma.$transaction` | Decidido na discussão (I) | y |
 | Análise travada | Uma `AnaliseEstoque` `EM_ANDAMENTO` com mais de 5 minutos é tratada como abandonada (vira `FALHA`) quando a próxima análise tenta começar | Decidido na discussão (8); sem isso, um crash da API no meio da análise bloquearia todas as análises seguintes | y |
-| Limite da execução manual | No máximo 1 execução `MANUAL` a cada 5 minutos, contados do início da última `MANUAL`; excedente recebe 429 | Decidido na discussão (2) | y |
+| Limite da execução manual | No máximo 1 execução `MANUAL` por minuto (era 5 minutos; reduzido pelo usuário em 2026-10-29), contados do início da última `MANUAL`; excedente recebe 429 | Decidido na discussão (2) | y |
 | Contrato da execução manual | `POST /estoque/agente/analisar` é síncrono: responde 201 com a `AnaliseEstoque` finalizada (até ~2 min) | Mais simples que 202 + polling; o limite de 2 min cabe numa requisição HTTP | y |
 | Contrato de leitura e ação | `GET /estoque/agente/alertas` → `{ ultimaAnalise, alertas }` (só ATIVO); `PATCH /estoque/agente/alertas/:id/dispensar` e `PATCH /estoque/agente/alertas/:id/resolver` | Mesmo padrão de um endpoint por ação usado em `/obras/:id/concluir` | y |
 | Contrato dos materiais previstos | `POST /obras` aceita `materiaisPrevistos?: { materialId, quantidade }[]`, gravado na mesma transação da obra; `PUT /obras/:id/materiais-previstos` substitui a lista inteira (lista vazia remove tudo); `GET /obras/:id/materiais-previstos` devolve previsto × utilizado | Substituir a lista evita endpoints de item e mantém a regra no service | y |
@@ -93,7 +93,7 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 | Rótulo da situação | `pendente > 0` → "pendente: N"; `excedente > 0` → "excedente: N"; os dois 0 → "conforme previsto"; se os dois > 0 (não deveria acontecer), vale o pendente | Decidido na discussão (10). Texto sem plural ajustado em 2026-10-29 | y |
 | Ícones dos alertas | `REPOSICAO` usa ⚠️; `INFORMATIVO` usa ℹ️ com o rótulo "observação do agente" | Decidido na discussão (10) | y |
 | Modelo e chave | `ANTHROPIC_MODEL` (padrão `claude-haiku-5-5`) e `ANTHROPIC_API_KEY` no `.env` (nunca commitado), vazios no `.env.example` e repassados no `docker-compose.yml` | Decidido na discussão (6) | y |
-| Estimativa de custo | Por análise, com até 20 chamadas de ferramenta e o histórico reenviado a cada turno (~2k tokens de sistema+ferramentas, ~0,7k por passo): pior caso ~175k tokens de entrada e ~20k de saída (com o raciocínio adaptativo). Haiku 5.5 (US$ 0,10 / 0,50 por MTok): ~US$ 0,03 no pior caso, ~US$ 0,01 típico, menos de US$ 1/mês com 1 análise diária e algumas manuais. Opus 5.5 (US$ 4 / 20): ~US$ 1,10 no pior caso por análise | Estimativa, não medição. Execução real (T27): estimado em menos de US$ 0,01 por análise (Haiku 5.5); confirmar no Console — Usage, 29/10 por volta de 13:25 e 13:44 UTC, 19 requisições | y |
+| Estimativa de custo | Por análise, com até 50 chamadas de ferramenta e o histórico reenviado a cada turno (~2k tokens de sistema+ferramentas, ~0,7k por passo): pior caso ~1M tokens de entrada e ~50k de saída (com o raciocínio adaptativo); com 20 chamadas eram ~175k e ~20k. Haiku 5.5 (US$ 0,10 / 0,50 por MTok): ~US$ 0,13 no pior caso, ~US$ 0,02 típico, poucos dólares por mês com 1 análise diária e algumas manuais. Opus 5.5 (US$ 4 / 20): ~US$ 5 no pior caso por análise | Estimativa, não medição. Execução real (T27): estimado em menos de US$ 0,01 por análise (Haiku 5.5); confirmar no Console — Usage, 29/10 por volta de 13:25 e 13:44 UTC, 19 requisições | y |
 | Testes | Os `.spec.ts` sempre usam a LLM mockada com roteiros de chamadas de ferramenta; nenhum teste chama a Claude API | Decidido na discussão (1) | y |
 | AD-006 | Texto na seção "Decisão proposta para STATE.md" abaixo; gravada no `STATE.md` em 2026-10-27 | Decidido na discussão (7) | y |
 
@@ -119,7 +119,7 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 6. IF o agente chama `sugerirReposicao` com `tipo = REPOSICAO` e quantidade fora da faixa, ou para um material com `calculado <= 0` THEN the system SHALL recusar sem gravar e devolver ao agente um resultado de ferramenta com erro que contém a faixa aceita (ou, com `calculado <= 0`, a indicação de que só `INFORMATIVO` é aceito).
 7. WHEN uma análise termina e um material com alerta obrigatório não recebeu sugestão `REPOSICAO` aceita do agente THEN the system SHALL criar o alerta `REPOSICAO` com a quantidade calculada, a justificativa padrão e `origemTexto = PADRAO`.
 8. IF `ANTHROPIC_API_KEY` não está configurada ou a chamada à Claude API falha THEN the system SHALL gravar a análise com status `FALHA`, criar os alertas obrigatórios pela rede de segurança e responder sem derrubar a API.
-9. IF o agente pede a 21ª chamada de ferramenta (as 20 primeiras são executadas) ou a análise chega a 2 minutos THEN the system SHALL interromper o agente sem executar essa chamada, manter as sugestões já aceitas, rodar a rede de segurança e gravar a análise com status `PARCIAL`; IF o agente termina (`end_turn`) com 20 chamadas ou menos dentro dos 2 minutos THEN the system SHALL gravar a análise com status `SUCESSO`.
+9. IF o agente pede a 51ª chamada de ferramenta (as 50 primeiras são executadas) ou a análise chega a 2 minutos THEN the system SHALL interromper o agente sem executar essa chamada, manter as sugestões já aceitas, rodar a rede de segurança e gravar a análise com status `PARCIAL`; IF o agente termina (`end_turn`) com 50 chamadas ou menos dentro dos 2 minutos THEN the system SHALL gravar a análise com status `SUCESSO`.
 10. The system SHALL nunca alterar `Material.saldoAtual` nem criar `MovimentacaoEstoque` durante uma análise, em nenhum status de término.
 11. The system SHALL enviar as obras à Claude API apenas como marcadores `{{OBRA_n}}` e nunca enviar `clienteNome`, `clienteTelefone` ou `endereco`.
 12. WHEN a justificativa aceita contém marcadores emitidos nesta análise THEN the system SHALL gravar o texto com cada marcador trocado pelo título da obra correspondente.
@@ -134,6 +134,10 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 21. IF o material tem obras com pendente > 0 e a justificativa aceita não cita nenhum marcador delas THEN the system SHALL manter o texto do agente (`origemTexto = AGENTE`) e acrescentar ao fim "Reservado para: <títulos das obras>", separados por vírgula.
 22. IF o agente chama `sugerirReposicao` para um material sem ter chamado nesta análise `consumoDoMaterial` para ele, ou `reservadoPorObras` quando o material tem reserva, ou `previstoVsUtilizado` quando ele tem previsão de obra `FECHADA`/`ANDAMENTO` THEN the system SHALL recusar sem gravar e devolver ao agente um resultado de ferramenta com erro que lista as consultas que faltam. A recusa por silêncio vem antes desta trava. `listarMateriais` dá só a visão geral (saldo, mínimo, `risco`, `obrigatorio`, `temReserva`, `temPrevisao`), sem `calculado`, que passa a vir em `consumoDoMaterial` junto com a faixa aceita. (EAP-67, T28)
 23. WHILE o material tem `ritmoDiario > 0` e não é obrigatório WHEN o cálculo determinístico dá `diasAteMinimo <= 7` THEN the system SHALL marcar o `motivo` como `PREVISAO`; com `diasAteMinimo > 7` (ex.: 7,01) SHALL deixar o `motivo` nulo. A sugestão de previsão continua a critério do agente, fora da rede de segurança. (EAP-69, critério promovido da assumption "Alerta de previsão" depois do Verifier)
+24. WHEN o material tem SAIDA na janela para obras não canceladas que não têm previsão dele THEN the system SHALL contar essas saídas no consumo solto (como antes) e informar ao agente de onde elas vieram: `consumoDoMaterial` devolve `consumoEmObrasSemPrevisao` (a parte do consumo solto que foi para essas obras), `previstoVsUtilizado` devolve `usoSemPrevisao` com uma linha por obra (marcador `{{OBRA_n}}`, status, `utilizado` líquido e `saidasNaJanela`) e `listarMateriais` devolve `temUsoSemPrevisao`. (EAP-71, T30)
+25. IF o material tem `temUsoSemPrevisao = true` e o agente chama `sugerirReposicao` sem ter chamado `previstoVsUtilizado` para ele nesta análise THEN the system SHALL recusar sem gravar, listando `previstoVsUtilizado` entre as consultas que faltam (mesma trava da EAP-67). (EAP-72, T30)
+26. WHEN a rede de segurança grava a justificativa padrão de um material com uso sem previsão THEN the system SHALL acrescentar `Saídas para obras sem previsão: <título> (<saidasNaJanela> <unidade>), …`. (EAP-73, T30)
+
 
 **Independent Test**: com Cal criada há mais de 30 dias (`estoqueMinimo` 10, `saldoAtual` 40) e registrar 30 sacos de SAIDA sem obra nos últimos 30 dias (ritmo 1/dia, `diasAteMinimo` = 30). Rodar com a LLM mockada sugerindo `REPOSICAO` de 20: recusado, porque `calculado = ceil(30 + 10 − 40)` = 0; o roteiro então registra um `INFORMATIVO`, que é aceito sem quantidade. Registrar mais 25 de SAIDA (saldo 15, ritmo ≈ 1,83/dia, `diasAteMinimo` ≈ 2,7): o roteiro sugere 50, que é aceito (`calculado = ceil(55 + 10 − 15)` = 50). Repetir a análise: continua 1 alerta. Rodar sem chave: status `FALHA`, alerta mantido, `saldoAtual` e movimentações inalterados.
 
@@ -152,7 +156,7 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 3. WHERE `AGENTE_AUTOMATICO` é `false` ou ausente the system SHALL não registrar o cron e não executar o catch-up.
 4. WHEN um usuário autenticado chama `POST /estoque/agente/analisar` THEN the system SHALL executar uma análise com origem `MANUAL` e responder 201 com a `AnaliseEstoque` finalizada, qualquer que seja o valor de `AGENTE_AUTOMATICO`.
 5. IF `POST /estoque/agente/analisar` é chamado enquanto existe uma análise `EM_ANDAMENTO` THEN the system SHALL responder 409 com a mensagem `Já existe uma análise de estoque em andamento` sem iniciar outra.
-6. IF `POST /estoque/agente/analisar` é chamado menos de 5 minutos depois do início da última análise `MANUAL` THEN the system SHALL responder 429 com a mensagem `Aguarde 5 minutos entre análises manuais` sem iniciar outra.
+6. IF `POST /estoque/agente/analisar` é chamado menos de 1 minuto depois do início da última análise `MANUAL` THEN the system SHALL responder 429 com a mensagem `Aguarde 1 minuto entre análises manuais` sem iniciar outra.
 7. IF o disparo agendado ou de catch-up ocorre enquanto existe uma análise `EM_ANDAMENTO` THEN the system SHALL pular esse disparo sem criar `AnaliseEstoque` e sem lançar erro.
 8. IF existe uma análise `EM_ANDAMENTO` iniciada há mais de 5 minutos quando outra vai começar THEN the system SHALL marcá-la como `FALHA` e prosseguir com a nova.
 
@@ -228,6 +232,7 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 7. WHEN uma análise alerta um material cujo último alerta do mesmo tipo foi resolvido pelo operador há 3 dias ou mais (risco persistente) THEN the system SHALL voltar esse mesmo alerta para ATIVO com os números da análise atual. IF o último alerta do mesmo tipo foi fechado pelo agente (`resolvidoPor = AGENTE`) ou dispensado há 5 dias ou mais THEN the system SHALL criar um registro novo.
 8. IF a chamada de dispensar ou resolver falha THEN the system SHALL manter o card e exibir a mensagem da API no padrão `erro` da seção de estoque.
 9. WHILE o último alerta `INFORMATIVO` do material foi dispensado há menos de 5 dias the system SHALL recusar novos `INFORMATIVO` para esse material e SHALL continuar aceitando e criando alertas `REPOSICAO` para ele.
+11. WHEN o operador expande o símbolo de silenciados na seção de alertas THEN the system SHALL buscar `GET /estoque/agente/silenciados` e listar cada material silenciado pelos critérios 5, 6 e 9 (material, tipo e ação — dispensado ou resolvido —, quando e até quando), o silêncio que termina primeiro no topo, deixando claro quando só observações estão silenciadas; WHEN o operador minimiza o símbolo THEN the system SHALL esconder a lista. (EAP-74)
 
 **Independent Test**: dispensar o alerta de Cal e rodar a análise de novo: nenhum alerta de Cal por 5 dias (simulado avançando o relógio no teste). Resolver o alerta de Gesso, rodar no dia seguinte (nada) e depois de 3 dias (o mesmo alerta volta ATIVO).
 
@@ -244,7 +249,10 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 1. WHEN `GET /obras/:id/materiais-previstos` é chamado THEN the system SHALL responder com uma linha por material previsto contendo `material`, `unidade`, `previsto`, `utilizado`, `pendente` e `excedente`.
 2. WHEN o operador abre "Materiais previstos" no card da obra THEN the system SHALL exibir a tabela com as colunas material, previsto, utilizado e situação, acima do formulário de edição.
 3. WHEN `pendente > 0` THEN the system SHALL exibir a situação "pendente: N"; WHEN `excedente > 0` THEN the system SHALL exibir "excedente: N"; WHEN os dois são 0 THEN the system SHALL exibir "conforme previsto".
-4. IF a obra não tem materiais previstos THEN the system SHALL exibir "Nenhum material previsto" no lugar da tabela.
+4. IF a obra não tem materiais previstos THEN the system SHALL exibir "Nenhum material previsto" no lugar da tabela. Com só linhas `semPrevisao`, a tabela aparece normalmente.
+5. WHEN a obra tem utilizado líquido > 0 de um material que ela não prevê THEN `GET /obras/:id/materiais-previstos` SHALL incluir uma linha desse material com `previsto` 0, `pendente` 0, `excedente` = `utilizado` e `semPrevisao: true`, depois das linhas previstas; as linhas previstas vêm com `semPrevisao: false`. (EAP-70, T31)
+6. WHEN a tabela mostra uma linha com `semPrevisao: true` THEN the system SHALL exibir "—" na coluna Previsto e "não previsto" na situação, e o editor de previstos SHALL NOT carregar essa linha como item previsto. (EAP-70, T32)
+
 
 **Independent Test**: obra com 10 sacos de Cal previstos e 15 de SAIDA para ela: a tabela mostra previsto 10, utilizado 15, "excedente: 5"; e a análise não conta esses 15 no consumo solto.
 
@@ -269,7 +277,7 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 - Validação/limites: quantidade prevista > 0 com 2 casas, material único por obra, faixa 50–200% da sugestão.
 - Falha parcial: status `PARCIAL` mantém sugestões aceitas e roda a rede de segurança; gravações de alertas em `$transaction`.
 - Idempotência: 1 alerta ATIVO por material; reexecução atualiza.
-- Rate limit: 1 análise manual a cada 5 min (429). Auth: N/A por AD-002 (qualquer usuário autenticado).
+- Rate limit: 1 análise manual por minuto (429). Auth: N/A por AD-002 (qualquer usuário autenticado).
 - Concorrência: 1 análise por vez (409 manual, agendada pulada), análise travada vira `FALHA` após 5 min.
 - Ciclo de vida dos dados: alertas e análises nunca são apagados (histórico, mesma linha da AD-003); silêncio de 5 dias (dispensa) e 3 dias (resolução).
 - Observabilidade: passos do agente em `AnaliseEstoque`; uso de tokens fica para o Design.
@@ -351,14 +359,19 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 | EAP-67 | P1: Análise — trava de investigação antes de sugerir | T28 | Verified |
 | EAP-68 | P2: Dispensar/resolver — "Resolver" de REPOSICAO leva à ENTRADA no Estoque | T29 | Verified |
 | EAP-69 | P1: Análise — PREVISAO quando cruza o mínimo em até 7 dias | T2 | Verified |
+| EAP-70 | P3: Previsto × utilizado — materiais usados sem previsão na tabela da obra | T31, T32 | Implementing |
+| EAP-71 | P1: Análise — agente sabe das saídas para obras sem previsão | T30 | Implementing |
+| EAP-72 | P1: Análise — trava exige previstoVsUtilizado com uso sem previsão | T30 | Implementing |
+| EAP-73 | P1: Análise — texto padrão cita as obras sem previsão | T30 | Implementing |
+| EAP-74 | P2: Dispensar/resolver — ver o que está silenciado | — | Implementing |
 
-Os IDs seguem a ordem dos critérios dentro de cada story; os critérios acrescentados na rodada 2 receberam EAP-58..65 em vez de renumerar os anteriores; EAP-66 entrou na revisão da Fase 5; EAP-67 entrou depois da primeira execução real (T27), em que o agente só listou e sugeriu o valor calculado, sem investigar; EAP-68 veio do usuário, para "Resolver" não fechar um alerta de compra sem registrar a entrada. EAP-69 promoveu a assumption "Alerta de previsão" a critério próprio depois do primeiro Verifier, para o teste de fronteira de 7 dias ter um critério para apontar.
+Os IDs seguem a ordem dos critérios dentro de cada story; os critérios acrescentados na rodada 2 receberam EAP-58..65 em vez de renumerar os anteriores; EAP-66 entrou na revisão da Fase 5; EAP-67 entrou depois da primeira execução real (T27), em que o agente só listou e sugeriu o valor calculado, sem investigar; EAP-68 veio do usuário, para "Resolver" não fechar um alerta de compra sem registrar a entrada. EAP-69 promoveu a assumption "Alerta de previsão" a critério próprio depois do primeiro Verifier, para o teste de fronteira de 7 dias ter um critério para apontar. EAP-70..73 vieram do usuário (2026-10-29): uma SAIDA de fita para uma obra sem previsão não aparecia em lugar nenhum e o agente escreveu "sem obra prevista". EAP-74 veio do usuário (2026-10-29): o Gesso cola estava abaixo do mínimo e o agente não alertou porque o operador tinha resolvido o alerta havia menos de 3 dias, e nada na tela mostrava isso.
 
 **ID format:** `EAP-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 69 total, 69 mapped to tasks, 0 unmapped (ver `tasks.md`)
+**Coverage:** 74 total, 73 mapped to tasks, 1 unmapped (EAP-74 ainda sem task em `tasks.md`)
 
 ---
 
@@ -367,7 +380,7 @@ Os IDs seguem a ordem dos critérios dentro de cada story; os critérios acresce
 Texto de **AD-006**, aprovado e gravado no `STATE.md` em 2026-10-27.
 
 - **Decision**: O agente de estoque é um agente LLM com ferramentas (Claude API, modelo configurável via `ANTHROPIC_MODEL`, padrão Haiku 5.5). Ele conduz a análise usando ferramentas somente de leitura e uma única ferramenta de escrita (`sugerirReposicao`), que grava apenas em `AlertaEstoque`. O código valida cada sugestão (faixa de 50% a 200% do cálculo determinístico) e garante os alertas obrigatórios (saldo livre <= mínimo) mesmo sem LLM. O agente nunca grava `MovimentacaoEstoque` nem altera `saldoAtual`. Dados pessoais de clientes nunca são enviados à API (obras vão como marcadores).
-- **Reason**: Demonstrar um agente real que decide o que investigar, mantendo números verificáveis, custo controlado (`AGENTE_AUTOMATICO`, limites de 20 chamadas / 2 min) e a feature funcionando sem chave de API.
+- **Reason**: Demonstrar um agente real que decide o que investigar, mantendo números verificáveis, custo controlado (`AGENTE_AUTOMATICO`, limites de 50 chamadas / 2 min, eram 20 até a AD-008) e a feature funcionando sem chave de API.
 - **Trade-off**: Resultados não determinísticos entre execuções, testes mais complexos (LLM mockada com roteiros de chamadas de ferramenta) e custo por execução na API.
 - **Scope**: `estoque-agente-proativo`.
 

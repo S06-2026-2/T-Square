@@ -28,15 +28,14 @@ const Decimal = Prisma.Decimal;
 
 const MINUTO_MS = 60 * 1000;
 const DIA_MS = 24 * 60 * MINUTO_MS;
-
-export const LIMITE_CHAMADAS_FERRAMENTA = 20;
+export const LIMITE_CHAMADAS_FERRAMENTA = 50;
 export const PRAZO_ANALISE_MS = 2 * MINUTO_MS;
 export const ANALISE_TRAVADA_MS = 5 * MINUTO_MS;
-export const INTERVALO_MANUAL_MS = 5 * MINUTO_MS;
+export const INTERVALO_MANUAL_MS = 1 * MINUTO_MS;
 const TAMANHO_RESUMO = 500;
 
 export const MSG_ANALISE_EM_ANDAMENTO = 'Já existe uma análise de estoque em andamento';
-export const MSG_LIMITE_MANUAL = 'Aguarde 5 minutos entre análises manuais';
+export const MSG_LIMITE_MANUAL = 'Aguarde 1 minuto entre análises manuais';
 
 /** Um passo do agente, gravado em AnaliseEstoque.passos (auditoria; nao vai para a UI). */
 export interface PassoAgente {
@@ -64,7 +63,10 @@ const SISTEMA = [
   'consumoDoMaterial (traz saldo livre, quantidade calculada e faixa aceita), reservadoPorObras',
   'se temReserva e previstoVsUtilizado se temPrevisao; (b) todo material SEM_RISCO com',
   'temPrevisao: chame consumoDoMaterial e previstoVsUtilizado, para ver se alguma obra está',
-  'consumindo além do previsto; (3) só então decida. sugerirReposicao recusa a sugestão se',
+  'consumindo além do previsto; (c) se temUsoSemPrevisao, chame previstoVsUtilizado: o',
+  'consumo solto inclui saídas para obras que não preveem o material (usoSemPrevisao),',
+  'então diga na justificativa quanto foi para cada uma, pelo marcador, em vez de tratar',
+  'como consumo sem obra; (3) só então decida. sugerirReposicao recusa a sugestão se',
   'faltar alguma dessas consultas. Os números vêm calculados: não refaça contas. Regras:',
   'obrigatorio = true exige REPOSICAO; PREVISAO merece REPOSICAO se o consumo justificar;',
   'REPOSICAO só dentro da faixa aceita, ajustando dentro dela quando a investigação mostrar',
@@ -167,7 +169,7 @@ export class AgenteEstoqueService {
   }
 
   /**
-   * Loop manual de tool use: ate 20 chamadas de ferramenta e 2 minutos.
+   * Loop manual de tool use: ate 50 chamadas de ferramenta e 2 minutos.
    * O historico so e acrescentado (response.content inteiro volta), nunca editado.
    */
   private async executarLoop(ctx: ContextoFerramentas, prazo: number): Promise<ResultadoLoop> {
@@ -471,6 +473,12 @@ export function textoPadrao(
 
   if (material.obrasQueReservam.length > 0) {
     texto += ` Reservado para: ${material.obrasQueReservam.map((o) => o.titulo).join(', ')}.`;
+  }
+  if (material.usoSemPrevisao.length > 0) {
+    const obras = material.usoSemPrevisao.map(
+      (u) => `${u.titulo} (${fmt(u.saidasNaJanela)} ${un})`,
+    );
+    texto += ` Saídas para obras sem previsão: ${obras.join(', ')}.`;
   }
   return texto;
 }

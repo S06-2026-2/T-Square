@@ -51,6 +51,7 @@ const previstoCal: LinhaPrevistoUtilizado = {
   utilizado: '8',
   pendente: '12',
   excedente: '0',
+  semPrevisao: false,
 };
 
 /** GET por caminho, incluindo o previsto x utilizado de qualquer obra e a lista de materiais. */

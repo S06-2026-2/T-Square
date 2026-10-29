@@ -141,8 +141,9 @@ Todas as rotas exigem `Authorization: Bearer <token>`, exceto as marcadas como p
 | GET    | `/api/gesseiros/:id/extrato`        | Vale, haver e saldo a receber      |
 | GET    | `/api/estoque/materiais`            | Lista materiais                    |
 | POST   | `/api/estoque/movimentacoes`        | Entrada/saída de material          |
-| POST   | `/api/estoque/agente/analisar`      | Roda uma análise do agente agora (1 a cada 5 min) |
+| POST   | `/api/estoque/agente/analisar`      | Roda uma análise do agente agora (1 a cada 1 min) |
 | GET    | `/api/estoque/agente/alertas`       | Alertas ativos e a última análise  |
+| GET    | `/api/estoque/agente/silenciados`   | Materiais silenciados pelo operador e até quando |
 | PATCH  | `/api/estoque/agente/alertas/:id/dispensar` | Dispensa um alerta         |
 | PATCH  | `/api/estoque/agente/alertas/:id/resolver`  | Marca o alerta como resolvido |
 

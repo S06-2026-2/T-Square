@@ -136,6 +136,22 @@ export interface RespostaAlertasEstoque {
   alertas: AlertaEstoque[];
 }
 
+/** Item de GET /estoque/agente/silenciados, o que acaba primeiro no topo. */
+export interface SilenciadoEstoque {
+  alertaId: string;
+  materialId: string;
+  material: Pick<Material, 'nome' | 'unidade'>;
+  /** Tipo do alerta que o operador fechou. */
+  tipo: TipoAlertaEstoque;
+  acao: Exclude<StatusAlertaEstoque, 'ATIVO'>;
+  /** Quando foi dispensado/resolvido. */
+  em: string;
+  /** Quando o material volta a poder ser alertado. */
+  ate: string;
+  /** TUDO: nenhum alerta do material; INFORMATIVO: só novas observações ficam de fora. */
+  abrangencia: 'TUDO' | 'INFORMATIVO';
+}
+
 /** Item enviado em POST /obras e PUT /obras/:id/materiais-previstos. */
 export interface MaterialPrevistoItem {
   materialId: string;
@@ -151,4 +167,6 @@ export interface LinhaPrevistoUtilizado {
   utilizado: string;
   pendente: string;
   excedente: string;
+  /** Material que saiu para a obra sem estar previsto: previsto 0, todo o utilizado e excedente (EAP-70). */
+  semPrevisao: boolean;
 }

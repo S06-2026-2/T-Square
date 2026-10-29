@@ -199,8 +199,42 @@ describe('EstoqueService', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
+    it.each(['CONCLUIDA', 'CANCELADA'])(
+      'SAIDA para obra %s retorna 400 sem gravar nada (EST-09)',
+      async (status) => {
+        prisma.obra.findUnique.mockResolvedValue({ id: 'obra-1', status });
+
+        await expect(
+          service.movimentar({
+            materialId: 'm-1',
+            obraId: 'obra-1',
+            tipo: TipoMovimentacao.SAIDA,
+            quantidade: 1,
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      },
+    );
+
+    it('ENTRADA (devolucao) para obra CONCLUIDA continua aceita (EST-09)', async () => {
+      prisma.obra.findUnique.mockResolvedValue({ id: 'obra-1', status: 'CONCLUIDA' });
+      prisma.movimentacaoEstoque.create.mockResolvedValue({ id: 'mov-6' });
+
+      await service.movimentar({
+        materialId: 'm-1',
+        obraId: 'obra-1',
+        tipo: TipoMovimentacao.ENTRADA,
+        quantidade: 2,
+      });
+
+      expect(prisma.movimentacaoEstoque.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ obraId: 'obra-1' }) }),
+      );
+    });
+
     it('aceita obra existente e a vincula a movimentacao', async () => {
-      prisma.obra.findUnique.mockResolvedValue({ id: 'obra-1' });
+      prisma.obra.findUnique.mockResolvedValue({ id: 'obra-1', status: 'ANDAMENTO' });
       prisma.material.updateMany.mockResolvedValue({ count: 1 });
       prisma.movimentacaoEstoque.create.mockResolvedValue({ id: 'mov-4' });
 
