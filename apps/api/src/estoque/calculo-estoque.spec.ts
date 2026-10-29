@@ -234,5 +234,36 @@ describe('calculo-estoque', () => {
 
       expect(ind.calculado.toString()).toBe('50');
     });
+
+    // EAP-69: PREVISAO quando cruza o mínimo em até 7 dias (diasAteMinimo <= 7), com ritmo > 0.
+    it('cruza o mínimo em exatamente 7 dias: PREVISAO, sem ser obrigatório (EAP-69)', () => {
+      // ritmo 1/dia; (17 - 10) x 30 / 30 = 7 dias
+      const ind = calcularIndicador({
+        saldoAtual: dec(17),
+        estoqueMinimo: dec(10),
+        pendentes: [],
+        consumoSolto: dec(30),
+        diasJanela: 30,
+      });
+
+      expect(ind.diasAteMinimo?.toString()).toBe('7');
+      expect(ind.motivo).toBe('PREVISAO');
+      expect(ind.obrigatorio).toBe(false);
+    });
+
+    it('cruza o mínimo depois de 7 dias: sem PREVISAO (EAP-69)', () => {
+      // (17,01 - 10) x 30 / 30 = 7,01 dias
+      const ind = calcularIndicador({
+        saldoAtual: dec('17.01'),
+        estoqueMinimo: dec(10),
+        pendentes: [],
+        consumoSolto: dec(30),
+        diasJanela: 30,
+      });
+
+      expect(ind.diasAteMinimo?.toString()).toBe('7.01');
+      expect(ind.motivo).toBeNull();
+      expect(ind.obrigatorio).toBe(false);
+    });
   });
 });

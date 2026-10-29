@@ -447,6 +447,39 @@ describe('AgenteEstoqueService', () => {
       expect(fechamentos()).toEqual([]);
     });
 
+    it('texto padrão sem consumo cita a janela real do material ("últimos 12 dias")', async () => {
+      // Material criado há 12 dias: janela 12. Saldo 3 < mínimo 10, sem SAIDA solta.
+      const novo = { ...material('gesso', { saldo: 3, minimo: 10 }), diasJanela: 12 };
+      previsao.montarSnapshot.mockResolvedValue(snapshot(novo));
+      const service = await criar(new Roteiro([terminar()]));
+
+      await service.analisar(OrigemAnaliseEstoque.MANUAL);
+
+      expect(dadosCriados()).toEqual([
+        expect.objectContaining({
+          materialId: 'gesso',
+          origemTexto: OrigemTextoAlerta.PADRAO,
+          justificativa:
+            'Saldo livre de 3 saco, abaixo do mínimo de 10 saco; ' +
+            'sem consumo nos últimos 12 dias. Repor 7 saco.',
+        }),
+      ]);
+    });
+
+    it('nenhum material cadastrado: SUCESSO e zero alertas (edge case)', async () => {
+      previsao.montarSnapshot.mockResolvedValue(snapshot());
+      const service = await criar(new Roteiro([terminar()]));
+
+      const analise = await service.analisar(OrigemAnaliseEstoque.MANUAL);
+
+      expect(analise?.status).toBe(StatusAnaliseEstoque.SUCESSO);
+      expect(prisma.alertaEstoque.create).not.toHaveBeenCalled();
+      expect(prisma.alertaEstoque.update).not.toHaveBeenCalled();
+      expect(finalizacao()?.data).toEqual(
+        expect.objectContaining({ status: StatusAnaliseEstoque.SUCESSO, totalAlertas: 0 }),
+      );
+    });
+
     it('rede de segurança nunca cria INFORMATIVO (EAP-60)', async () => {
       previsao.montarSnapshot.mockResolvedValue(snapshot(calAbaixo(), gessoSobrando()));
       const service = await criar(new Roteiro([terminar()]));
@@ -681,6 +714,31 @@ describe('AgenteEstoqueService', () => {
         await service.analisar(OrigemAnaliseEstoque.MANUAL);
 
         expect(dadosCriados()).toEqual([expect.objectContaining({ materialId: 'cal' })]);
+      });
+
+      it('fechado pelo agente (resolvidoPor = AGENTE): cria um registro novo, sem reabrir o antigo', async () => {
+        previsao.montarSnapshot.mockResolvedValue(
+          snapshot(
+            calAbaixo([
+              alerta({
+                id: 'al-agente',
+                status: StatusAlertaEstoque.RESOLVIDO,
+                resolvidoPor: ResolvidoPor.AGENTE,
+                resolvidoEm: diasAtras(4),
+              }),
+            ]),
+          ),
+        );
+        const service = await criar(new Roteiro([terminar()]));
+
+        await service.analisar(OrigemAnaliseEstoque.MANUAL);
+
+        expect(prisma.alertaEstoque.update).not.toHaveBeenCalledWith(
+          expect.objectContaining({ where: { id: 'al-agente' } }),
+        );
+        expect(dadosCriados()).toEqual([
+          expect.objectContaining({ materialId: 'cal', tipo: TipoAlertaEstoque.REPOSICAO }),
+        ]);
       });
 
       it('resolvido pelo operador há 3 dias ou mais: o mesmo registro volta para ATIVO', async () => {
