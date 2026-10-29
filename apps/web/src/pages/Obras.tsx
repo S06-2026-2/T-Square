@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import AlocarGesseiroForm from '../components/forms/AlocarGesseiroForm';
+import MateriaisPrevistosForm from '../components/forms/MateriaisPrevistosForm';
 import NovaObraForm from '../components/forms/NovaObraForm';
 import Icone from '../components/Icone';
 import StatusBadge from '../components/StatusBadge';
@@ -27,6 +28,8 @@ export default function Obras() {
   const [carregando, setCarregando] = useState(true);
   const [gesseiros, setGesseiros] = useState<Gesseiro[]>([]);
   const [mostrarForm, setMostrarForm] = useState(false);
+  /** Obras com "Materiais previstos" aberto: o formulário só monta (e busca na API) quando abre. */
+  const [previstosAbertos, setPrevistosAbertos] = useState<Record<string, boolean>>({});
 
   async function carregar() {
     setCarregando(true);
@@ -167,6 +170,20 @@ export default function Obras() {
                 <AlocarGesseiroForm obraId={obra.id} gesseiros={gesseiros} onSalvo={carregar} />
               </details>
             )}
+
+            {/* Em todo card: a tabela previsto x utilizado sempre; a edição só nos status
+                editáveis, decidida pelo próprio formulário (EAP-43, EAP-44). */}
+            <details
+              onToggle={(e) => {
+                const aberto = (e.currentTarget as HTMLDetailsElement).open;
+                setPrevistosAbertos((atual) => ({ ...atual, [obra.id]: aberto }));
+              }}
+            >
+              <summary>Materiais previstos</summary>
+              {previstosAbertos[obra.id] && (
+                <MateriaisPrevistosForm obraId={obra.id} status={obra.status} />
+              )}
+            </details>
           </article>
         ))}
       </div>

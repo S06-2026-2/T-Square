@@ -387,6 +387,34 @@ h1 {
   content: '- ';
 }
 
+/* O conteúdo expansível (previstos, alocação) cresce para baixo, nunca para o lado: o card
+   fica preso à largura da coluna da grade, a tabela rola dentro dele e cada linha do editor
+   empilha material em cima e quantidade + remover embaixo. */
+.card-obra {
+  min-width: 0;
+}
+
+.card-obra select,
+.card-obra input {
+  width: 100%;
+  min-width: 0;
+}
+
+.card-obra .tabela th,
+.card-obra .tabela td {
+  padding: 8px 10px;
+}
+
+.card-obra .linha-form {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--borda);
+}
+
+.card-obra .linha-form > label:first-child {
+  grid-column: 1 / -1;
+}
+
 .duas-colunas {
   display: grid;
   grid-template-columns: 300px 1fr;
@@ -763,6 +791,130 @@ h1 {
 .estado-vazio p {
   margin: 0;
   color: var(--secundario);
+}
+
+/* ---------- alertas do agente de estoque ---------- */
+
+.secao-alertas {
+  margin-top: 32px;
+}
+
+.cabecalho-secao {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.cabecalho-secao h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.aviso {
+  color: #8a5a00;
+  background: #fdf4e1;
+  border: 1px solid #f1dcae;
+  border-radius: var(--raio-sm);
+  padding: 10px 12px;
+  margin: 0 0 12px;
+}
+
+.lista-alertas {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  /* Cada card na sua altura: abrir o "+" de um não estica os vizinhos da mesma linha. */
+  align-items: start;
+}
+
+.card-alerta {
+  display: flex;
+  flex-direction: column;
+  border-left: 4px solid var(--alerta);
+}
+
+.card-alerta[data-tipo='INFORMATIVO'] {
+  border-left-color: #4a73c9;
+}
+
+.card-alerta h4 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.badge-neutro {
+  background: var(--superficie-2);
+  color: var(--secundario);
+  border: 1px solid var(--borda);
+  white-space: nowrap;
+}
+
+.badge-neutro::before {
+  display: none;
+}
+
+.quantidade-sugerida {
+  margin: 8px 0 2px;
+  font-size: 15px;
+}
+
+.quantidade-sugerida strong {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rotulo-informativo {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a73c9;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.situacao-alerta {
+  margin: 2px 0;
+  font-weight: 600;
+  color: var(--alerta);
+}
+
+.card-alerta[data-tipo='INFORMATIVO'] .situacao-alerta {
+  color: var(--secundario);
+}
+
+.justificativa {
+  margin: 10px 0 0;
+  color: var(--texto);
+  white-space: pre-line;
+}
+
+/* "+" discreto no fim da linha de ações: abre/fecha a justificativa do alerta. */
+.btn-detalhes {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--borda-forte);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--secundario);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.btn-detalhes:hover,
+.btn-detalhes[aria-expanded='true'] {
+  color: var(--primaria);
+  border-color: var(--primaria);
 }
 
 /* ---------- login ---------- */

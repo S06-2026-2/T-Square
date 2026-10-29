@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { api } from '../lib/api';
-import type { Gesseiro, Obra, StatusObra } from '../types';
+import type { Gesseiro, LinhaPrevistoUtilizado, Material, Obra, StatusObra } from '../types';
 import Obras from './Obras';
 
 jest.mock('../lib/api', () => ({
@@ -37,6 +37,34 @@ function ultimaChamadaObras() {
 
 function card(titulo: string) {
   return screen.getByRole('heading', { name: titulo }).closest('article') as HTMLElement;
+}
+
+const materiais: Material[] = [
+  { id: 'm-cal', nome: 'Cal', unidade: 'saco', saldoAtual: '25', estoqueMinimo: '10' },
+];
+
+const previstoCal: LinhaPrevistoUtilizado = {
+  materialId: 'm-cal',
+  material: 'Cal',
+  unidade: 'saco',
+  previsto: '20',
+  utilizado: '8',
+  pendente: '12',
+  excedente: '0',
+};
+
+/** GET por caminho, incluindo o previsto x utilizado de qualquer obra e a lista de materiais. */
+function responderComPrevistos() {
+  get.mockImplementation(async (caminho: string) => {
+    if (caminho === '/gesseiros') return gesseiros;
+    if (caminho === '/estoque/materiais') return materiais;
+    if (/^\/obras\/[^/]+\/materiais-previstos$/.test(caminho)) return [previstoCal];
+    return todas;
+  });
+}
+
+function abrirPrevistos(titulo: string) {
+  fireEvent.click(within(card(titulo)).getByText('Materiais previstos'));
 }
 
 async function criarObra() {
@@ -132,5 +160,51 @@ describe('Obras', () => {
       return lista as HTMLElement;
     });
     expect(alocados).toHaveTextContent(/Ana - R\$\s700,00/);
+  });
+
+  it('mostra a ação "Materiais previstos" em todo card e só monta o formulário ao abrir', async () => {
+    responderComPrevistos();
+    render(<Obras />);
+    await screen.findByText('Obra orc');
+
+    for (const titulo of ['Obra orc', 'Obra fec', 'Obra and', 'Obra con', 'Obra can']) {
+      expect(within(card(titulo)).getByText('Materiais previstos').tagName).toBe('SUMMARY');
+    }
+    expect(get).not.toHaveBeenCalledWith('/obras/orc/materiais-previstos');
+  });
+
+  it('abre o editor com os itens atuais nos 3 status editáveis (EAP-43)', async () => {
+    responderComPrevistos();
+    render(<Obras />);
+    await screen.findByText('Obra orc');
+
+    for (const [id, titulo] of [
+      ['orc', 'Obra orc'],
+      ['fec', 'Obra fec'],
+      ['and', 'Obra and'],
+    ]) {
+      abrirPrevistos(titulo);
+      const alvo = within(card(titulo));
+      expect(await alvo.findByRole('table')).toHaveTextContent('pendente: 12');
+      await waitFor(() => expect(alvo.getByLabelText('Material')).toHaveValue('m-cal'));
+      expect(alvo.getByLabelText('Quantidade')).toHaveValue(20);
+      expect(alvo.getByRole('button', { name: 'Salvar materiais' })).toBeInTheDocument();
+      expect(get).toHaveBeenCalledWith(`/obras/${id}/materiais-previstos`);
+    }
+  });
+
+  it('em obra CONCLUIDA ou CANCELADA mostra só o previsto x utilizado, sem editor (EAP-44)', async () => {
+    responderComPrevistos();
+    render(<Obras />);
+    await screen.findByText('Obra orc');
+
+    for (const titulo of ['Obra con', 'Obra can']) {
+      abrirPrevistos(titulo);
+      const alvo = within(card(titulo));
+      expect(await alvo.findByRole('table')).toHaveTextContent('pendente: 12');
+      expect(alvo.queryByLabelText('Material')).not.toBeInTheDocument();
+      expect(alvo.queryByRole('button', { name: 'Adicionar material' })).not.toBeInTheDocument();
+      expect(alvo.queryByRole('button', { name: 'Salvar materiais' })).not.toBeInTheDocument();
+    }
   });
 });

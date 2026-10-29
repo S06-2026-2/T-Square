@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import AlertasEstoque from '../components/AlertasEstoque';
 import { api } from '../lib/api';
 import { moeda } from '../lib/formato';
 import { STATUS_FUNIL, rotuloPlural } from '../lib/status';
@@ -28,7 +29,6 @@ export default function Dashboard() {
       <div className="cabecalho-pagina">
         <div>
           <h1>Visao geral</h1>
-          <p className="subtitulo-pagina">Quantidade e valor das obras em cada etapa do funil.</p>
         </div>
       </div>
 
@@ -50,6 +50,9 @@ export default function Dashboard() {
           ))}
         </div>
       )}
+
+      {/* Busca e erro próprios: uma falha aqui não esconde o funil, e vice-versa (EAP-34). */}
+      <AlertasEstoque />
     </section>
   );
 }

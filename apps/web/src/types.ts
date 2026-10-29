@@ -89,3 +89,66 @@ export interface LoginResponse {
   accessToken: string;
   usuario: Usuario;
 }
+
+// ---------- agente de estoque ----------
+// Os campos numéricos chegam como string (Decimal da API) e são só exibidos.
+
+export type TipoAlertaEstoque = 'REPOSICAO' | 'INFORMATIVO';
+export type StatusAlertaEstoque = 'ATIVO' | 'DISPENSADO' | 'RESOLVIDO';
+export type OrigemTextoAlerta = 'AGENTE' | 'PADRAO';
+export type StatusAnaliseEstoque = 'EM_ANDAMENTO' | 'SUCESSO' | 'PARCIAL' | 'FALHA';
+export type OrigemAnaliseEstoque = 'AGENDADA' | 'CATCH_UP' | 'MANUAL';
+
+/** Motivo do alerta, calculado na API a partir dos números gravados (null em INFORMATIVO ou sem consumo). */
+export type MotivoAlertaEstoque = 'ABAIXO_DO_MINIMO' | 'NO_MINIMO_COM_CONSUMO' | 'PREVISAO';
+
+export interface AlertaEstoque {
+  id: string;
+  materialId: string;
+  tipo: TipoAlertaEstoque;
+  status: StatusAlertaEstoque;
+  /** null no INFORMATIVO. */
+  quantidadeSugerida: string | null;
+  saldoLivre: string;
+  estoqueMinimo: string;
+  ritmoDiario: string;
+  /** null quando o ritmo de consumo é 0. */
+  diasAteMinimo: string | null;
+  justificativa: string;
+  origemTexto: OrigemTextoAlerta;
+  motivo: MotivoAlertaEstoque | null;
+  criadoEm: string;
+  material: Material;
+}
+
+export interface AnaliseEstoque {
+  id: string;
+  origem: OrigemAnaliseEstoque;
+  status: StatusAnaliseEstoque;
+  iniciadoEm: string;
+  finalizadoEm: string | null;
+  totalAlertas: number;
+}
+
+/** GET /estoque/agente/alertas: alertas ATIVO já na ordem de urgência. */
+export interface RespostaAlertasEstoque {
+  ultimaAnalise: AnaliseEstoque | null;
+  alertas: AlertaEstoque[];
+}
+
+/** Item enviado em POST /obras e PUT /obras/:id/materiais-previstos. */
+export interface MaterialPrevistoItem {
+  materialId: string;
+  quantidade: number;
+}
+
+/** Linha de GET /obras/:id/materiais-previstos (previsto x utilizado). */
+export interface LinhaPrevistoUtilizado {
+  materialId: string;
+  material: string;
+  unidade: string;
+  previsto: string;
+  utilizado: string;
+  pendente: string;
+  excedente: string;
+}

@@ -51,6 +51,43 @@ enum TipoMovimentacao {
   SAIDA
 }
 
+/// REPOSICAO = alerta de compra (com quantidade sugerida)
+/// INFORMATIVO = observacao do agente (sem quantidade)
+enum TipoAlertaEstoque {
+  REPOSICAO
+  INFORMATIVO
+}
+
+enum StatusAlertaEstoque {
+  ATIVO
+  DISPENSADO
+  RESOLVIDO
+}
+
+enum ResolvidoPor {
+  AGENTE
+  OPERADOR
+}
+
+/// AGENTE = justificativa escrita pela LLM; PADRAO = texto padrao do sistema
+enum OrigemTextoAlerta {
+  AGENTE
+  PADRAO
+}
+
+enum StatusAnaliseEstoque {
+  EM_ANDAMENTO
+  SUCESSO
+  PARCIAL
+  FALHA
+}
+
+enum OrigemAnaliseEstoque {
+  AGENDADA
+  CATCH_UP
+  MANUAL
+}
+
 // ---------------------------------------------------------------------------
 // Acesso
 // ---------------------------------------------------------------------------
@@ -145,6 +182,8 @@ model Obra {
   lancamentos   Lancamento[]
   movimentacoes MovimentacaoEstoque[]
 
+  materiaisPrevistos MaterialPrevistoObra[]
+
   @@index([status])
   @@map("obras")
 }
@@ -176,6 +215,8 @@ model Material {
   criadoEm      DateTime @default(now())
 
   movimentacoes MovimentacaoEstoque[]
+  previstos     MaterialPrevistoObra[]
+  alertas       AlertaEstoque[]
 
   @@map("materiais")
 }
@@ -194,4 +235,70 @@ model MovimentacaoEstoque {
 
   @@index([materialId])
   @@map("movimentacoes_estoque")
+}
+
+/// Material que uma obra deve consumir. Pendente = previsto - utilizado (derivado, nunca gravado).
+model MaterialPrevistoObra {
+  id         String   @id @default(uuid())
+  obraId     String
+  materialId String
+  quantidade Decimal  @db.Decimal(12, 2)
+  criadoEm   DateTime @default(now())
+
+  obra     Obra     @relation(fields: [obraId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id])
+
+  @@unique([obraId, materialId])
+  @@map("materiais_previstos_obra")
+}
+
+// ---------------------------------------------------------------------------
+// Agente de estoque
+// ---------------------------------------------------------------------------
+
+/// Uma execucao do agente. Nunca apagada.
+model AnaliseEstoque {
+  id                 String               @id @default(uuid())
+  origem             OrigemAnaliseEstoque
+  status             StatusAnaliseEstoque @default(EM_ANDAMENTO)
+  iniciadoEm         DateTime             @default(now())
+  finalizadoEm       DateTime?
+  totalAlertas       Int                  @default(0)
+  chamadasFerramenta Int                  @default(0)
+  modelo             String?
+  erro               String?
+  passos             Json                 @default("[]") // [{ tipo, ferramenta?, entrada?, resultado?, texto?, erro? }]
+  marcadores         Json                 @default("{}") // { "{{OBRA_1}}": obraId }
+
+  alertas AlertaEstoque[]
+
+  @@index([iniciadoEm])
+  @@map("analises_estoque")
+}
+
+/// Sugestao do agente (ou da rede de seguranca). No maximo 1 ATIVO por material (regra no service).
+model AlertaEstoque {
+  id                 String              @id @default(uuid())
+  materialId         String
+  analiseId          String // ultima analise que criou/atualizou
+  tipo               TipoAlertaEstoque
+  status             StatusAlertaEstoque @default(ATIVO)
+  quantidadeSugerida Decimal?            @db.Decimal(12, 2) // null no INFORMATIVO
+  saldoLivre         Decimal             @db.Decimal(12, 2)
+  estoqueMinimo      Decimal             @db.Decimal(12, 2)
+  ritmoDiario        Decimal             @db.Decimal(12, 2)
+  diasAteMinimo      Decimal?            @db.Decimal(12, 2) // null com ritmo 0
+  justificativa      String
+  origemTexto        OrigemTextoAlerta
+  resolvidoPor       ResolvidoPor?
+  dispensadoEm       DateTime?
+  resolvidoEm        DateTime?
+  criadoEm           DateTime            @default(now())
+  atualizadoEm       DateTime            @updatedAt
+
+  material Material       @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  analise  AnaliseEstoque @relation(fields: [analiseId], references: [id])
+
+  @@index([materialId, status])
+  @@map("alertas_estoque")
 }

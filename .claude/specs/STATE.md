@@ -42,19 +42,29 @@
 - **Date**: 2026-10-07
 - **Status**: active
 
+### AD-006
+- **Decision**: O agente de estoque é um agente LLM com ferramentas (Claude API, modelo configurável via `ANTHROPIC_MODEL`, padrão Haiku 5.5). Ele conduz a análise usando ferramentas somente de leitura e uma única ferramenta de escrita (`sugerirReposicao`), que grava apenas em `AlertaEstoque`. O código valida cada sugestão (faixa de 50% a 200% do cálculo determinístico) e garante os alertas obrigatórios (saldo livre <= mínimo) mesmo sem LLM. O agente nunca grava `MovimentacaoEstoque` nem altera `saldoAtual`. Dados pessoais de clientes nunca são enviados à API (obras vão como marcadores).
+- **Reason**: Demonstrar um agente real que decide o que investigar, mantendo números verificáveis, custo controlado (`AGENTE_AUTOMATICO`, limites de 20 chamadas / 2 min) e a feature funcionando sem chave de API.
+- **Trade-off**: Resultados não determinísticos entre execuções, testes mais complexos (LLM mockada com roteiros de chamadas de ferramenta) e custo por execução na API.
+- **Scope**: `estoque-agente-proativo`.
+- **Date**: 2026-10-27
+- **Status**: active
+
 ## Handoff
 
-- **Feature**: nenhuma em execução (2026-10-19)
-- **Phase / Task**: `front-dashboard-resumo` (T1–T5) e `front-formularios` (T1–T12) com Execute concluído e Verifier PASS
+- **Feature**: `estoque-agente-proativo` em Execute (2026-10-28)
+- **Phase / Task**: T1–T29 concluídas e verificadas. Verifier independente: rodada 1 FAIL só por lacunas de teste (3 mutantes sobreviventes); rodada 2 PASS, com 69/69 EAP com evidência e 23/23 mutantes mortos (`validation.md`).
 - **Completed**:
-  - `front-dashboard-resumo`: DSH-01..03 Verified (Verifier rodada 2: PASS, 15/16 mutantes mortos; o sobrevivente, cards no carregamento, foi fechado com teste + edge case). Ver `features/front-dashboard-resumo/validation.md`.
-  - `front-formularios`: FRM-01..12 Verified. Fases 1–2 em 2026-10-07; Fases 3–4 (Gesseiros e Estoque) em 2026-10-19, Verifier PASS com 23/25 mutantes mortos (os 2 sobreviventes são equivalentes ou fora de contrato). Ver `features/front-formularios/validation.md`.
-  - Suite do web: 67 testes, build ok.
+  - Fases 1–2 em `b5e2ba6`; Fases 3–4 em `a6e6522` (branch `feat/agente-estoque`).
+  - Fases 5–6 (T17–T24), ajustes da revisão da Fase 5 (EAP-66), T25 e T26 em `f7e6664`. Depois: texto "pendente: N" / "excedente: N" na situação do previsto x utilizado (sem commit).
+  - T28: listarMateriais só com visão geral e risco, calculado e faixa em consumoDoMaterial, trava de investigação no sugerirReposicao, prompt novo e seed com "Massa para drywall" (SEM_RISCO, obra ANDAMENTO acima do previsto).
+  - T29: "Resolver" de REPOSICAO leva à ENTRADA no Estoque e resolve o alerta depois de salvar (EAP-68). Ajustes de front pedidos pelo usuário: card do agente sem a linha de saldo livre, justificativa atrás de um "+", grade sem esticar os vizinhos; Dashboard sem o subtítulo do funil.
+  - Verifier: 4 testes acrescentados na rodada 2 (alerta fechado pelo AGENTE, janela real no texto sem consumo, fronteira de 7 dias, zero materiais); a regra de previsão em até 7 dias virou o critério EAP-69. Remoção do subtítulo registrada na spec `front-dashboard-resumo`.
+  - Rastreabilidade com os 69 EAP em `Verified`. API 236 testes, web 137, builds ok.
 - **In-progress**: none
-- **Next step**:
-  - UAT manual (Independent Tests) de FRM-01/05 (T6), FRM-06/07 (T9) e FRM-08/09 (T12) com `docker compose up`; marcar os itens "Manual" em `front-formularios/tasks.md`.
-  - Time confirmar a assumption "Login navega para `/` (dashboard)" em `front-dashboard-resumo/spec.md` e trocar para `y`.
-  - Rodar `lessons.py` quando houver Python (sinais: assumption derivada sem teste; estado de carregamento/erro não definido na spec; edição de spec por regex que corrompeu a linha 1).
-- **Blockers**: none
-- **Uncommitted files**: tudo das duas features em `apps/web/src/` e `.claude/specs/features/{front-dashboard-resumo,front-formularios}/`; o time commita manualmente (mensagens sugeridas por task nos `tasks.md`)
-- **Branch**: feat/front-formularios
+- **Next step**: commit do usuário (testes da rodada 2, EAP-69, spec do dashboard, `validation.md`, STATE) → push → PR da `feat/agente-estoque` → depois a spec `obras-transicoes-status` num branch novo.
+- **Regras do usuário**: sub-agentes em sequência; sem commit/push/`git add` pelo agente; nenhuma dependência nova sem perguntar; `ANTHROPIC_API_KEY` só no `.env`.
+- **Blockers**: none.
+- **Uncommitted files**: conferir `git status`. Fora da feature, nunca commitar junto: `CLAUDE.md`, `migration_lock.toml` (só metadado, conteúdo igual), `.claude/specs/features/obras-transicoes-status/`.
+- **Dados de teste no banco local**: 1 análise (`53f2bf02-…`, SUCESSO, execução final da T27) e os 5 alertas dela (4 REPOSICAO + 1 INFORMATIVO); dados do seed (obras `3333…`, `4444…`, `5555…`, `7777…`, materiais e movimentações) e a obra "Moldura - Bairro Centro" (`45fb510c-…`, do usuário).
+- **Branch**: feat/agente-estoque

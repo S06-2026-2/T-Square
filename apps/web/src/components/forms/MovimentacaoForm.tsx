@@ -9,15 +9,17 @@ interface Props {
   materiais: Material[];
   obras: Obra[];
   onSalvo: () => void | Promise<void>;
+  /** Valores iniciais de uma ENTRADA (atalho do "Resolver" de um alerta de reposicao). */
+  inicial?: { materialId: string; quantidade: string };
 }
 
 type TipoMovimentacao = 'ENTRADA' | 'SAIDA';
 
 /** Entrada ou saida de material; so a SAIDA pode apontar a obra que consumiu. */
-export default function MovimentacaoForm({ materiais, obras, onSalvo }: Props) {
-  const [materialId, setMaterialId] = useState('');
+export default function MovimentacaoForm({ materiais, obras, onSalvo, inicial }: Props) {
+  const [materialId, setMaterialId] = useState(inicial?.materialId ?? '');
   const [tipo, setTipo] = useState<TipoMovimentacao>('ENTRADA');
-  const [quantidade, setQuantidade] = useState('');
+  const [quantidade, setQuantidade] = useState(inicial?.quantidade ?? '');
   const [obraId, setObraId] = useState('');
   const [observacao, setObservacao] = useState('');
   const { enviando, erro, enviar } = useEnvio();
@@ -64,7 +66,11 @@ export default function MovimentacaoForm({ materiais, obras, onSalvo }: Props) {
       </label>
       <label>
         Tipo
-        <select value={tipo} onChange={(e) => trocarTipo(e.target.value as TipoMovimentacao)} required>
+        <select
+          value={tipo}
+          onChange={(e) => trocarTipo(e.target.value as TipoMovimentacao)}
+          required
+        >
           <option value="ENTRADA">Entrada</option>
           <option value="SAIDA">Saida</option>
         </select>

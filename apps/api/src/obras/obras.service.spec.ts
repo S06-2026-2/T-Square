@@ -3,6 +3,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { StatusObra, TipoLancamento } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { MateriaisPrevistosService } from './materiais-previstos.service';
 import { ObrasService } from './obras.service';
 
 /**
@@ -12,21 +13,28 @@ import { ObrasService } from './obras.service';
 describe('ObrasService', () => {
   let service: ObrasService;
   let prisma: {
-    obra: { findUnique: jest.Mock; update: jest.Mock };
+    obra: { findUnique: jest.Mock; update: jest.Mock; create: jest.Mock };
+    material: { findMany: jest.Mock };
     lancamento: { createMany: jest.Mock };
     $transaction: jest.Mock;
   };
 
   beforeEach(async () => {
     prisma = {
-      obra: { findUnique: jest.fn(), update: jest.fn() },
+      obra: { findUnique: jest.fn(), update: jest.fn(), create: jest.fn() },
+      material: { findMany: jest.fn() },
       lancamento: { createMany: jest.fn() },
       // Executa o callback da transacao passando o proprio mock como "tx".
       $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
     };
 
+    // MateriaisPrevistosService real (validarItens), sobre o mesmo Prisma mockado.
     const modulo: TestingModule = await Test.createTestingModule({
-      providers: [ObrasService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        ObrasService,
+        MateriaisPrevistosService,
+        { provide: PrismaService, useValue: prisma },
+      ],
     }).compile();
 
     service = modulo.get<ObrasService>(ObrasService);
@@ -34,6 +42,89 @@ describe('ObrasService', () => {
 
   it('deve ser definido', () => {
     expect(service).toBeDefined();
+  });
+
+  /** EAP-37, 40 e 42 de .claude/specs/features/estoque-agente-proativo/spec.md */
+  describe('create com materiais previstos', () => {
+    const dadosObra = {
+      titulo: 'Forro Residencia Teste',
+      clienteNome: 'Cliente Teste',
+      valorTotal: 8500,
+    };
+
+    it('grava os materiais previstos aninhados na criacao da obra', async () => {
+      prisma.material.findMany.mockResolvedValue([{ id: 'mat-cal' }, { id: 'mat-gesso' }]);
+      prisma.obra.create.mockResolvedValue({ id: 'obra-nova' });
+
+      const resultado = await service.create({
+        ...dadosObra,
+        materiaisPrevistos: [
+          { materialId: 'mat-cal', quantidade: 20 },
+          { materialId: 'mat-gesso', quantidade: 7.5 },
+        ],
+      });
+
+      expect(prisma.obra.create).toHaveBeenCalledTimes(1);
+      const { data } = prisma.obra.create.mock.calls[0][0];
+      expect(data).toEqual(
+        expect.objectContaining({
+          ...dadosObra,
+          materiaisPrevistos: {
+            create: [
+              { materialId: 'mat-cal', quantidade: 20 },
+              { materialId: 'mat-gesso', quantidade: 7.5 },
+            ],
+          },
+        }),
+      );
+      expect(resultado).toEqual({ id: 'obra-nova' });
+    });
+
+    it('sem materiais previstos mantem a criacao atual', async () => {
+      prisma.obra.create.mockResolvedValue({ id: 'obra-nova' });
+
+      await service.create({ ...dadosObra, gesseiros: [{ gesseiroId: 'g-1', valorCombinado: 900 }] });
+
+      expect(prisma.material.findMany).not.toHaveBeenCalled();
+      const { data } = prisma.obra.create.mock.calls[0][0];
+      expect(data).toEqual({
+        ...dadosObra,
+        pagamento: undefined,
+        gesseiros: { create: [{ gesseiroId: 'g-1', valorCombinado: 900 }] },
+        materiaisPrevistos: undefined,
+      });
+    });
+
+    it('material repetido rejeita com 400 antes de criar a obra', async () => {
+      prisma.material.findMany.mockResolvedValue([{ id: 'mat-cal' }]);
+
+      const promessa = service.create({
+        ...dadosObra,
+        materiaisPrevistos: [
+          { materialId: 'mat-cal', quantidade: 5 },
+          { materialId: 'mat-cal', quantidade: 2 },
+        ],
+      });
+
+      await expect(promessa).rejects.toBeInstanceOf(BadRequestException);
+      await expect(promessa).rejects.toThrow(
+        'Material mat-cal aparece mais de uma vez nos materiais previstos',
+      );
+      expect(prisma.obra.create).not.toHaveBeenCalled();
+    });
+
+    it('material inexistente rejeita com 404 antes de criar a obra', async () => {
+      prisma.material.findMany.mockResolvedValue([]);
+
+      const promessa = service.create({
+        ...dadosObra,
+        materiaisPrevistos: [{ materialId: 'mat-fantasma', quantidade: 5 }],
+      });
+
+      await expect(promessa).rejects.toBeInstanceOf(NotFoundException);
+      await expect(promessa).rejects.toThrow('Material mat-fantasma não encontrado');
+      expect(prisma.obra.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('concluir', () => {
