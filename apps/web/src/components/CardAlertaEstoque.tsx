@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { numero, situacaoAlerta } from '../lib/formato';
 import type { AlertaEstoque } from '../types';
 
@@ -16,12 +18,18 @@ interface Props {
 export default function CardAlertaEstoque({ alerta, ocupado, onDispensar, onResolver }: Props) {
   const reposicao = alerta.tipo === 'REPOSICAO';
   const { nome, unidade } = alerta.material;
+  // A justificativa fica recolhida: o "+" mostra o detalhe só para quem quiser ler.
+  const [detalhes, setDetalhes] = useState(false);
 
   return (
     <li className="card card-alerta" data-tipo={alerta.tipo}>
       <div className="card-topo">
         <h4>
-          <span className="icone-alerta" role="img" aria-label={reposicao ? 'reposição' : 'observação'}>
+          <span
+            className="icone-alerta"
+            role="img"
+            aria-label={reposicao ? 'reposição' : 'observação'}
+          >
             {reposicao ? '⚠️' : 'ℹ️'}
           </span>{' '}
           {nome}
@@ -33,7 +41,8 @@ export default function CardAlertaEstoque({ alerta, ocupado, onDispensar, onReso
 
       {reposicao && alerta.quantidadeSugerida !== null ? (
         <p className="quantidade-sugerida">
-          Repor <strong data-testid="quantidade-sugerida">{numero(alerta.quantidadeSugerida)}</strong>{' '}
+          Repor{' '}
+          <strong data-testid="quantidade-sugerida">{numero(alerta.quantidadeSugerida)}</strong>{' '}
           <span data-testid="unidade">{unidade}</span>
         </p>
       ) : (
@@ -46,17 +55,29 @@ export default function CardAlertaEstoque({ alerta, ocupado, onDispensar, onReso
           {situacaoAlerta(alerta)}
         </p>
       )}
-      <p className="secundario" data-testid="saldo-livre">
-        Saldo livre {numero(alerta.saldoLivre)} {unidade} · mínimo {numero(alerta.estoqueMinimo)}
-      </p>
-      <p className="justificativa">{alerta.justificativa}</p>
+      {detalhes && <p className="justificativa">{alerta.justificativa}</p>}
 
       <div className="card-acoes">
         <button type="button" className="btn" disabled={ocupado} onClick={onResolver}>
           Resolver
         </button>
-        <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={onDispensar}>
+        <button
+          type="button"
+          className="btn btn-secundario"
+          disabled={ocupado}
+          onClick={onDispensar}
+        >
           Dispensar
+        </button>
+        <button
+          type="button"
+          className="btn-detalhes"
+          aria-expanded={detalhes}
+          aria-label={detalhes ? 'Ocultar detalhes' : 'Ver detalhes'}
+          title={detalhes ? 'Ocultar detalhes' : 'Ver detalhes'}
+          onClick={() => setDetalhes((aberto) => !aberto)}
+        >
+          {detalhes ? '−' : '+'}
         </button>
       </div>
     </li>

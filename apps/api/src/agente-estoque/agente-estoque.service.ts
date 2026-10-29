@@ -57,14 +57,20 @@ export interface ResultadoLoop {
 }
 
 const SISTEMA = [
-  'Você é o agente de reposição de estoque de uma firma de gesso. Analise os materiais e',
-  'registre com sugerirReposicao o que precisa ser comprado. Você nunca compra nem movimenta',
-  'estoque. Todos os números já vêm calculados pelas ferramentas: use-os, não refaça contas.',
-  'Regras: (1) material com obrigatorio = true precisa de REPOSICAO; (2) material com motivo',
-  'PREVISAO (cruza o mínimo em até 7 dias) merece REPOSICAO se fizer sentido; (3) REPOSICAO',
-  'aceita quantidade entre 50% e 200% do campo calculado; (4) INFORMATIVO (sem quantidade) só',
-  'vale para material com calculado <= 0, para uma observação útil (ex.: obra consumindo além',
-  'do previsto). Cite obras apenas pelos marcadores {{OBRA_n}} exatamente como recebidos.',
+  'Você é o agente de reposição de estoque de uma firma de gesso. Você nunca compra nem',
+  'movimenta estoque; só registra sugestões com sugerirReposicao. Método: (1) comece por',
+  'listarMateriais, que dá a visão geral e o risco de cada material; (2) investigue, começando',
+  'pelos obrigatórios: (a) todo material com risco diferente de SEM_RISCO: chame',
+  'consumoDoMaterial (traz saldo livre, quantidade calculada e faixa aceita), reservadoPorObras',
+  'se temReserva e previstoVsUtilizado se temPrevisao; (b) todo material SEM_RISCO com',
+  'temPrevisao: chame consumoDoMaterial e previstoVsUtilizado, para ver se alguma obra está',
+  'consumindo além do previsto; (3) só então decida. sugerirReposicao recusa a sugestão se',
+  'faltar alguma dessas consultas. Os números vêm calculados: não refaça contas. Regras:',
+  'obrigatorio = true exige REPOSICAO; PREVISAO merece REPOSICAO se o consumo justificar;',
+  'REPOSICAO só dentro da faixa aceita, ajustando dentro dela quando a investigação mostrar',
+  'motivo; INFORMATIVO (sem quantidade) só com calculado <= 0, para uma observação útil (ex.:',
+  'obra consumindo além do previsto). Na justificativa, diga o que você viu (reserva, consumo,',
+  'excedente) e cite obras só pelos marcadores {{OBRA_n}} exatamente como recebidos.',
   'Justificativas curtas, em português, para o dono da firma. Quando terminar, responda com um',
   'resumo de uma linha.',
 ].join(' ');
@@ -136,7 +142,12 @@ export class AgenteEstoqueService {
 
       try {
         const snapshot = await this.previsao.montarSnapshot(agora);
-        const ctx: ContextoFerramentas = { snapshot, mapa: new MapaMarcadores(), aceitas: [] };
+        const ctx: ContextoFerramentas = {
+          snapshot,
+          mapa: new MapaMarcadores(),
+          aceitas: [],
+          consultas: new Map(),
+        };
         const loop = await this.executarLoop(ctx, Date.now() + PRAZO_ANALISE_MS);
         return await this.persistir(analise, ctx, loop);
       } catch (erro) {

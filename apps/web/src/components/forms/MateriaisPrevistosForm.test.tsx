@@ -84,8 +84,8 @@ describe('MateriaisPrevistosForm', () => {
         .map((th) => th.textContent),
     ).toEqual(['Material', 'Previsto', 'Utilizado', 'Situação']);
     expect(corpoDaTabela()).toEqual([
-      ['Cal (saco)', '20', '8', '12 pendentes'],
-      ['Gesso (saco)', '10', '15', '+5 além do previsto'],
+      ['Cal (saco)', '20', '8', 'pendente: 12'],
+      ['Gesso (saco)', '10', '15', 'excedente: 5'],
       ['Placa (un)', '1.250,5', '1.250,5', 'conforme previsto'],
     ]);
     expect(get).toHaveBeenCalledWith('/obras/o1/materiais-previstos');
@@ -141,8 +141,8 @@ describe('MateriaisPrevistosForm', () => {
 
     await waitFor(() =>
       expect(corpoDaTabela()).toEqual([
-        ['Cal (saco)', '25', '8', '17 pendentes'],
-        ['Gesso (saco)', '7,5', '0', '7,5 pendentes'],
+        ['Cal (saco)', '25', '8', 'pendente: 17'],
+        ['Gesso (saco)', '7,5', '0', 'pendente: 7,5'],
       ]),
     );
     expect(put).toHaveBeenCalledWith('/obras/o1/materiais-previstos', {
@@ -179,7 +179,7 @@ describe('MateriaisPrevistosForm', () => {
 
     expect(await screen.findByText('Material m-cal não encontrado')).toBeInTheDocument();
     expect(screen.getByLabelText('Quantidade')).toHaveValue(30);
-    expect(corpoDaTabela()).toEqual([['Cal (saco)', '20', '8', '12 pendentes']]);
+    expect(corpoDaTabela()).toEqual([['Cal (saco)', '20', '8', 'pendente: 12']]);
   });
 
   it('desabilita o botão enquanto salva', async () => {

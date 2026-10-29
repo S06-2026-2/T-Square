@@ -135,7 +135,8 @@ Fluxo de uma análise:
 - **Interfaces**:
   - `definicoes: Anthropic.Tool[]` — `listarMateriais`, `consumoDoMaterial(materialId)`, `reservadoPorObras(materialId)`, `previstoVsUtilizado(materialId)`, `sugerirReposicao(materialId, tipo, quantidade?, justificativa)`
   - `executar(nome, input, ctx: ContextoFerramentas): { conteudo: string; erro: boolean }`
-  - `ctx` = snapshot + `MapaMarcadores` + lista de sugestões aceitas
+  - `ctx` = snapshot + `MapaMarcadores` + lista de sugestões aceitas + consultas feitas por material (EAP-67)
+- **Visão geral x investigação (T28)**: `listarMateriais` devolve só `saldoAtual`, `estoqueMinimo`, `risco` (`motivo` do indicador ou `SEM_RISCO`), `obrigatorio`, `temReserva` e `temPrevisao` (previsão de obra `FECHADA`/`ANDAMENTO`); `calculado`, `saldoLivre` e a faixa aceita (`minimoAceito`/`maximoAceito`, `null` com `calculado <= 0`) vêm em `consumoDoMaterial`. `sugerirReposicao` recusa, depois do silêncio e antes da faixa, se faltar `consumoDoMaterial`, `reservadoPorObras` (com reserva) ou `previstoVsUtilizado` (com previsão) para o material. A rede de segurança lê o snapshot direto e não depende das consultas.
 - **Regras**: leituras devolvem JSON só com nome do material, unidade e números; obras aparecem só como marcador. `sugerirReposicao` valida faixa 50–200% (`REPOSICAO`), `calculado <= 0` (só `INFORMATIVO`), `calculado > 0` (recusa `INFORMATIVO`), silêncio por tipo: `REPOSICAO` dispensado (5 dias) ou resolvido pelo operador (3 dias) segura tudo; `INFORMATIVO` dispensado (5 dias) ou resolvido pelo operador (3 dias) segura só novos `INFORMATIVO` (um `REPOSICAO` sempre pode aparecer). `previstoVsUtilizado` devolve também o `status` da obra (enum). Material inexistente ou input inválido → erro de ferramenta.
 
 ### AgenteEstoqueService

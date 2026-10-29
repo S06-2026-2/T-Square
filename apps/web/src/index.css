@@ -830,6 +830,8 @@ h1 {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
+  /* Cada card na sua altura: abrir o "+" de um não estica os vizinhos da mesma linha. */
+  align-items: start;
 }
 
 .card-alerta {
@@ -892,6 +894,27 @@ h1 {
   margin: 10px 0 0;
   color: var(--texto);
   white-space: pre-line;
+}
+
+/* "+" discreto no fim da linha de ações: abre/fecha a justificativa do alerta. */
+.btn-detalhes {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--borda-forte);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--secundario);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.btn-detalhes:hover,
+.btn-detalhes[aria-expanded='true'] {
+  color: var(--primaria);
+  border-color: var(--primaria);
 }
 
 /* ---------- login ---------- */

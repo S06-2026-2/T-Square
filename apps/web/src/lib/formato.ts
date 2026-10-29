@@ -68,8 +68,8 @@ function ehZero(valor: string): boolean {
  * então "> 0" equivale a "diferente de zero", conferido no texto, sem converter nem fazer contas.
  */
 export function situacaoPrevisto(linha: Pick<LinhaPrevistoUtilizado, 'pendente' | 'excedente'>): string {
-  if (!ehZero(linha.pendente)) return `${numero(linha.pendente)} pendentes`;
-  if (!ehZero(linha.excedente)) return `+${numero(linha.excedente)} além do previsto`;
+  if (!ehZero(linha.pendente)) return `pendente: ${numero(linha.pendente)}`;
+  if (!ehZero(linha.excedente)) return `excedente: ${numero(linha.excedente)}`;
   return 'conforme previsto';
 }
 

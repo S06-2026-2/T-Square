@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 import { api } from '../lib/api';
 import type { RespostaAlertasEstoque, ResumoStatus } from '../types';
@@ -57,7 +58,11 @@ beforeEach(() => {
 describe('Dashboard', () => {
   it('busca o resumo e mostra quantidade e valor em BRL de cada status (DSH-01)', async () => {
     porCaminho(async () => seed);
-    render(<Dashboard />);
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
 
     const andamento = await card('Em andamento');
     expect(andamento.getByTestId('quantidade')).toHaveTextContent(/^1$/);
@@ -72,7 +77,11 @@ describe('Dashboard', () => {
 
   it('mostra os status ausentes na resposta com 0 e R$ 0,00, na ordem do funil (DSH-02)', async () => {
     porCaminho(async () => seed);
-    render(<Dashboard />);
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
     await card('Em andamento');
 
     for (const rotulo of ['Fechadas', 'Concluidas', 'Canceladas']) {
@@ -82,12 +91,22 @@ describe('Dashboard', () => {
     }
 
     const titulos = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
-    expect(titulos).toEqual(['Aguardando cliente', 'Fechadas', 'Em andamento', 'Concluidas', 'Canceladas']);
+    expect(titulos).toEqual([
+      'Aguardando cliente',
+      'Fechadas',
+      'Em andamento',
+      'Concluidas',
+      'Canceladas',
+    ]);
   });
 
   it('sem nenhuma obra, mostra os 5 cards zerados', async () => {
     porCaminho(async () => []);
-    render(<Dashboard />);
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
     await card('Aguardando cliente');
 
     const cards = screen.getAllByRole('article');
@@ -103,7 +122,11 @@ describe('Dashboard', () => {
       () => new Promise(() => {}),
       () => new Promise(() => {}),
     );
-    render(<Dashboard />);
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
 
     expect(screen.getByText('Carregando...')).toBeInTheDocument();
     expect(screen.queryAllByRole('article')).toHaveLength(0);
@@ -111,7 +134,11 @@ describe('Dashboard', () => {
 
   it('exibe a mensagem de erro quando a API falha (DSH-03)', async () => {
     porCaminho(() => Promise.reject(new Error('Erro ao comunicar com a API')));
-    render(<Dashboard />);
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
 
     const erro = await screen.findByText('Erro ao comunicar com a API');
     expect(erro).toHaveClass('erro');
@@ -126,7 +153,11 @@ describe('Dashboard', () => {
         async () => seed,
         () => Promise.reject(new Error('Erro ao carregar alertas do agente')),
       );
-      render(<Dashboard />);
+      render(
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>,
+      );
 
       const erro = await screen.findByText('Erro ao carregar alertas do agente');
       expect(erro).toHaveClass('erro');
@@ -140,12 +171,18 @@ describe('Dashboard', () => {
 
     it('erro em /obras/resumo não esconde a seção de estoque', async () => {
       porCaminho(() => Promise.reject(new Error('Erro ao comunicar com a API')));
-      render(<Dashboard />);
+      render(
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>,
+      );
 
       const erro = await screen.findByText('Erro ao comunicar com a API');
       expect(secaoEstoque()).not.toContainElement(erro);
       expect(await within(secaoEstoque()).findByText('Estoque em dia')).toBeInTheDocument();
-      expect(within(secaoEstoque()).getByRole('button', { name: 'Rodar análise agora' })).toBeInTheDocument();
+      expect(
+        within(secaoEstoque()).getByRole('button', { name: 'Rodar análise agora' }),
+      ).toBeInTheDocument();
       expect(get).toHaveBeenCalledWith('/estoque/agente/alertas');
     });
   });

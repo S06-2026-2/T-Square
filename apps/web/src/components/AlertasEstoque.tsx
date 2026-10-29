@@ -1,16 +1,30 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { api } from '../lib/api';
 import { dataHora } from '../lib/formato';
-import type { RespostaAlertasEstoque, StatusAnaliseEstoque } from '../types';
+import type { AlertaEstoque, RespostaAlertasEstoque, StatusAnaliseEstoque } from '../types';
 import CardAlertaEstoque from './CardAlertaEstoque';
 import Icone from './Icone';
 
 /** Status de análise que pedem aviso junto dos alertas (EAP-33). */
 const avisoStatus: Partial<Record<StatusAnaliseEstoque, string>> = {
   FALHA: 'o agente não respondeu; os alertas abaixo vêm das análises anteriores e da regra básica.',
-  PARCIAL: 'o agente parou no limite de tempo ou de chamadas; os alertas abaixo podem estar incompletos.',
+  PARCIAL:
+    'o agente parou no limite de tempo ou de chamadas; os alertas abaixo podem estar incompletos.',
 };
+
+/**
+ * Atalho do "Resolver" de um REPOSICAO (EAP-68): o Estoque abre a ENTRADA já preenchida
+ * e só resolve o alerta quando a entrada é salva.
+ */
+function caminhoEntrada(alerta: AlertaEstoque): string {
+  const params = new URLSearchParams({ alerta: alerta.id, material: alerta.materialId });
+  if (alerta.quantidadeSugerida !== null) {
+    params.set('quantidade', String(Number(alerta.quantidadeSugerida)));
+  }
+  return `/estoque?${params}`;
+}
 
 /**
  * Seção do Dashboard com os alertas do agente de estoque.
@@ -23,6 +37,7 @@ export default function AlertasEstoque() {
   const [analisando, setAnalisando] = useState(false);
   /** id do alerta com Dispensar/Resolver em andamento. */
   const [agindo, setAgindo] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   async function carregar() {
     try {
@@ -58,7 +73,9 @@ export default function AlertasEstoque() {
     setAgindo(id);
     try {
       await api.patch(`/estoque/agente/alertas/${id}/${acao}`);
-      setResposta((atual) => atual && { ...atual, alertas: atual.alertas.filter((a) => a.id !== id) });
+      setResposta(
+        (atual) => atual && { ...atual, alertas: atual.alertas.filter((a) => a.id !== id) },
+      );
     } catch (e) {
       // O card fica na lista; só a mensagem aparece (EAP-53).
       setErro(e instanceof Error ? e.message : 'Erro ao atualizar o alerta');
@@ -77,11 +94,18 @@ export default function AlertasEstoque() {
           <h3 id="titulo-alertas">Reposição de estoque</h3>
           {resposta && (
             <p className="subtitulo-pagina" data-testid="ultima-analise">
-              {ultima ? `Última análise: ${dataHora(ultima.iniciadoEm)}` : 'Nenhuma análise executada ainda'}
+              {ultima
+                ? `Última análise: ${dataHora(ultima.iniciadoEm)}`
+                : 'Nenhuma análise executada ainda'}
             </p>
           )}
         </div>
-        <button type="button" className="btn" disabled={analisando} onClick={() => void rodarAnalise()}>
+        <button
+          type="button"
+          className="btn"
+          disabled={analisando}
+          onClick={() => void rodarAnalise()}
+        >
           {analisando ? 'Analisando...' : 'Rodar análise agora'}
         </button>
       </div>
@@ -112,7 +136,11 @@ export default function AlertasEstoque() {
               alerta={alerta}
               ocupado={agindo === alerta.id}
               onDispensar={() => void agir(alerta.id, 'dispensar')}
-              onResolver={() => void agir(alerta.id, 'resolver')}
+              onResolver={() =>
+                alerta.tipo === 'REPOSICAO'
+                  ? navigate(caminhoEntrada(alerta))
+                  : void agir(alerta.id, 'resolver')
+              }
             />
           ))}
         </ul>

@@ -185,7 +185,7 @@ describe('Obras', () => {
     ]) {
       abrirPrevistos(titulo);
       const alvo = within(card(titulo));
-      expect(await alvo.findByRole('table')).toHaveTextContent('12 pendentes');
+      expect(await alvo.findByRole('table')).toHaveTextContent('pendente: 12');
       await waitFor(() => expect(alvo.getByLabelText('Material')).toHaveValue('m-cal'));
       expect(alvo.getByLabelText('Quantidade')).toHaveValue(20);
       expect(alvo.getByRole('button', { name: 'Salvar materiais' })).toBeInTheDocument();
@@ -201,7 +201,7 @@ describe('Obras', () => {
     for (const titulo of ['Obra con', 'Obra can']) {
       abrirPrevistos(titulo);
       const alvo = within(card(titulo));
-      expect(await alvo.findByRole('table')).toHaveTextContent('12 pendentes');
+      expect(await alvo.findByRole('table')).toHaveTextContent('pendente: 12');
       expect(alvo.queryByLabelText('Material')).not.toBeInTheDocument();
       expect(alvo.queryByRole('button', { name: 'Adicionar material' })).not.toBeInTheDocument();
       expect(alvo.queryByRole('button', { name: 'Salvar materiais' })).not.toBeInTheDocument();

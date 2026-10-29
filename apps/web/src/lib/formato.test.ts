@@ -77,15 +77,15 @@ describe('situacaoAlerta (EAP-28)', () => {
 
 describe('situacaoPrevisto (EAP-56)', () => {
   // Pendente e excedente vêm prontos da API; o front só escolhe o texto e formata.
-  it('pendente > 0: "N pendentes"', () => {
-    expect(situacaoPrevisto({ pendente: '12', excedente: '0' })).toBe('12 pendentes');
-    expect(situacaoPrevisto({ pendente: '2.5', excedente: '0' })).toBe('2,5 pendentes');
+  it('pendente > 0: "pendente: N"', () => {
+    expect(situacaoPrevisto({ pendente: '12', excedente: '0' })).toBe('pendente: 12');
+    expect(situacaoPrevisto({ pendente: '2.5', excedente: '0' })).toBe('pendente: 2,5');
   });
 
-  it('excedente > 0: "+N além do previsto"', () => {
-    expect(situacaoPrevisto({ pendente: '0', excedente: '5' })).toBe('+5 além do previsto');
+  it('excedente > 0: "excedente: N"', () => {
+    expect(situacaoPrevisto({ pendente: '0', excedente: '5' })).toBe('excedente: 5');
     expect(situacaoPrevisto({ pendente: '0.00', excedente: '1250.5' })).toBe(
-      '+1.250,5 além do previsto',
+      'excedente: 1.250,5',
     );
   });
 
@@ -94,8 +94,12 @@ describe('situacaoPrevisto (EAP-56)', () => {
     expect(situacaoPrevisto({ pendente: '0.00', excedente: '0.0' })).toBe('conforme previsto');
   });
 
+  it('os dois > 0 (a API não deveria devolver): vale o pendente', () => {
+    expect(situacaoPrevisto({ pendente: '3', excedente: '2' })).toBe('pendente: 3');
+  });
+
   it('decimal só abaixo de 1 ainda conta como maior que zero', () => {
-    expect(situacaoPrevisto({ pendente: '0.01', excedente: '0' })).toBe('0,01 pendentes');
-    expect(situacaoPrevisto({ pendente: '0', excedente: '0.5' })).toBe('+0,5 além do previsto');
+    expect(situacaoPrevisto({ pendente: '0.01', excedente: '0' })).toBe('pendente: 0,01');
+    expect(situacaoPrevisto({ pendente: '0', excedente: '0.5' })).toBe('excedente: 0,5');
   });
 });

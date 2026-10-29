@@ -117,7 +117,7 @@ async function main() {
     create: { nome: 'Gesso em po', unidade: 'saco', saldoAtual: 45, estoqueMinimo: 10 },
   });
 
-  await seedDemonstracaoAgente();
+  await seedDemonstracaoAgente(pedro.id);
 
   console.log('Seed concluido. Login: admin@gesso.com / admin123');
   console.log(`Usuario admin: ${admin.id}`);
@@ -132,13 +132,16 @@ const DIA_MS = 24 * 60 * 60 * 1000;
  * - Perfil montante 48mm: saldo 20 = minimo 20, com consumo solto (no minimo);
  * - Placa de drywall ST: saldo 70, mas a obra FECHADA reserva 60 -> saldo livre 10 < minimo 20;
  * - Fita para juntas: cruza o minimo em ~6 dias (previsao; fica a criterio do agente).
+ * - Massa para drywall: sem risco (saldo 25, minimo 5), mas a obra em ANDAMENTO previu 10 e
+ *   ja usou 15 (excedente 5). Excedente nao reserva nem entra no consumo solto, entao
+ *   calculado <= 0: cenario para o agente registrar um INFORMATIVO (T28, EAP-67).
  *
  * Idempotente: materiais por nome, obra/previsto/movimentacoes por id fixo.
  * Rodar de novo nao duplica nada; so traz as datas das movimentacoes para perto de "agora",
  * para as saidas continuarem dentro da janela de 30 dias.
  * O saldoAtual de cada material bate com as movimentacoes (entrada inicial - saidas).
  */
-async function seedDemonstracaoAgente() {
+async function seedDemonstracaoAgente(gesseiroId: string) {
   const agora = new Date();
   const diasAtras = (dias: number) => new Date(agora.getTime() - dias * DIA_MS);
 
@@ -154,6 +157,7 @@ async function seedDemonstracaoAgente() {
   const perfil = await material('Perfil montante 48mm', 'barra', 20, 20);
   const placaDrywall = await material('Placa de drywall ST 1,20x1,80', 'un', 70, 20);
   const fita = await material('Fita para juntas', 'rolo', 11, 5);
+  const massa = await material('Massa para drywall', 'balde', 25, 5);
 
   const obraFechada = await prisma.obra.upsert({
     where: { id: '55555555-5555-5555-5555-555555555555' },
@@ -176,6 +180,29 @@ async function seedDemonstracaoAgente() {
     create: { obraId: obraFechada.id, materialId: placaDrywall.id, quantidade: 60 },
   });
 
+  const obraAndamento = await prisma.obra.upsert({
+    where: { id: '77777777-7777-7777-7777-777777777777' },
+    update: {},
+    create: {
+      id: '77777777-7777-7777-7777-777777777777',
+      titulo: 'Drywall - Loja Avenida',
+      descricao: 'Parede de drywall separando estoque e salao de vendas.',
+      clienteNome: 'Loja Avenida Ltda',
+      clienteTelefone: '(35) 98888-0004',
+      endereco: 'Av. Sete de Setembro, 80 - Campos Gerais/MG',
+      status: StatusObra.ANDAMENTO,
+      valorTotal: 6200,
+      dataInicio: diasAtras(14),
+      gesseiros: { create: [{ gesseiroId, valorCombinado: 1800, funcao: 'Drywall' }] },
+    },
+  });
+
+  await prisma.materialPrevistoObra.upsert({
+    where: { obraId_materialId: { obraId: obraAndamento.id, materialId: massa.id } },
+    update: {},
+    create: { obraId: obraAndamento.id, materialId: massa.id, quantidade: 10 },
+  });
+
   const { ENTRADA, SAIDA } = TipoMovimentacao;
   const movimentacoes: {
     id: string;
@@ -184,6 +211,7 @@ async function seedDemonstracaoAgente() {
     quantidade: number;
     dias: number;
     observacao: string;
+    obraId?: string;
   }[] = [
     {
       id: '66666666-6666-6666-6666-666666666601',
@@ -280,6 +308,32 @@ async function seedDemonstracaoAgente() {
       quantidade: 15,
       dias: 6,
       observacao: 'Retirada avulsa',
+    },
+    {
+      id: '66666666-6666-6666-6666-666666666613',
+      materialId: massa.id,
+      tipo: ENTRADA,
+      quantidade: 40,
+      dias: 35,
+      observacao: 'Compra inicial',
+    },
+    {
+      id: '66666666-6666-6666-6666-666666666614',
+      materialId: massa.id,
+      tipo: SAIDA,
+      quantidade: 8,
+      dias: 10,
+      observacao: 'Saida para a obra',
+      obraId: obraAndamento.id,
+    },
+    {
+      id: '66666666-6666-6666-6666-666666666615',
+      materialId: massa.id,
+      tipo: SAIDA,
+      quantidade: 7,
+      dias: 4,
+      observacao: 'Saida para a obra',
+      obraId: obraAndamento.id,
     },
   ];
 

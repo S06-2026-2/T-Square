@@ -78,6 +78,8 @@ const ferramenta = (name: string, input: Record<string, unknown> = {}) => ({
   input,
 });
 const usar = (...blocos: unknown[]) => resposta('tool_use', blocos);
+/** Leitura que a trava do sugerirReposicao exige antes de sugerir (EAP-67). */
+const consumo = (materialId: string) => ferramenta('consumoDoMaterial', { materialId });
 const texto = (t: string) => ({ type: 'text', text: t });
 const terminar = (t = 'Análise concluída.') => resposta('end_turn', [texto(t)]);
 
@@ -207,6 +209,7 @@ describe('AgenteEstoqueService', () => {
     snapshot: snapshot(...materiais),
     mapa: new MapaMarcadores(),
     aceitas: [],
+    consultas: new Map(),
   });
 
   const loop = (service: AgenteEstoqueService, ctx: ContextoFerramentas): Promise<ResultadoLoop> =>
@@ -244,20 +247,21 @@ describe('AgenteEstoqueService', () => {
         justificativa: 'Abaixo do mínimo.',
       });
       const primeira = usar(texto('Vou listar.'), lista);
-      const roteiro = new Roteiro([primeira, usar(sugestao), terminar('Pronto.')]);
+      const roteiro = new Roteiro([primeira, usar(consumo('cal'), sugestao), terminar('Pronto.')]);
       const service = await criar(roteiro);
 
       const r = await loop(service, contexto(calAbaixo()));
 
       expect(r.status).toBe(StatusAnaliseEstoque.SUCESSO);
-      expect(r.chamadas).toBe(2);
+      expect(r.chamadas).toBe(3);
       expect(r.passos.map((p) => [p.tipo, p.ferramenta ?? p.texto])).toEqual([
         ['texto', 'Vou listar.'],
         ['ferramenta', 'listarMateriais'],
+        ['ferramenta', 'consumoDoMaterial'],
         ['ferramenta', 'sugerirReposicao'],
         ['texto', 'Pronto.'],
       ]);
-      expect(r.passos[2]).toEqual({
+      expect(r.passos[3]).toEqual({
         tipo: 'ferramenta',
         ferramenta: 'sugerirReposicao',
         entrada: sugestao.input,
@@ -294,6 +298,7 @@ describe('AgenteEstoqueService', () => {
 
     it('a 21ª chamada de ferramenta não executa: PARCIAL mantendo as aceitas', async () => {
       const blocos = [
+        consumo('cal'),
         ferramenta('sugerirReposicao', {
           materialId: 'cal',
           tipo: 'REPOSICAO',
@@ -332,6 +337,7 @@ describe('AgenteEstoqueService', () => {
         const service = await criar(
           new Roteiro([
             usar(
+              consumo('cal'),
               ferramenta('sugerirReposicao', {
                 materialId: 'cal',
                 tipo: 'REPOSICAO',
@@ -452,10 +458,43 @@ describe('AgenteEstoqueService', () => {
       ]);
     });
 
+    it('sugestão sem investigar é recusada e a rede de segurança cobre o obrigatório (EAP-67)', async () => {
+      const apressada = ferramenta('sugerirReposicao', {
+        materialId: 'cal',
+        tipo: 'REPOSICAO',
+        quantidade: 40,
+        justificativa: 'Sem olhar.',
+      });
+      const roteiro = new Roteiro([usar(apressada), terminar()]);
+      const service = await criar(roteiro);
+
+      const analise = await service.analisar(OrigemAnaliseEstoque.MANUAL);
+
+      expect(analise?.status).toBe(StatusAnaliseEstoque.SUCESSO);
+      expect(roteiro.requisicoes[1][2]).toEqual({
+        role: 'user',
+        content: [
+          expect.objectContaining({
+            tool_use_id: apressada.id,
+            is_error: true,
+            content: expect.stringContaining('consulte consumoDoMaterial'),
+          }),
+        ],
+      });
+      expect(dadosCriados().map(numeros)).toEqual([
+        expect.objectContaining({
+          materialId: 'cal',
+          quantidadeSugerida: 35,
+          origemTexto: OrigemTextoAlerta.PADRAO,
+        }),
+      ]);
+    });
+
     it('INFORMATIVO aceito do agente é gravado sem quantidade (EAP-58)', async () => {
       const service = await criar(
         new Roteiro([
           usar(
+            consumo('gesso'),
             ferramenta('sugerirReposicao', {
               materialId: 'gesso',
               tipo: 'INFORMATIVO',
@@ -521,6 +560,7 @@ describe('AgenteEstoqueService', () => {
 
     it('PARCIAL também fecha os não repetidos e mantém as aceitas (EAP-09, EAP-15)', async () => {
       const blocos = [
+        consumo('cal'),
         ferramenta('sugerirReposicao', {
           materialId: 'cal',
           tipo: 'REPOSICAO',
@@ -679,7 +719,7 @@ describe('AgenteEstoqueService', () => {
     describe('justificativa passa por finalizarJustificativa (EAP-12)', () => {
       const comTexto = (justificativa: string) =>
         new Roteiro([
-          usar(ferramenta('reservadoPorObras', { materialId: 'cal' })),
+          usar(consumo('cal'), ferramenta('reservadoPorObras', { materialId: 'cal' })),
           usar(
             ferramenta('sugerirReposicao', {
               materialId: 'cal',

@@ -90,10 +90,10 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 | Previsto menor que o já utilizado | Permitido; o pendente fica 0 e o excesso vira excedente | `max(0, …)` já cobre o caso; recusar travaria correções | y |
 | UI de edição dos previstos | Não existe formulário de edição de obra nem tela de detalhe. Criação: seção "Materiais previstos" em `NovaObraForm`. Edição: ação "Materiais previstos" no card da obra em `Obras.tsx`, que abre um formulário no próprio card (mesmo padrão do `AlocarGesseiroForm`) | Decidido na discussão (tela de obras) | y |
 | UI do previsto × utilizado (P3) | Tabela dentro do card da obra, revelada pela mesma ação "Materiais previstos", acima do formulário de edição; não cria rota `/obras/:id` | Decidido na discussão (tela de obras) | y |
-| Rótulo da situação | `pendente > 0` → "N pendentes"; `excedente > 0` → "+N além do previsto"; os dois 0 → "conforme previsto" | Decidido na discussão (10) | y |
+| Rótulo da situação | `pendente > 0` → "pendente: N"; `excedente > 0` → "excedente: N"; os dois 0 → "conforme previsto"; se os dois > 0 (não deveria acontecer), vale o pendente | Decidido na discussão (10). Texto sem plural ajustado em 2026-10-29 | y |
 | Ícones dos alertas | `REPOSICAO` usa ⚠️; `INFORMATIVO` usa ℹ️ com o rótulo "observação do agente" | Decidido na discussão (10) | y |
 | Modelo e chave | `ANTHROPIC_MODEL` (padrão `claude-haiku-5-5`) e `ANTHROPIC_API_KEY` no `.env` (nunca commitado), vazios no `.env.example` e repassados no `docker-compose.yml` | Decidido na discussão (6) | y |
-| Estimativa de custo | Por análise, com até 20 chamadas de ferramenta e o histórico reenviado a cada turno (~2k tokens de sistema+ferramentas, ~0,7k por passo): pior caso ~175k tokens de entrada e ~20k de saída (com o raciocínio adaptativo). Haiku 5.5 (US$ 0,10 / 0,50 por MTok): ~US$ 0,03 no pior caso, ~US$ 0,01 típico, menos de US$ 1/mês com 1 análise diária e algumas manuais. Opus 5.5 (US$ 4 / 20): ~US$ 1,10 no pior caso por análise | Estimativa, não medição; usar `response.usage` na primeira execução real para confirmar | y |
+| Estimativa de custo | Por análise, com até 20 chamadas de ferramenta e o histórico reenviado a cada turno (~2k tokens de sistema+ferramentas, ~0,7k por passo): pior caso ~175k tokens de entrada e ~20k de saída (com o raciocínio adaptativo). Haiku 5.5 (US$ 0,10 / 0,50 por MTok): ~US$ 0,03 no pior caso, ~US$ 0,01 típico, menos de US$ 1/mês com 1 análise diária e algumas manuais. Opus 5.5 (US$ 4 / 20): ~US$ 1,10 no pior caso por análise | Estimativa, não medição. Execução real (T27): estimado em menos de US$ 0,01 por análise (Haiku 5.5); confirmar no Console — Usage, 29/10 por volta de 13:25 e 13:44 UTC, 19 requisições | y |
 | Testes | Os `.spec.ts` sempre usam a LLM mockada com roteiros de chamadas de ferramenta; nenhum teste chama a Claude API | Decidido na discussão (1) | y |
 | AD-006 | Texto na seção "Decisão proposta para STATE.md" abaixo; gravada no `STATE.md` em 2026-10-27 | Decidido na discussão (7) | y |
 
@@ -132,6 +132,7 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 19. IF o agente chama `sugerirReposicao` com `tipo = INFORMATIVO` para um material com `calculado > 0` THEN the system SHALL recusar sem gravar e devolver ao agente um resultado de ferramenta com erro indicando que o material exige `REPOSICAO`.
 20. The system SHALL criar alertas `INFORMATIVO` somente a partir de `sugerirReposicao`; a rede de segurança SHALL criar apenas alertas `REPOSICAO`.
 21. IF o material tem obras com pendente > 0 e a justificativa aceita não cita nenhum marcador delas THEN the system SHALL manter o texto do agente (`origemTexto = AGENTE`) e acrescentar ao fim "Reservado para: <títulos das obras>", separados por vírgula.
+22. IF o agente chama `sugerirReposicao` para um material sem ter chamado nesta análise `consumoDoMaterial` para ele, ou `reservadoPorObras` quando o material tem reserva, ou `previstoVsUtilizado` quando ele tem previsão de obra `FECHADA`/`ANDAMENTO` THEN the system SHALL recusar sem gravar e devolver ao agente um resultado de ferramenta com erro que lista as consultas que faltam. A recusa por silêncio vem antes desta trava. `listarMateriais` dá só a visão geral (saldo, mínimo, `risco`, `obrigatorio`, `temReserva`, `temPrevisao`), sem `calculado`, que passa a vir em `consumoDoMaterial` junto com a faixa aceita. (EAP-67, T28)
 
 **Independent Test**: com Cal criada há mais de 30 dias (`estoqueMinimo` 10, `saldoAtual` 40) e registrar 30 sacos de SAIDA sem obra nos últimos 30 dias (ritmo 1/dia, `diasAteMinimo` = 30). Rodar com a LLM mockada sugerindo `REPOSICAO` de 20: recusado, porque `calculado = ceil(30 + 10 − 40)` = 0; o roteiro então registra um `INFORMATIVO`, que é aceito sem quantidade. Registrar mais 25 de SAIDA (saldo 15, ritmo ≈ 1,83/dia, `diasAteMinimo` ≈ 2,7): o roteiro sugere 50, que é aceito (`calculado = ceil(55 + 10 − 15)` = 50). Repetir a análise: continua 1 alerta. Rodar sem chave: status `FALHA`, alerta mantido, `saldoAtual` e movimentações inalterados.
 
@@ -166,7 +167,7 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 
 **Acceptance Criteria**:
 
-1. WHEN o operador acessa `/dashboard` THEN the system SHALL chamar `GET /estoque/agente/alertas` e exibir um card por alerta ATIVO com material, unidade, quantidade sugerida, situação em dias e justificativa, na ordem de urgência devolvida pela API: abaixo do mínimo (`saldoLivre < estoqueMinimo`) → no mínimo com consumo (`saldoLivre = estoqueMinimo`) → previsão (`diasAteMinimo` crescente; sem dias por último) → `INFORMATIVO`; empate por `criadoEm` crescente.
+1. WHEN o operador acessa `/dashboard` THEN the system SHALL chamar `GET /estoque/agente/alertas` e exibir um card por alerta ATIVO com material, unidade, quantidade sugerida, situação em dias e justificativa (recolhida atrás de um botão "+" que abre e fecha o texto; ajuste de 2026-10-29 para limpar o card), na ordem de urgência devolvida pela API: abaixo do mínimo (`saldoLivre < estoqueMinimo`) → no mínimo com consumo (`saldoLivre = estoqueMinimo`) → previsão (`diasAteMinimo` crescente; sem dias por último) → `INFORMATIVO`; empate por `criadoEm` crescente.
 2. The system SHALL exibir no card os valores numéricos dos campos gravados no alerta, e nunca números extraídos da justificativa.
 3. WHEN o alerta `REPOSICAO` tem `motivo = ABAIXO_DO_MINIMO` (`saldoLivre < estoqueMinimo`) THEN the system SHALL exibir "abaixo do mínimo" no lugar dos dias; WHEN tem `motivo = NO_MINIMO_COM_CONSUMO` (`saldoLivre = estoqueMinimo`) THEN the system SHALL exibir "no mínimo"; WHEN tem `motivo = PREVISAO` (`ritmoDiario > 0` e `saldoLivre > estoqueMinimo`) THEN the system SHALL exibir, com `N = floor(diasAteMinimo)`, "cruza o mínimo hoje" se N = 0, "cruza o mínimo em ~1 dia" se N = 1 e "cruza o mínimo em ~N dias" se N >= 2; WHEN não tem motivo (`ritmoDiario = 0`) THEN the system SHALL exibir "sem consumo recente". O `motivo` é calculado pela API em `GET /estoque/agente/alertas` a partir dos números gravados; o front não compara nem converte esses números.
 4. WHEN o alerta tem `origemTexto = PADRAO` THEN the system SHALL exibir o selo "sem agente — alerta básico" no card.
@@ -217,7 +218,8 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 **Acceptance Criteria**:
 
 1. WHEN o operador clica em "Dispensar" num card de alerta THEN the system SHALL chamar `PATCH /estoque/agente/alertas/:id/dispensar`, que muda o status para `DISPENSADO` e grava a data, e remover o card da lista.
-2. WHEN o operador clica em "Resolver" num card de alerta THEN the system SHALL chamar `PATCH /estoque/agente/alertas/:id/resolver`, que muda o status para `RESOLVIDO` com `resolvidoPor = OPERADOR` e grava a data, e remover o card da lista.
+2. WHEN o operador clica em "Resolver" num card de alerta `INFORMATIVO` THEN the system SHALL chamar `PATCH /estoque/agente/alertas/:id/resolver`, que muda o status para `RESOLVIDO` com `resolvidoPor = OPERADOR` e grava a data, e remover o card da lista. (Num `REPOSICAO`, o "Resolver" segue o critério 10.)
+10. WHEN o operador clica em "Resolver" num card de alerta `REPOSICAO` THEN the system SHALL abrir a página de Estoque com o formulário de ENTRADA preenchido com o material e a quantidade sugerida (editável), sem chamar a API; WHEN essa ENTRADA é salva THEN the system SHALL chamar `PATCH /estoque/agente/alertas/:id/resolver` e voltar ao Dashboard. IF a ENTRADA falha THEN the system SHALL não resolver o alerta e manter o formulário com o erro; IF a resolução falha depois da ENTRADA salva THEN the system SHALL ficar no Estoque com a mensagem `Entrada registrada, mas o alerta não foi resolvido: <mensagem da API>`; IF o operador fecha ou troca o formulário THEN the system SHALL desfazer o atalho, mantendo o alerta ATIVO. (EAP-68, T29)
 3. IF dispensar ou resolver é chamado para um alerta que não está ATIVO THEN the system SHALL responder 400 com a mensagem `Alerta <id> não está ativo` sem alterá-lo.
 4. IF dispensar ou resolver é chamado com um `id` inexistente THEN the system SHALL responder 404 com a mensagem `Alerta <id> não encontrado`.
 5. WHILE o último alerta `REPOSICAO` do material foi dispensado há menos de 5 dias the system SHALL não criar nem reabrir alerta para esse material em nenhuma análise, inclusive o obrigatório.
@@ -240,10 +242,10 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 
 1. WHEN `GET /obras/:id/materiais-previstos` é chamado THEN the system SHALL responder com uma linha por material previsto contendo `material`, `unidade`, `previsto`, `utilizado`, `pendente` e `excedente`.
 2. WHEN o operador abre "Materiais previstos" no card da obra THEN the system SHALL exibir a tabela com as colunas material, previsto, utilizado e situação, acima do formulário de edição.
-3. WHEN `pendente > 0` THEN the system SHALL exibir a situação "N pendentes"; WHEN `excedente > 0` THEN the system SHALL exibir "+N além do previsto"; WHEN os dois são 0 THEN the system SHALL exibir "conforme previsto".
+3. WHEN `pendente > 0` THEN the system SHALL exibir a situação "pendente: N"; WHEN `excedente > 0` THEN the system SHALL exibir "excedente: N"; WHEN os dois são 0 THEN the system SHALL exibir "conforme previsto".
 4. IF a obra não tem materiais previstos THEN the system SHALL exibir "Nenhum material previsto" no lugar da tabela.
 
-**Independent Test**: obra com 10 sacos de Cal previstos e 15 de SAIDA para ela: a tabela mostra previsto 10, utilizado 15, "+5 além do previsto"; e a análise não conta esses 15 no consumo solto.
+**Independent Test**: obra com 10 sacos de Cal previstos e 15 de SAIDA para ela: a tabela mostra previsto 10, utilizado 15, "excedente: 5"; e a análise não conta esses 15 no consumo solto.
 
 ---
 
@@ -345,14 +347,16 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 | EAP-64 | P2: Previstos — devolução abate o utilizado | T2, T3 | Implementing |
 | EAP-65 | P2: Dispensar/resolver — dispensa de INFORMATIVO | T6 | Implementing |
 | EAP-66 | P1: Dashboard — carregando a seção ("Carregando alertas...") | T18 | Implementing |
+| EAP-67 | P1: Análise — trava de investigação antes de sugerir | T28 | Implementing |
+| EAP-68 | P2: Dispensar/resolver — "Resolver" de REPOSICAO leva à ENTRADA no Estoque | T29 | Implementing |
 
-Os IDs seguem a ordem dos critérios dentro de cada story; os critérios acrescentados na rodada 2 receberam EAP-58..65 em vez de renumerar os anteriores; EAP-66 entrou na revisão da Fase 5.
+Os IDs seguem a ordem dos critérios dentro de cada story; os critérios acrescentados na rodada 2 receberam EAP-58..65 em vez de renumerar os anteriores; EAP-66 entrou na revisão da Fase 5; EAP-67 entrou depois da primeira execução real (T27), em que o agente só listou e sugeriu o valor calculado, sem investigar; EAP-68 veio do usuário, para "Resolver" não fechar um alerta de compra sem registrar a entrada.
 
 **ID format:** `EAP-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 66 total, 66 mapped to tasks, 0 unmapped (ver `tasks.md`)
+**Coverage:** 68 total, 68 mapped to tasks, 0 unmapped (ver `tasks.md`)
 
 ---
 
@@ -369,7 +373,7 @@ Texto de **AD-006**, aprovado e gravado no `STATE.md` em 2026-10-27.
 
 - Incluir na fase Tasks uma task para gerar um HTML standalone com o raciocínio (passos gravados em `AnaliseEstoque`) de uma execução **real**, para a apresentação ao professor.
 - Dependências novas a confirmar no Design: `@nestjs/schedule` e `@anthropic-ai/sdk`.
-- Custo: confirmar a estimativa (Assumptions) com `response.usage` na primeira execução real.
+- Custo: estimado em menos de US$ 0,01 por análise (Haiku 5.5); confirmar no Console — Usage, 29/10 por volta de 13:25 e 13:44 UTC, 19 requisições. Não bloqueia a T27 nem o Verifier.
 - Ambiente (nota para a skill `check-specs`): nesta máquina `python` não está no PATH (nem no Bash nem no PowerShell). O `validate_spec.py` foi rodado com `%LOCALAPPDATA%\Programs\Python\Python313\python.exe`. A skill não foi alterada.
 
 ---

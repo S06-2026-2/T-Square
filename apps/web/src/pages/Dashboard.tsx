@@ -29,7 +29,6 @@ export default function Dashboard() {
       <div className="cabecalho-pagina">
         <div>
           <h1>Visao geral</h1>
-          <p className="subtitulo-pagina">Quantidade e valor das obras em cada etapa do funil.</p>
         </div>
       </div>
 

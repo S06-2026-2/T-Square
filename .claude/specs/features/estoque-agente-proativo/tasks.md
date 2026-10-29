@@ -90,6 +90,8 @@ T21 → T23 → T24
 ```
 T25 → T27
 T26 → T27
+T27 (1ª execução) → T28 → T27 (execução final)
+T19 → T29
 ```
 
 ---
@@ -653,7 +655,7 @@ T26 → T27
 
 **Done when**:
 
-- [x] Testes cobrem: colunas material, previsto, utilizado, situação; "12 pendentes", "+5 além do previsto", "conforme previsto"; "Nenhum material previsto"; salvar chama `PUT /obras/:id/materiais-previstos` e recarrega; erro da API no formulário; em `CONCLUIDA` só a tabela, sem editor
+- [x] Testes cobrem: colunas material, previsto, utilizado, situação; "pendente: 12", "excedente: 5", "conforme previsto"; "Nenhum material previsto"; salvar chama `PUT /obras/:id/materiais-previstos` e recarrega; erro da API no formulário; em `CONCLUIDA` só a tabela, sem editor
 - [x] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit
@@ -752,14 +754,68 @@ T26 → T27
 
 **Done when**:
 
-- [ ] Passo manual do usuário: colocar a chave no `.env` da raiz (nunca commitado) e recriar o container com `docker compose up -d api` (`docker restart gesso_api` não relê o `.env`)
-- [ ] Análise real termina `SUCESSO` ou `PARCIAL`; `response.usage` anotado para confirmar a estimativa de custo da spec
-- [ ] HTML gerado, aberto no navegador e revisado (sem dado de cliente)
-- [ ] Gate check passes: `npm run build && npm test`
+- [x] Passo manual do usuário: colocar a chave no `.env` da raiz (nunca commitado) e recriar o container com `docker compose up -d api` (`docker restart gesso_api` não relê o `.env`)
+- [x] Análise real termina `SUCESSO` ou `PARCIAL`. 1ª execução (2026-10-29): `SUCESSO` em 11,5 s com 5 chamadas, mas o agente só listou e sugeriu o calculado, sem investigar; análise e alertas apagados e T28 criada. Execução final (2026-10-29, `53f2bf02-…`): `SUCESSO` em 12,7 s com 14 chamadas (8 consultas), 4 REPOSICAO + 1 INFORMATIVO, todos do agente, sem recusa e sem rede de segurança. Custo estimado em menos de US$ 0,01 por análise; confirmar no Console (não bloqueia).
+- [x] HTML gerado em `apps/api/tmp/raciocinio-execucao-real.html` (ignorado no Git); sem telefone, endereço nem `clienteNome`; os títulos das obras aparecem só na legenda dos marcadores
+- [x] Gate check passes: `npm run build && npm test` (API 231, web 137)
 
 **Tests**: none
 **Gate**: build
 **Commit**: `docs(agente-estoque): registra custo medido na execucao real do agente` (o HTML não é commitado)
+
+---
+
+### T28: Agente investiga antes de sugerir
+
+**What**: `listarMateriais` passa a dar só a visão geral e o risco; `calculado` e a faixa aceita vão para `consumoDoMaterial`; `sugerirReposicao` ganha a trava de investigação; o prompt de sistema orienta o método (risco → consumo, reserva, previsto x utilizado; SEM_RISCO com previsão → consumo + previsto x utilizado, para avaliar INFORMATIVO). O seed ganha um material SEM_RISCO com obra em `ANDAMENTO` acima do previsto.
+**Where**: `apps/api/src/agente-estoque/ferramentas-agente.ts` (+ `.spec.ts`), `agente-estoque.service.ts` (prompt e `ctx.consultas`) (+ `.spec.ts`), `apps/api/prisma/seed.ts`
+**Depends on**: T27 (1ª execução)
+**Reuses**: T6 (ferramentas), T7 (loop), T25 (seed)
+**Requirement**: EAP-67
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [x] `listarMateriais` sem `calculado`, `saldoLivre`, `ritmoDiario` e `reservado`; com `risco`, `obrigatorio`, `temReserva` e `temPrevisao` (previsão só de obra `FECHADA`/`ANDAMENTO`)
+- [x] `consumoDoMaterial` com `saldoLivre`, `calculado`, `minimoAceito` e `maximoAceito` (`null` com `calculado <= 0`)
+- [x] Trava: recusa sem gravar, listando as consultas que faltam; silêncio continua vindo antes; faixa 50–200%, regras de INFORMATIVO, rede de segurança, limites (20 chamadas / 2 min) e marcadores inalterados
+- [x] Seed: "Massa para drywall" (saldo 25, mínimo 5) com previsto 10 e utilizado 15 na obra "Drywall - Loja Avenida" (`ANDAMENTO`); estimativa da análise do seed: 14 chamadas
+- [x] Spec cobre: visão geral sem calculado; consumo com faixa; trava sem consumo, com reserva, com previsão, SEM_RISCO com excedente (INFORMATIVO só depois de `previstoVsUtilizado`), consulta de outro material não libera, silêncio antes da trava; no service, sugestão sem investigar é recusada e a rede de segurança cobre o obrigatório
+- [x] Gate check passes: `npm run build && npm test` (API e web)
+
+**Tests**: unit
+**Gate**: build
+**Commit**: `feat(agente-estoque): exige investigacao antes de sugerir reposicao`
+
+---
+
+### T29: "Resolver" de REPOSICAO leva à ENTRADA no Estoque
+
+**What**: No card `REPOSICAO`, "Resolver" navega para `/estoque?alerta=&material=&quantidade=`; o Estoque abre a ENTRADA preenchida e, ao salvar, resolve o alerta e volta ao Dashboard. `INFORMATIVO` continua resolvendo direto.
+**Where**: `apps/web/src/components/AlertasEstoque.tsx` (+ `.test.tsx`), `apps/web/src/pages/Estoque.tsx` (+ `.test.tsx`), `apps/web/src/components/forms/MovimentacaoForm.tsx` (prop `inicial`), `apps/web/src/pages/Dashboard.test.tsx` (render dentro do roteador)
+**Depends on**: T19
+**Reuses**: `MovimentacaoForm` (FRM-09), `PATCH /estoque/agente/alertas/:id/resolver` (T10)
+**Requirement**: EAP-68
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [x] REPOSICAO: "Resolver" navega com alerta, material e quantidade (sem zeros à direita), sem PATCH; INFORMATIVO: PATCH direto e card removido
+- [x] Estoque com o atalho: aviso com o nome do material, ENTRADA preenchida e editável; salvar → POST da movimentação, depois PATCH resolver, depois `/dashboard`
+- [x] ENTRADA com erro: sem PATCH, formulário mantido; resolução com erro: mensagem "Entrada registrada, mas o alerta não foi resolvido: …" e fica no Estoque; fechar/trocar o formulário desfaz o atalho
+- [x] Gate check passes: `npm run build && npm test` (web)
+
+**Tests**: unit
+**Gate**: build
+**Commit**: `feat(web): leva o resolver de reposicao para a entrada no estoque`
 
 ---
 
@@ -775,7 +831,7 @@ Fases em sequência; dentro de cada fase, as tasks rodam na ordem numérica.
 | 4. Materiais previstos (API) | T14, T15, T16 | Batch 2 |
 | 5. Dashboard (web) | T17, T18, T19, T20 | Batch 3 (fases 5–6, 8 tasks) |
 | 6. Materiais previstos (web) | T21, T22, T23, T24 | Batch 3 |
-| 7. Demonstração | T25, T26, T27 | Batch 4 (3 tasks; T27 tem passo manual) |
+| 7. Demonstração | T25, T26, T27, T28, T29 | Batch 4 (5 tasks; T27 tem passo manual e roda de novo depois da T28; T29 veio do usuário) |
 
 ---
 
@@ -810,6 +866,8 @@ Fases em sequência; dentro de cada fase, as tasks rodam na ordem numérica.
 | T25 | 1 seed | ✅ |
 | T26 | 1 script | ✅ |
 | T27 | 1 execução + 1 artefato | ✅ |
+| T28 | 1 ajuste de ferramentas + prompt + seed | ✅ |
+| T29 | 1 fluxo (card → Estoque) | ✅ |
 
 ---
 
@@ -844,6 +902,8 @@ Fases em sequência; dentro de cada fase, as tasks rodam na ordem numérica.
 | T25 | None | início da fase 7 | ✅ |
 | T26 | None | T26 → T27 | ✅ |
 | T27 | T25, T26 | T25 → T27, T26 → T27 | ✅ |
+| T28 | T27 (1ª execução) | T27 → T28 → T27 (final) | ✅ |
+| T29 | T19 | T19 → T29 | ✅ |
 
 Dependências entre fases (todas para trás): T3 usa o snapshot de T2; T6 usa T3/T4; T10 usa os modelos de T1; T14 usa `calculo-estoque` de T2; T26 lê `passos` gravados por T7/T8.
 
@@ -880,6 +940,8 @@ Dependências entre fases (todas para trás): T3 usa o snapshot de T2; T6 usa T3
 | T25 | Seed (config/dados) | none | none | ✅ |
 | T26 | Script (render puro) | unit | unit | ✅ |
 | T27 | Artefato de documentação | none | none | ✅ |
+| T28 | Service (ferramentas e loop) | unit | unit | ✅ |
+| T29 | Componente + página | unit | unit | ✅ |
 
 ---
 
@@ -919,5 +981,7 @@ Dependências entre fases (todas para trás): T3 usa o snapshot de T2; T6 usa T3
 | EAP-54 | T14, T16 |
 | EAP-55, 56, 57 | T23 |
 | EAP-64 | T2, T3 |
+| EAP-67 | T28 |
+| EAP-68 | T29 |
 
-65 de 65 requisitos mapeados.
+68 de 68 requisitos mapeados (EAP-66 em T18, EAP-67 em T28, EAP-68 em T29).

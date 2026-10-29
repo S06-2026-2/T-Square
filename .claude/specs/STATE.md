@@ -53,16 +53,17 @@
 ## Handoff
 
 - **Feature**: `estoque-agente-proativo` em Execute (2026-10-28)
-- **Phase / Task**: T1–T26 concluídas; falta só a T27 (execução real com a chave do usuário), que espera autorização explícita porque consome créditos
+- **Phase / Task**: T1–T29 concluídas (T27 com a execução real final; T28 e T29 vieram depois da 1ª execução). Falta o Verifier independente e o `validation.md`
 - **Completed**:
   - Fases 1–2 em `b5e2ba6`; Fases 3–4 em `a6e6522` (branch `feat/agente-estoque`).
-  - Fases 5–6 (T17–T24) e ajustes da revisão da Fase 5 (motivo vindo da API, textos de dias, "Carregando alertas...", EAP-66): pacote de commit entregue ao usuário.
-  - Fase 7 parcial: T25 (seed de demonstração) e T26 (exportação do raciocínio em HTML para `apps/api/tmp/`, ignorada).
-  - API 223 testes, web 129, build ok; rastreabilidade com os 66 EAP em `Implementing`.
+  - Fases 5–6 (T17–T24), ajustes da revisão da Fase 5 (EAP-66), T25 e T26 em `f7e6664`. Depois: texto "pendente: N" / "excedente: N" na situação do previsto x utilizado (sem commit).
+  - T28: listarMateriais só com visão geral e risco, calculado e faixa em consumoDoMaterial, trava de investigação no sugerirReposicao, prompt novo e seed com "Massa para drywall" (SEM_RISCO, obra ANDAMENTO acima do previsto).
+  - T29: "Resolver" de REPOSICAO leva à ENTRADA no Estoque e resolve o alerta depois de salvar (EAP-68). Ajustes de front pedidos pelo usuário: card do agente sem a linha de saldo livre, justificativa atrás de um "+", grade sem esticar os vizinhos; Dashboard sem o subtítulo do funil.
+  - Rastreabilidade com os 68 EAP em `Implementing` (vão para `Verified` depois do Verifier). API 231 testes, web 137, builds ok.
 - **In-progress**: none
-- **Next step**: usuário coloca a chave no `.env` da raiz e autoriza a T27 → rodar análise real, exportar o HTML, anotar o custo (o código não grava `response.usage`; usar o Console) → pacote de commit da Fase 7 → Verifier independente (spec-anchored + discrimination sensor) → `validation.md` → `validate_state.py`.
+- **Next step**: commit do usuário → Verifier independente (spec-anchored + discrimination sensor, inclusive T28 e T29) → `validation.md` → conferir o veredito lendo (sem Python na máquina) → EAP para `Verified`.
 - **Regras do usuário**: sub-agentes em sequência; sem commit/push/`git add` pelo agente; nenhuma dependência nova sem perguntar; `ANTHROPIC_API_KEY` só no `.env`.
-- **Blockers**: T27 depende da chave e da autorização do usuário.
+- **Blockers**: none.
 - **Uncommitted files**: conferir `git status`. Fora da feature, nunca commitar junto: `CLAUDE.md`, `migration_lock.toml` (só metadado, conteúdo igual), `.claude/specs/features/obras-transicoes-status/`.
-- **Dados de teste no banco local**: obra "[SMOKE agente-estoque T14-T16] Obra de teste" (`e8603a2f-…`, ORCAMENTO); análises FALHA dos smokes (Fase 3 e T25, `cbbdd9ad-…`); 3 alertas PADRAO ATIVO do seed (Gesso cola, Placa de drywall ST, Perfil montante 48mm).
+- **Dados de teste no banco local**: 1 análise (`53f2bf02-…`, SUCESSO, execução final da T27) e os 5 alertas dela (4 REPOSICAO + 1 INFORMATIVO); dados do seed (obras `3333…`, `4444…`, `5555…`, `7777…`, materiais e movimentações) e a obra "Moldura - Bairro Centro" (`45fb510c-…`, do usuário).
 - **Branch**: feat/agente-estoque

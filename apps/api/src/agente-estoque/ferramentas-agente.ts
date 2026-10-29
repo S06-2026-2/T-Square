@@ -5,6 +5,7 @@ import {
   Prisma,
   ResolvidoPor,
   StatusAlertaEstoque,
+  StatusObra,
   TipoAlertaEstoque,
 } from '@prisma/client';
 
@@ -28,11 +29,41 @@ export interface SugestaoAceita {
   justificativa: string;
 }
 
+/** Leituras por material que a trava do sugerirReposicao pode exigir (EAP-67). */
+export type ConsultaMaterial = 'consumoDoMaterial' | 'reservadoPorObras' | 'previstoVsUtilizado';
+
 export interface ContextoFerramentas {
   snapshot: SnapshotEstoque;
   mapa: MapaMarcadores;
   aceitas: SugestaoAceita[];
+  /** Leituras ja feitas nesta analise, por materialId. */
+  consultas: Map<string, Set<ConsultaMaterial>>;
 }
+
+/** Obras que ainda vao consumir: previsao delas pede investigacao. */
+const STATUS_OBRA_ATIVA: StatusObra[] = [StatusObra.FECHADA, StatusObra.ANDAMENTO];
+
+const temReserva = (m: MaterialSnapshot) => m.obrasQueReservam.length > 0;
+const temPrevisao = (m: MaterialSnapshot) =>
+  m.previstoVsUtilizado.some((l) => STATUS_OBRA_ATIVA.includes(l.status));
+
+/**
+ * Leituras que o agente precisa ter feito antes de sugerir para o material (EAP-67):
+ * consumoDoMaterial sempre; reservadoPorObras com reserva; previstoVsUtilizado com
+ * previsao de obra FECHADA/ANDAMENTO.
+ */
+export function consultasExigidas(m: MaterialSnapshot): ConsultaMaterial[] {
+  const exigidas: ConsultaMaterial[] = ['consumoDoMaterial'];
+  if (temReserva(m)) exigidas.push('reservadoPorObras');
+  if (temPrevisao(m)) exigidas.push('previstoVsUtilizado');
+  return exigidas;
+}
+
+/** Faixa aceita de REPOSICAO: 50% a 200% do calculado (EAP-05). */
+const faixaReposicao = (calculado: Decimal) => ({
+  minimo: calculado.times(0.5),
+  maximo: calculado.times(2),
+});
 
 export interface ResultadoFerramenta {
   conteudo: string;
@@ -122,16 +153,17 @@ export const DEFINICOES_FERRAMENTAS: Anthropic.Tool[] = [
   {
     name: 'listarMateriais',
     description:
-      'Lista todos os materiais com os indicadores já calculados: saldo atual, mínimo, reservado ' +
-      'por obras, saldo livre, ritmo diário, dias até o mínimo, quantidade calculada para ' +
-      '30 dias de cobertura, se o alerta é obrigatório e o motivo.',
+      'Visão geral de todos os materiais: saldo atual, mínimo, risco (ABAIXO_DO_MINIMO, ' +
+      'NO_MINIMO_COM_CONSUMO, PREVISAO ou SEM_RISCO), se o alerta é obrigatório e se há ' +
+      'reserva ou previsão de obras ativas. Não traz a quantidade a comprar.',
     input_schema: { type: 'object', properties: {} },
   },
   {
     name: 'consumoDoMaterial',
     description:
       'Consumo solto de um material na janela de análise (saídas sem obra ou de obras sem ' +
-      'previsão para ele), com o ritmo diário e os dias até o mínimo.',
+      'previsão para ele), com ritmo diário, dias até o mínimo, saldo livre, a quantidade ' +
+      'calculada para 30 dias de cobertura e a faixa aceita para REPOSICAO.',
     input_schema: entradaMaterial,
   },
   {
@@ -151,7 +183,9 @@ export const DEFINICOES_FERRAMENTAS: Anthropic.Tool[] = [
   {
     name: 'sugerirReposicao',
     description:
-      'Registra a sugestão para um material. REPOSICAO exige quantidade entre 50% e 200% da ' +
+      'Registra a sugestão para um material. Só é aceita depois de consumoDoMaterial e, quando ' +
+      'o material tem reserva ou previsão, de reservadoPorObras / previstoVsUtilizado. ' +
+      'REPOSICAO exige quantidade entre 50% e 200% da ' +
       'quantidade calculada e só vale com calculado > 0. INFORMATIVO não leva quantidade e só ' +
       'vale com calculado <= 0. Cite obras só pelos marcadores {{OBRA_n}} recebidos. ' +
       'Uma nova sugestão para o mesmo material substitui a anterior.',
@@ -175,7 +209,7 @@ export const DEFINICOES_FERRAMENTAS: Anthropic.Tool[] = [
  * Executa as ferramentas do agente contra o snapshot. A unica escrita e a lista de
  * sugestoes aceitas em memoria; nada vai ao banco aqui.
  * Spec: .claude/specs/features/estoque-agente-proativo/spec.md
- * (EAP-05, 06, 11, 50, 51, 58, 59, 65)
+ * (EAP-05, 06, 11, 50, 51, 58, 59, 65, 67)
  */
 @Injectable()
 export class FerramentasAgente {
@@ -188,7 +222,7 @@ export class FerramentasAgente {
     }
 
     if (nome === 'listarMateriais') {
-      return ok(ctx.snapshot.materiais.map((m) => resumoMaterial(m)));
+      return ok(ctx.snapshot.materiais.map((m) => visaoGeral(m)));
     }
 
     if (
@@ -210,8 +244,15 @@ export class FerramentasAgente {
       return falha(`Material ${dados.materialId} não encontrado`);
     }
 
+    if (nome !== 'sugerirReposicao') {
+      const feitas = ctx.consultas.get(material.id) ?? new Set<ConsultaMaterial>();
+      ctx.consultas.set(material.id, feitas.add(nome as ConsultaMaterial));
+    }
+
     switch (nome) {
-      case 'consumoDoMaterial':
+      case 'consumoDoMaterial': {
+        const { calculado } = material.indicador;
+        const faixa = calculado.gt(0) ? faixaReposicao(calculado) : null;
         return ok({
           materialId: material.id,
           nome: material.nome,
@@ -220,7 +261,13 @@ export class FerramentasAgente {
           consumoSolto: num(material.consumoSolto),
           ritmoDiario: num(material.indicador.ritmoDiario),
           diasAteMinimo: num(material.indicador.diasAteMinimo),
+          saldoLivre: num(material.indicador.saldoLivre),
+          calculado: num(calculado),
+          // null com calculado <= 0: so INFORMATIVO e aceito.
+          minimoAceito: faixa && num(faixa.minimo),
+          maximoAceito: faixa && num(faixa.maximo),
         });
+      }
       case 'reservadoPorObras':
         return ok({
           materialId: material.id,
@@ -276,6 +323,15 @@ export class FerramentasAgente {
       return falha(`Sugestão recusada: ${silencio.motivo}`);
     }
 
+    // Trava de investigacao (EAP-67): depois do silencio, para nao pedir leituras inuteis.
+    const feitas = ctx.consultas.get(material.id);
+    const faltando = consultasExigidas(material).filter((c) => !feitas?.has(c));
+    if (faltando.length > 0) {
+      return falha(
+        `Sugestão recusada: antes de sugerir para este material, consulte ${faltando.join(', ')}.`,
+      );
+    }
+
     const calculado = material.indicador.calculado;
     let qtd: Decimal | null = null;
 
@@ -286,8 +342,7 @@ export class FerramentasAgente {
             'só INFORMATIVO é aceito.',
         );
       }
-      const minimo = calculado.times(0.5);
-      const maximo = calculado.times(2);
+      const { minimo, maximo } = faixaReposicao(calculado);
       const faixa = `entre ${num(minimo)} e ${num(maximo)} ${material.unidade}`;
       if (typeof quantidade !== 'number') {
         return falha(`Entrada inválida: REPOSICAO exige quantidade (faixa aceita: ${faixa})`);
@@ -318,21 +373,21 @@ export class FerramentasAgente {
   }
 }
 
-function resumoMaterial(m: MaterialSnapshot) {
-  const i = m.indicador;
+/**
+ * Item do listarMateriais: so a visao geral e o sinal de risco. Sem calculado, saldo livre
+ * nem ritmo, para o agente investigar com as outras leituras antes de decidir.
+ */
+function visaoGeral(m: MaterialSnapshot) {
   return {
     materialId: m.id,
     nome: m.nome,
     unidade: m.unidade,
     saldoAtual: num(m.saldoAtual),
     estoqueMinimo: num(m.estoqueMinimo),
-    reservado: num(i.reservado),
-    saldoLivre: num(i.saldoLivre),
-    ritmoDiario: num(i.ritmoDiario),
-    diasAteMinimo: num(i.diasAteMinimo),
-    calculado: num(i.calculado),
-    obrigatorio: i.obrigatorio,
-    motivo: i.motivo,
+    risco: m.indicador.motivo ?? 'SEM_RISCO',
+    obrigatorio: m.indicador.obrigatorio,
+    temReserva: temReserva(m),
+    temPrevisao: temPrevisao(m),
   };
 }
 
