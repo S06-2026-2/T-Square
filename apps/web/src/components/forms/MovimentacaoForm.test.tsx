@@ -13,6 +13,8 @@ const materiais: Material[] = [
 ];
 const obras: Obra[] = [
   { id: 'o-forro', titulo: 'Forro sala', clienteNome: 'Maria', status: 'ANDAMENTO', valorTotal: 8500 },
+  { id: 'o-sanca', titulo: 'Sanca quarto', clienteNome: 'Joao', status: 'CONCLUIDA', valorTotal: 3000 },
+  { id: 'o-divisoria', titulo: 'Divisoria loja', clienteNome: 'Ana', status: 'CANCELADA', valorTotal: 5000 },
 ];
 
 function preencher(rotulo: string, valor: string) {
@@ -84,6 +86,16 @@ describe('MovimentacaoForm', () => {
       quantidade: 5,
       obraId: 'o-forro',
     });
+  });
+
+  it('nao oferece obra concluida nem cancelada na SAIDA (EST-09)', () => {
+    renderForm();
+    preencher('Tipo', 'SAIDA');
+
+    const opcoes = within(screen.getByLabelText('Obra'))
+      .getAllByRole('option')
+      .map((opcao) => opcao.textContent);
+    expect(opcoes).toEqual(['Nenhuma', 'Forro sala']);
   });
 
   it('nao envia obraId quando o tipo volta para ENTRADA depois de escolher uma obra (FRM-09 AC2)', async () => {

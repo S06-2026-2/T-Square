@@ -14,6 +14,11 @@ const caminhos = {
   sair: ['M13 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h7', 'M10 12h10', 'M16 8l4 4-4 4'],
   mais: ['M12 5v14', 'M5 12h14'],
   vazio: ['M4 7h16v12H4z', 'M4 7l2-3h12l2 3', 'M9 11h6'],
+  silenciado: [
+    'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9',
+    'M10.3 21a1.94 1.94 0 0 0 3.4 0',
+    'M3 3l18 18',
+  ],
 } as const;
 
 export type NomeIcone = keyof typeof caminhos;

@@ -28,6 +28,14 @@ export class AgenteEstoqueController {
     return this.alertasService.listarAtivos();
   }
 
+  @Get('silenciados')
+  @ApiOperation({
+    summary: 'Materiais silenciados porque o operador dispensou ou resolveu o último alerta',
+  })
+  silenciados() {
+    return this.alertasService.listarSilenciados();
+  }
+
   @Patch('alertas/:id/dispensar')
   @ApiOperation({ summary: 'Dispensa um alerta ATIVO (silencia o material por 5 dias)' })
   dispensar(@Param('id') id: string) {

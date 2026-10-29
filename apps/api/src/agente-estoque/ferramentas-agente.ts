@@ -46,16 +46,18 @@ const STATUS_OBRA_ATIVA: StatusObra[] = [StatusObra.FECHADA, StatusObra.ANDAMENT
 const temReserva = (m: MaterialSnapshot) => m.obrasQueReservam.length > 0;
 const temPrevisao = (m: MaterialSnapshot) =>
   m.previstoVsUtilizado.some((l) => STATUS_OBRA_ATIVA.includes(l.status));
+/** Parte do consumo solto foi para obras que nao preveem o material (EAP-71). */
+const temUsoSemPrevisao = (m: MaterialSnapshot) => m.usoSemPrevisao.length > 0;
 
 /**
- * Leituras que o agente precisa ter feito antes de sugerir para o material (EAP-67):
+ * Leituras que o agente precisa ter feito antes de sugerir para o material (EAP-67, EAP-72):
  * consumoDoMaterial sempre; reservadoPorObras com reserva; previstoVsUtilizado com
- * previsao de obra FECHADA/ANDAMENTO.
+ * previsao de obra FECHADA/ANDAMENTO ou com uso sem previsao.
  */
 export function consultasExigidas(m: MaterialSnapshot): ConsultaMaterial[] {
   const exigidas: ConsultaMaterial[] = ['consumoDoMaterial'];
   if (temReserva(m)) exigidas.push('reservadoPorObras');
-  if (temPrevisao(m)) exigidas.push('previstoVsUtilizado');
+  if (temPrevisao(m) || temUsoSemPrevisao(m)) exigidas.push('previstoVsUtilizado');
   return exigidas;
 }
 
@@ -76,10 +78,16 @@ export interface SilencioMaterial {
   /** tudo, ou INFORMATIVO dispensado < 5 dias / resolvido pelo operador < 3 dias: novo INFORMATIVO e recusado. */
   informativo: boolean;
   motivo: string | null;
+  /** Alerta dispensado/resolvido que causou o silencio (null sem silencio). */
+  alerta: AlertaEstoque | null;
+  /** Quando o silencio acaba (null sem silencio). */
+  ate: Date | null;
 }
 
 const recente = (data: Date | null, agora: Date, dias: number) =>
   data !== null && agora.getTime() - data.getTime() < dias * DIA_MS;
+
+const somarDias = (data: Date, dias: number) => new Date(data.getTime() + dias * DIA_MS);
 
 /**
  * Silencio de um material a partir dos ultimos alertas dele (EAP-50, EAP-51, EAP-65).
@@ -106,6 +114,8 @@ export function silencioDoMaterial(alertas: AlertaEstoque[], agora: Date): Silen
       tudo: true,
       informativo: true,
       motivo: `alerta de reposição dispensado há menos de ${SILENCIO_DISPENSA_DIAS} dias`,
+      alerta: reposicao,
+      ate: somarDias(reposicao.dispensadoEm!, SILENCIO_DISPENSA_DIAS),
     };
   }
 
@@ -114,6 +124,8 @@ export function silencioDoMaterial(alertas: AlertaEstoque[], agora: Date): Silen
       tudo: true,
       informativo: true,
       motivo: `alerta de reposição resolvido pelo operador há menos de ${SILENCIO_RESOLUCAO_DIAS} dias`,
+      alerta: reposicao!,
+      ate: somarDias(reposicao!.resolvidoEm!, SILENCIO_RESOLUCAO_DIAS),
     };
   }
 
@@ -126,6 +138,8 @@ export function silencioDoMaterial(alertas: AlertaEstoque[], agora: Date): Silen
       tudo: false,
       informativo: true,
       motivo: `observação dispensada há menos de ${SILENCIO_DISPENSA_DIAS} dias`,
+      alerta: informativo,
+      ate: somarDias(informativo.dispensadoEm!, SILENCIO_DISPENSA_DIAS),
     };
   }
 
@@ -134,10 +148,12 @@ export function silencioDoMaterial(alertas: AlertaEstoque[], agora: Date): Silen
       tudo: false,
       informativo: true,
       motivo: `observação resolvida pelo operador há menos de ${SILENCIO_RESOLUCAO_DIAS} dias`,
+      alerta: informativo!,
+      ate: somarDias(informativo!.resolvidoEm!, SILENCIO_RESOLUCAO_DIAS),
     };
   }
 
-  return { tudo: false, informativo: false, motivo: null };
+  return { tudo: false, informativo: false, motivo: null, alerta: null, ate: null };
 }
 
 const num = (valor: Decimal | null) => (valor === null ? null : Number(valor.toDecimalPlaces(2)));
@@ -154,8 +170,9 @@ export const DEFINICOES_FERRAMENTAS: Anthropic.Tool[] = [
     name: 'listarMateriais',
     description:
       'Visão geral de todos os materiais: saldo atual, mínimo, risco (ABAIXO_DO_MINIMO, ' +
-      'NO_MINIMO_COM_CONSUMO, PREVISAO ou SEM_RISCO), se o alerta é obrigatório e se há ' +
-      'reserva ou previsão de obras ativas. Não traz a quantidade a comprar.',
+      'NO_MINIMO_COM_CONSUMO, PREVISAO ou SEM_RISCO), se o alerta é obrigatório, se há ' +
+      'reserva ou previsão de obras ativas e se houve saídas para obras sem previsão ' +
+      '(temUsoSemPrevisao). Não traz a quantidade a comprar.',
     input_schema: { type: 'object', properties: {} },
   },
   {
@@ -163,7 +180,9 @@ export const DEFINICOES_FERRAMENTAS: Anthropic.Tool[] = [
     description:
       'Consumo solto de um material na janela de análise (saídas sem obra ou de obras sem ' +
       'previsão para ele), com ritmo diário, dias até o mínimo, saldo livre, a quantidade ' +
-      'calculada para 30 dias de cobertura e a faixa aceita para REPOSICAO.',
+      'calculada para 30 dias de cobertura e a faixa aceita para REPOSICAO. ' +
+      'consumoEmObrasSemPrevisao é a parte do consumo solto que saiu para obras que não ' +
+      'preveem o material (detalhada em previstoVsUtilizado).',
     input_schema: entradaMaterial,
   },
   {
@@ -176,15 +195,17 @@ export const DEFINICOES_FERRAMENTAS: Anthropic.Tool[] = [
   {
     name: 'previstoVsUtilizado',
     description:
-      'Previsto × utilizado de cada obra que prevê o material (pendente e excedente). ' +
-      'As obras aparecem só como marcadores {{OBRA_n}}.',
+      'Previsto × utilizado de cada obra que prevê o material (pendente e excedente) e, em ' +
+      'usoSemPrevisao, as obras que receberam o material sem prevê-lo (utilizado e saídas na ' +
+      'janela, que já estão no consumo solto). As obras aparecem só como marcadores {{OBRA_n}}.',
     input_schema: entradaMaterial,
   },
   {
     name: 'sugerirReposicao',
     description:
       'Registra a sugestão para um material. Só é aceita depois de consumoDoMaterial e, quando ' +
-      'o material tem reserva ou previsão, de reservadoPorObras / previstoVsUtilizado. ' +
+      'o material tem reserva, previsão ou uso sem previsão, de reservadoPorObras / ' +
+      'previstoVsUtilizado. ' +
       'REPOSICAO exige quantidade entre 50% e 200% da ' +
       'quantidade calculada e só vale com calculado > 0. INFORMATIVO não leva quantidade e só ' +
       'vale com calculado <= 0. Cite obras só pelos marcadores {{OBRA_n}} recebidos. ' +
@@ -209,7 +230,7 @@ export const DEFINICOES_FERRAMENTAS: Anthropic.Tool[] = [
  * Executa as ferramentas do agente contra o snapshot. A unica escrita e a lista de
  * sugestoes aceitas em memoria; nada vai ao banco aqui.
  * Spec: .claude/specs/features/estoque-agente-proativo/spec.md
- * (EAP-05, 06, 11, 50, 51, 58, 59, 65, 67)
+ * (EAP-05, 06, 11, 50, 51, 58, 59, 65, 67, 71, 72)
  */
 @Injectable()
 export class FerramentasAgente {
@@ -259,6 +280,12 @@ export class FerramentasAgente {
           unidade: material.unidade,
           diasJanela: material.diasJanela,
           consumoSolto: num(material.consumoSolto),
+          consumoEmObrasSemPrevisao: num(
+            material.usoSemPrevisao.reduce(
+              (soma, u) => soma.plus(u.saidasNaJanela),
+              new Decimal(0),
+            ),
+          ),
           ritmoDiario: num(material.indicador.ritmoDiario),
           diasAteMinimo: num(material.indicador.diasAteMinimo),
           saldoLivre: num(material.indicador.saldoLivre),
@@ -291,6 +318,12 @@ export class FerramentasAgente {
             utilizado: num(l.utilizado),
             pendente: num(l.pendente),
             excedente: num(l.excedente),
+          })),
+          usoSemPrevisao: material.usoSemPrevisao.map((u) => ({
+            obra: ctx.mapa.marcar(u.obraId, u.titulo),
+            status: u.status,
+            utilizado: num(u.utilizado),
+            saidasNaJanela: num(u.saidasNaJanela),
           })),
         });
       default:
@@ -388,6 +421,7 @@ function visaoGeral(m: MaterialSnapshot) {
     obrigatorio: m.indicador.obrigatorio,
     temReserva: temReserva(m),
     temPrevisao: temPrevisao(m),
+    temUsoSemPrevisao: temUsoSemPrevisao(m),
   };
 }
 

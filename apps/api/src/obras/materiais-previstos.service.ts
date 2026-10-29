@@ -15,7 +15,7 @@ type ClientePrisma = Pick<PrismaService, 'material'>;
 
 /**
  * Cadastro e consulta dos materiais previstos por obra.
- * Spec: .claude/specs/features/estoque-agente-proativo/spec.md (EAP-38..42, EAP-54)
+ * Spec: .claude/specs/features/estoque-agente-proativo/spec.md (EAP-38..42, EAP-54, EAP-70)
  */
 @Injectable()
 export class MateriaisPrevistosService {
@@ -90,7 +90,12 @@ export class MateriaisPrevistosService {
       }),
       this.prisma.movimentacaoEstoque.findMany({
         where: { obraId },
-        select: { materialId: true, tipo: true, quantidade: true },
+        select: {
+          materialId: true,
+          tipo: true,
+          quantidade: true,
+          material: { select: { nome: true, unidade: true } },
+        },
       }),
     ]);
 
@@ -98,12 +103,14 @@ export class MateriaisPrevistosService {
       movimentacoes
         .filter((m) => m.materialId === materialId && m.tipo === tipo)
         .reduce((soma, m) => soma.plus(m.quantidade), new Decimal(0));
-
-    return previstos.map((p) => {
-      const utilizado = utilizadoObra(
-        somar(p.materialId, TipoMovimentacao.SAIDA),
-        somar(p.materialId, TipoMovimentacao.ENTRADA),
+    const utilizadoDe = (materialId: string) =>
+      utilizadoObra(
+        somar(materialId, TipoMovimentacao.SAIDA),
+        somar(materialId, TipoMovimentacao.ENTRADA),
       );
+
+    const linhasPrevistas = previstos.map((p) => {
+      const utilizado = utilizadoDe(p.materialId);
       return {
         materialId: p.materialId,
         material: p.material.nome,
@@ -112,8 +119,36 @@ export class MateriaisPrevistosService {
         utilizado,
         pendente: pendenteObra(p.quantidade, utilizado),
         excedente: excedenteObra(p.quantidade, utilizado),
+        semPrevisao: false,
       };
     });
+
+    // Material que saiu para a obra sem estar previsto: previsto 0, tudo excedente (EAP-70).
+    const previstosIds = new Set(previstos.map((p) => p.materialId));
+    const semPrevisao = new Map<string, { nome: string; unidade: string }>();
+    for (const m of movimentacoes) {
+      if (!previstosIds.has(m.materialId)) semPrevisao.set(m.materialId, m.material);
+    }
+    const linhasSemPrevisao = [...semPrevisao]
+      .map(([materialId, material]) => ({
+        materialId,
+        material,
+        utilizado: utilizadoDe(materialId),
+      }))
+      .filter((l) => l.utilizado.gt(0))
+      .sort((a, b) => a.material.nome.localeCompare(b.material.nome, 'pt-BR'))
+      .map(({ materialId, material, utilizado }) => ({
+        materialId,
+        material: material.nome,
+        unidade: material.unidade,
+        previsto: new Decimal(0),
+        utilizado,
+        pendente: new Decimal(0),
+        excedente: utilizado,
+        semPrevisao: true,
+      }));
+
+    return [...linhasPrevistas, ...linhasSemPrevisao];
   }
 
   private async buscarObra(obraId: string) {

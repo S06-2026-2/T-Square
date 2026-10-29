@@ -94,6 +94,14 @@ T27 (1ª execução) → T28 → T27 (execução final)
 T19 → T29
 ```
 
+### Phase 8: Uso de material sem previsão (pedido do usuário, 2026-10-29)
+
+```
+T28 → T30
+T14 → T31
+T23 → T32
+```
+
 ---
 
 ## Task Breakdown
@@ -811,11 +819,85 @@ T19 → T29
 - [x] REPOSICAO: "Resolver" navega com alerta, material e quantidade (sem zeros à direita), sem PATCH; INFORMATIVO: PATCH direto e card removido
 - [x] Estoque com o atalho: aviso com o nome do material, ENTRADA preenchida e editável; salvar → POST da movimentação, depois PATCH resolver, depois `/dashboard`
 - [x] ENTRADA com erro: sem PATCH, formulário mantido; resolução com erro: mensagem "Entrada registrada, mas o alerta não foi resolvido: …" e fica no Estoque; fechar/trocar o formulário desfaz o atalho
-- [x] Gate check passes: `npm run build && npm test` (web)
+- [x] Gate check passes: `npm run build && npm test` (web) — web 140 testes
 
 **Tests**: unit
 **Gate**: build
 **Commit**: `feat(web): leva o resolver de reposicao para a entrada no estoque`
+
+---
+
+### T30: Agente sabe das saídas para obras sem previsão
+
+**What**: No snapshot, `usoSemPrevisao` por material (obras não canceladas, sem previsão do material, com SAIDA dele na janela: `utilizado` líquido e `saidasNaJanela`). `consumoDoMaterial` ganha `consumoEmObrasSemPrevisao`; `previstoVsUtilizado` ganha `usoSemPrevisao` com marcadores; `listarMateriais` ganha `temUsoSemPrevisao`; a trava exige `previstoVsUtilizado` nesse caso; o texto padrão cita as obras; o prompt explica. O cálculo não muda.
+**Where**: `apps/api/src/agente-estoque/ferramentas-agente.ts` (+ `previsao-estoque.service.ts`, `agente-estoque.service.ts`, specs)
+**Depends on**: T28
+**Reuses**: `comPrevisao`/`saidasObra` do snapshot, `consultasExigidas` (T28), `MapaMarcadores`
+**Requirement**: EAP-71, EAP-72, EAP-73
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [x] Snapshot: SAIDA para obra sem previsão entra em `usoSemPrevisao` (com `saidasNaJanela` e `utilizado`) e continua no `consumoSolto`; obra cancelada, obra com previsão e SAIDA fora da janela ficam fora
+- [x] Ferramentas: os três campos novos, obras só por marcador; trava recusa sem `previstoVsUtilizado` quando `temUsoSemPrevisao`
+- [x] Texto padrão com "Saídas para obras sem previsão: …"
+- [x] Gate check passes: `npm run build && npm test` (API) — API 244 testes
+
+**Tests**: unit
+**Gate**: build
+**Commit**: `feat(agente-estoque): mostra ao agente as saidas para obras sem previsao`
+
+---
+
+### T31: Previsto × utilizado inclui materiais usados sem previsão
+
+**What**: `listarComUtilizado` devolve, depois das linhas previstas, uma linha por material com utilizado líquido > 0 na obra e sem previsão (`previsto` 0, `pendente` 0, `excedente` = `utilizado`, `semPrevisao: true`).
+**Where**: `apps/api/src/obras/materiais-previstos.service.ts`
+**Depends on**: T14
+**Reuses**: `utilizadoObra`, `excedenteObra`
+**Requirement**: EAP-70
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [x] `materiais-previstos.service.spec.ts`: linha sem previsão com os valores da spec, ordem (previstos primeiro, por nome) e devolução que zera o utilizado não gera linha
+- [x] Gate check passes: `npm run test --workspace apps/api`
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `feat(obras): inclui materiais usados sem previsao no previsto x utilizado`
+
+---
+
+### T32: Tabela da obra mostra "não previsto"
+
+**What**: `MateriaisPrevistosForm` exibe "—" em Previsto e "não previsto" na situação para `semPrevisao`; o editor não carrega essas linhas.
+**Where**: `apps/web/src/components/forms/MateriaisPrevistosForm.tsx` (+ `types.ts`, `.test.tsx`)
+**Depends on**: T23
+**Reuses**: `situacaoPrevisto`, `numero`
+**Requirement**: EAP-70
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [x] Teste: linha `semPrevisao` com "—" e "não previsto"; salvar não envia essa linha no PUT
+- [x] Gate check passes: `npm run build && npm test` (web) — web 140 testes
+
+**Tests**: unit
+**Gate**: build
+**Commit**: `feat(web): mostra materiais usados sem previsao na tabela da obra`
 
 ---
 
@@ -984,5 +1066,7 @@ Dependências entre fases (todas para trás): T3 usa o snapshot de T2; T6 usa T3
 | EAP-67 | T28 |
 | EAP-68 | T29 |
 | EAP-69 | T2 (teste de fronteira no Verifier) |
+| EAP-70 | T31, T32 |
+| EAP-71, 72, 73 | T30 |
 
-69 de 69 requisitos mapeados (EAP-66 em T18, EAP-67 em T28, EAP-68 em T29, EAP-69 em T2).
+73 de 73 requisitos mapeados (EAP-66 em T18, EAP-67 em T28, EAP-68 em T29, EAP-69 em T2, EAP-70 em T31/T32, EAP-71..73 em T30).

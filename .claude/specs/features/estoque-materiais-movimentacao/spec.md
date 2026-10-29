@@ -72,6 +72,7 @@ saldo em estoque fique sempre correto e rastreável por movimentação.
 3. IF `tipo: SAIDA` for enviado com `quantidade > saldoAtual` do material THEN the system SHALL rejeitar com 400, sem criar a movimentação nem alterar o saldo.
 4. IF o `materialId` não corresponder a um material existente THEN the system SHALL retornar 404.
 5. IF `obraId` for informado e não corresponder a uma obra existente THEN the system SHALL retornar 404.
+6. IF `tipo: SAIDA` for enviado com `obraId` de uma obra com status `CONCLUIDA` ou `CANCELADA` THEN the system SHALL rejeitar com 400, sem criar a movimentação nem alterar o saldo. Uma `ENTRADA` com esse `obraId` (devolução de sobra) continua aceita.
 
 **Independent Test**: material com `saldoAtual=10`; `SAIDA` de 5 retorna 201 e novo saldo é 5; `SAIDA` de 100 (maior que o saldo) retorna 400 e saldo permanece 5.
 
@@ -113,12 +114,13 @@ mínimo, para que eu saiba o que precisa ser reposto.
 | EST-06 | P1: Registrar movimentação (404 material) | Design | Pending |
 | EST-07 | P1: Registrar movimentação (404 obra) | Design | Pending |
 | EST-08 | P2: Alerta abaixo do mínimo | Design | Pending |
+| EST-09 | P1: Registrar saída (obra encerrada) | Execute | Implementing |
 
 **ID format:** `EST-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 8 total, 0 mapped to tasks, 8 unmapped ⚠️ (Tasks phase ainda não rodou)
+**Coverage:** 9 total, 0 mapped to tasks, 9 unmapped ⚠️ (Tasks phase ainda não rodou)
 
 ---
 

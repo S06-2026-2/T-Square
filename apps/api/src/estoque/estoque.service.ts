@@ -4,11 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, TipoMovimentacao } from '@prisma/client';
+import { Prisma, StatusObra, TipoMovimentacao } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMaterialDto } from './dto/create-material.dto';
 import { CreateMovimentacaoDto } from './dto/create-movimentacao.dto';
+
+const OBRA_ENCERRADA: StatusObra[] = [StatusObra.CONCLUIDA, StatusObra.CANCELADA];
 
 /**
  * Spec: .claude/specs/features/estoque-materiais-movimentacao/spec.md
@@ -60,6 +62,13 @@ export class EstoqueService {
       const obra = await this.prisma.obra.findUnique({ where: { id: dto.obraId } });
       if (!obra) {
         throw new NotFoundException(`Obra ${dto.obraId} nao encontrada`);
+      }
+
+      // EST-09: obra encerrada nao consome mais material; ENTRADA (devolucao de sobra) segue aceita.
+      if (dto.tipo === TipoMovimentacao.SAIDA && OBRA_ENCERRADA.includes(obra.status)) {
+        throw new BadRequestException(
+          `Nao e possivel dar saida de material para uma obra com status ${obra.status}`,
+        );
       }
     }
 

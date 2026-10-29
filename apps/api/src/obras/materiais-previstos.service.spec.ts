@@ -162,10 +162,16 @@ describe('MateriaisPrevistosService', () => {
       quantidade: D(quantidade),
       material: { id: materialId, nome, unidade: 'saco' },
     });
-    const mov = (materialId: string, tipo: TipoMovimentacao, quantidade: number) => ({
+    const mov = (
+      materialId: string,
+      tipo: TipoMovimentacao,
+      quantidade: number,
+      nome = materialId,
+    ) => ({
       materialId,
       tipo,
       quantidade: D(quantidade),
+      material: { nome, unidade: 'rolo' },
     });
 
     const comoNumeros = (linha: Record<string, unknown>) =>
@@ -208,6 +214,7 @@ describe('MateriaisPrevistosService', () => {
           utilizado: 5,
           pendente: 15,
           excedente: 0,
+          semPrevisao: false,
         },
         {
           materialId: 'mat-gesso',
@@ -217,6 +224,7 @@ describe('MateriaisPrevistosService', () => {
           utilizado: 15,
           pendente: 0,
           excedente: 5,
+          semPrevisao: false,
         },
         {
           materialId: 'mat-massa',
@@ -226,6 +234,7 @@ describe('MateriaisPrevistosService', () => {
           utilizado: 12,
           pendente: 0,
           excedente: 0,
+          semPrevisao: false,
         },
       ]);
     });
@@ -244,10 +253,56 @@ describe('MateriaisPrevistosService', () => {
       );
     });
 
-    it('obra sem previstos devolve lista vazia', async () => {
+    it('obra sem previstos nem movimentacoes devolve lista vazia', async () => {
+      prisma.materialPrevistoObra.findMany.mockResolvedValue([]);
+      prisma.movimentacaoEstoque.findMany.mockResolvedValue([]);
+
+      await expect(service.listarComUtilizado('obra-1')).resolves.toEqual([]);
+    });
+
+    it('material usado sem previsao entra depois dos previstos, com previsto 0 e tudo excedente (EAP-70)', async () => {
+      prisma.materialPrevistoObra.findMany.mockResolvedValue([previsto('mat-cal', 'Cal', 20)]);
+      prisma.movimentacaoEstoque.findMany.mockResolvedValue([
+        mov('mat-cal', TipoMovimentacao.SAIDA, 5),
+        // Fita: 7 + 4 saem para a obra sem previsao, 1 volta → utilizado 10
+        mov('mat-fita', TipoMovimentacao.SAIDA, 7, 'Fita para juntas'),
+        mov('mat-fita', TipoMovimentacao.SAIDA, 4, 'Fita para juntas'),
+        mov('mat-fita', TipoMovimentacao.ENTRADA, 1, 'Fita para juntas'),
+        mov('mat-areia', TipoMovimentacao.SAIDA, 2, 'Areia'),
+      ]);
+
+      const linhas = await service.listarComUtilizado('obra-1');
+
+      expect(linhas.map(comoNumeros)).toEqual([
+        expect.objectContaining({ materialId: 'mat-cal', previsto: 20, semPrevisao: false }),
+        {
+          materialId: 'mat-areia',
+          material: 'Areia',
+          unidade: 'rolo',
+          previsto: 0,
+          utilizado: 2,
+          pendente: 0,
+          excedente: 2,
+          semPrevisao: true,
+        },
+        {
+          materialId: 'mat-fita',
+          material: 'Fita para juntas',
+          unidade: 'rolo',
+          previsto: 0,
+          utilizado: 10,
+          pendente: 0,
+          excedente: 10,
+          semPrevisao: true,
+        },
+      ]);
+    });
+
+    it('material sem previsao com devolucao total (utilizado 0) nao gera linha (EAP-70)', async () => {
       prisma.materialPrevistoObra.findMany.mockResolvedValue([]);
       prisma.movimentacaoEstoque.findMany.mockResolvedValue([
-        mov('mat-cal', TipoMovimentacao.SAIDA, 4),
+        mov('mat-fita', TipoMovimentacao.SAIDA, 3),
+        mov('mat-fita', TipoMovimentacao.ENTRADA, 3),
       ]);
 
       await expect(service.listarComUtilizado('obra-1')).resolves.toEqual([]);
