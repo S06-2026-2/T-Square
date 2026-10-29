@@ -68,5 +68,7 @@ export const api = {
     request<T>(caminho, { method: 'POST', body: JSON.stringify(corpo ?? {}) }),
   patch: <T>(caminho: string, corpo?: unknown) =>
     request<T>(caminho, { method: 'PATCH', body: JSON.stringify(corpo ?? {}) }),
+  put: <T>(caminho: string, corpo?: unknown) =>
+    request<T>(caminho, { method: 'PUT', body: JSON.stringify(corpo ?? {}) }),
   delete: <T>(caminho: string) => request<T>(caminho, { method: 'DELETE' }),
 };

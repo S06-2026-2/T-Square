@@ -16,6 +16,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "ts-node prisma/seed.ts",
+    "agente:exportar": "ts-node scripts/exportar-raciocinio.ts",
     "db:studio": "prisma studio",
     "prisma:generate": "prisma generate",
     "postinstall": "prisma generate"

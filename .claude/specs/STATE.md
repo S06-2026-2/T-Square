@@ -53,14 +53,16 @@
 ## Handoff
 
 - **Feature**: `estoque-agente-proativo` em Execute (2026-10-28)
-- **Phase / Task**: Fases 1–4 concluídas (T1–T16); próxima é a Fase 5 (T17 → T18 → T19 → T20, Dashboard web), que só começa com o "segue" do usuário
+- **Phase / Task**: T1–T26 concluídas; falta só a T27 (execução real com a chave do usuário), que espera autorização explícita porque consome créditos
 - **Completed**:
-  - Fases 1–2 (T1–T9) commitadas em `b5e2ba6` na branch `feat/agente-estoque`.
-  - Fases 3–4 (T10–T16) implementadas e revisadas; pacote de commit entregue ao usuário. API 214 testes, web 67, build ok.
+  - Fases 1–2 em `b5e2ba6`; Fases 3–4 em `a6e6522` (branch `feat/agente-estoque`).
+  - Fases 5–6 (T17–T24) e ajustes da revisão da Fase 5 (motivo vindo da API, textos de dias, "Carregando alertas...", EAP-66): pacote de commit entregue ao usuário.
+  - Fase 7 parcial: T25 (seed de demonstração) e T26 (exportação do raciocínio em HTML para `apps/api/tmp/`, ignorada).
+  - API 223 testes, web 129, build ok; rastreabilidade com os 66 EAP em `Implementing`.
 - **In-progress**: none
-- **Next step**: Fases 5–6 por sub-agente (uma por vez, parando para revisão), depois pacote de commit das Fases 5–6; Fase 7 (avisar antes da T27, que consome créditos da API) e o Verifier no fim.
-- **Regras do usuário**: uma fase por sub-agente, em sequência, parando ao fim de cada fase para revisão; sem commit/push/`git add` pelo agente; nenhuma dependência nova sem perguntar; `ANTHROPIC_API_KEY` só no `.env`.
-- **Blockers**: none
-- **Uncommitted files**: se o commit das Fases 3–4 ainda não foi feito, conferir `git status`. Fora da feature, nunca commitar junto: `CLAUDE.md`, `migration_lock.toml` (só fim de linha), `.claude/specs/features/obras-transicoes-status/`.
-- **Dados de teste no banco local**: obra "[SMOKE agente-estoque T14-T16] Obra de teste" (`e8603a2f-b394-4633-bc46-04f2ae0cd02a`, ORCAMENTO) e 1 `AnaliseEstoque` FALHA do smoke da Fase 3.
+- **Next step**: usuário coloca a chave no `.env` da raiz e autoriza a T27 → rodar análise real, exportar o HTML, anotar o custo (o código não grava `response.usage`; usar o Console) → pacote de commit da Fase 7 → Verifier independente (spec-anchored + discrimination sensor) → `validation.md` → `validate_state.py`.
+- **Regras do usuário**: sub-agentes em sequência; sem commit/push/`git add` pelo agente; nenhuma dependência nova sem perguntar; `ANTHROPIC_API_KEY` só no `.env`.
+- **Blockers**: T27 depende da chave e da autorização do usuário.
+- **Uncommitted files**: conferir `git status`. Fora da feature, nunca commitar junto: `CLAUDE.md`, `migration_lock.toml` (só metadado, conteúdo igual), `.claude/specs/features/obras-transicoes-status/`.
+- **Dados de teste no banco local**: obra "[SMOKE agente-estoque T14-T16] Obra de teste" (`e8603a2f-…`, ORCAMENTO); análises FALHA dos smokes (Fase 3 e T25, `cbbdd9ad-…`); 3 alertas PADRAO ATIVO do seed (Gesso cola, Placa de drywall ST, Perfil montante 48mm).
 - **Branch**: feat/agente-estoque

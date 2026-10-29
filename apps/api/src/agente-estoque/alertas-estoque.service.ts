@@ -7,6 +7,7 @@ import {
   TipoAlertaEstoque,
 } from '@prisma/client';
 
+import { MotivoIndicador } from '../estoque/calculo-estoque';
 import { PrismaService } from '../prisma/prisma.service';
 
 type CamposUrgencia = Pick<
@@ -37,6 +38,21 @@ function porUrgencia(a: CamposUrgencia, b: CamposUrgencia): number {
 }
 
 /**
+ * Motivo do alerta para a tela, a partir dos numeros gravados (o front so exibe, nao recalcula):
+ * INFORMATIVO -> null; saldo livre < minimo -> ABAIXO_DO_MINIMO; = minimo -> NO_MINIMO_COM_CONSUMO;
+ * acima do minimo com ritmo > 0 -> PREVISAO; senao null ("sem consumo recente").
+ */
+export function motivoAlerta(
+  a: Pick<AlertaEstoque, 'tipo' | 'saldoLivre' | 'estoqueMinimo' | 'ritmoDiario'>,
+): MotivoIndicador | null {
+  if (a.tipo === TipoAlertaEstoque.INFORMATIVO) return null;
+  if (a.saldoLivre.lt(a.estoqueMinimo)) return 'ABAIXO_DO_MINIMO';
+  if (a.saldoLivre.eq(a.estoqueMinimo)) return 'NO_MINIMO_COM_CONSUMO';
+  if (a.ritmoDiario.gt(0)) return 'PREVISAO';
+  return null;
+}
+
+/**
  * Leitura dos alertas do agente e acoes do operador (dispensar / resolver).
  * Spec: .claude/specs/features/estoque-agente-proativo/spec.md (EAP-46..49)
  */
@@ -59,7 +75,11 @@ export class AlertasEstoqueService {
     ]);
 
     // sort e estavel: no empate fica a ordem de criadoEm crescente da consulta.
-    return { ultimaAnalise, alertas: [...alertas].sort(porUrgencia) };
+    const ordenados = [...alertas].sort(porUrgencia);
+    return {
+      ultimaAnalise,
+      alertas: ordenados.map((alerta) => ({ ...alerta, motivo: motivoAlerta(alerta) })),
+    };
   }
 
   async dispensar(id: string) {

@@ -156,7 +156,7 @@ Fluxo de uma análise:
 - **Purpose**: Leitura e ações do operador sobre alertas.
 - **Location**: `apps/api/src/agente-estoque/alertas-estoque.service.ts`
 - **Interfaces**:
-  - `listarAtivos(): Promise<{ ultimaAnalise: AnaliseEstoque | null; alertas: AlertaComMaterial[] }>` — `ultimaAnalise` = a última que terminou (não `EM_ANDAMENTO`); `alertas` ordenados por urgência a partir dos números gravados: `ABAIXO_DO_MINIMO` → `NO_MINIMO_COM_CONSUMO` → `PREVISAO` (`diasAteMinimo` crescente, sem dias por último) → `INFORMATIVO`; empate por `criadoEm` crescente (consulta ordenada por `criadoEm` + sort estável no service)
+  - `listarAtivos(): Promise<{ ultimaAnalise: AnaliseEstoque | null; alertas: AlertaComMaterial[] }>` — `ultimaAnalise` = a última que terminou (não `EM_ANDAMENTO`); `alertas` ordenados por urgência a partir dos números gravados: `ABAIXO_DO_MINIMO` → `NO_MINIMO_COM_CONSUMO` → `PREVISAO` (`diasAteMinimo` crescente, sem dias por último) → `INFORMATIVO`; empate por `criadoEm` crescente (consulta ordenada por `criadoEm` + sort estável no service). Cada alerta sai com `motivo` (`ABAIXO_DO_MINIMO` | `NO_MINIMO_COM_CONSUMO` | `PREVISAO` | `null`), calculado no service por `motivoAlerta()` a partir dos números gravados (INFORMATIVO e ritmo 0 → `null`); o front só escolhe o texto pelo motivo (revisão da Fase 5)
   - `dispensar(id)` / `resolver(id)` — 404 `Alerta <id> não encontrado`; 400 `Alerta <id> não está ativo`
 
 ### AgenteEstoqueController
@@ -180,9 +180,12 @@ Fluxo de uma análise:
 - **Interfaces**:
   - `validarItens(itens, tx?)` — material repetido → 400; material inexistente → 404
   - `substituir(obraId, itens)` — 404 obra; 400 `Não é possível alterar materiais previstos de uma obra com status <STATUS>` em `CONCLUIDA`/`CANCELADA`; `deleteMany` + `createMany` numa `$transaction`
-  - `listarComUtilizado(obraId)` — linhas `{ material, unidade, previsto, utilizado, pendente, excedente }`
+  - `listarComUtilizado(obraId)` — linhas `{ materialId, material, unidade, previsto, utilizado, pendente, excedente }` (Decimal serializado como string no JSON)
+  - Mensagens: `Material <id> aparece mais de uma vez nos materiais previstos` (400), `Material <id> não encontrado` (404), `Obra <id> não encontrada` (404)
 - **Reuses**: `calculo-estoque` (`utilizadoObra`, `pendenteObra`, `excedenteObra`)
 - **DTO**: `MaterialPrevistoDto { materialId: string; quantidade: number }` com `@IsNumber({ maxDecimalPlaces: 2 })` e `@Min(0.01)`; `SubstituirMateriaisPrevistosDto { itens: MaterialPrevistoDto[] }`; `CreateObraDto.materiaisPrevistos?`
+- **`UpdateObraDto`** (`apps/api/src/obras/dto/update-obra.dto.ts`): omite `materiaisPrevistos` (mesmo padrão de `gesseiros`); `PATCH /obras/:id` não altera previstos, que só se editam por `PUT /obras/:id/materiais-previstos` (aprovado na revisão da Fase 4)
+- **Criação com previstos**: gravação aninhada em `obra.create({ data: { …, materiaisPrevistos: { create: [...] } } })`, atômica pelo próprio Prisma, sem `$transaction` explícito; `validarItens` roda antes da gravação
 
 ### Front
 
@@ -197,6 +200,12 @@ Fluxo de uma análise:
 | `NovaObraForm` | `apps/web/src/components/forms/NovaObraForm.tsx` | Ganha a seção "Materiais previstos" |
 | `MateriaisPrevistosForm` | `apps/web/src/components/forms/MateriaisPrevistosForm.tsx` | Tabela previsto × utilizado + edição (só em status editável) |
 | `Obras.tsx` | `apps/web/src/pages/Obras.tsx` | `<details>` "Materiais previstos" em todo card; o formulário de edição só aparece em `ORCAMENTO`/`FECHADA`/`ANDAMENTO` |
+
+**Títulos da seção de alertas:** a seção usa `h3` no título e `h4` nos cards, e os alertas são `<ul>/<li>` (não `article`). Motivo: os testes DSH existentes contam `h2` e `article` na página inteira (`screen.getAllByRole`, `Dashboard.test.tsx:84,93,109,118,138`), não só dentro do funil; com `h2`/`article` na seção eles quebrariam (revisão da Fase 5).
+
+**Regras do front (revisão da Fase 4):**
+- Os valores numéricos vindos da API (Decimal como string) são só **exibidos**, formatados (ex.: "10" ou "10,00"); o front não faz contas com eles convertendo para `Number`. Formatar para exibição segue `lib/formato.ts`.
+- `ItensMateriaisPrevistos` impede material repetido (material já escolhido some das opções das outras linhas) e material inexistente (seleção só pela lista de materiais carregada da API, sem texto livre).
 
 ---
 
@@ -303,6 +312,7 @@ model AlertaEstoque {
 | `api.ts` não tem `put` | `apps/web/src/lib/api.ts:67` | PUT de previstos impossível | Task de front adiciona `put` |
 | `CreateObraDto` ainda aceita `status` (feature `obras-transicoes-status` não implementada) | `apps/api/src/obras/dto/create-obra.dto.ts:84` | Obra pode nascer `CONCLUIDA` com previstos | Aceitável: previstos de obra em status final não entram no reservado; a outra feature fecha o atalho |
 | `DELETE /obras/:id` é hard delete | `apps/api/src/obras/obras.controller.ts:43` | Some a previsão junto (cascade); `MovimentacaoEstoque.obraId` sem `onDelete` pode bloquear o delete | Fora do escopo (já registrado em `obras-transicoes-status`); `MaterialPrevistoObra` usa `onDelete: Cascade` para não piorar |
+| Material apagado entre `validarItens` e o `obra.create` aninhado | `apps/api/src/obras/obras.service.ts` (`create`) | A FK falha e a API responde 500 em vez de 404 | Risco conhecido e aceito (revisão da Fase 4): janela mínima e hoje não existe rota de exclusão de material; a obra não é criada (gravação atômica) |
 | Hot-reload não confiável no OneDrive | `CLAUDE.md` (Ambiente) | Teste manual vê código antigo | `docker restart gesso_api` antes do UAT |
 | Nenhum teste de controller/e2e no repo | `apps/api/test/app.e2e-spec.ts` | Rotas novas sem teste HTTP | Controllers ficam finos (só delegam); regras 100% cobertas nos `.spec.ts` dos services, como no resto do projeto |
 | Custo da API sem limite externo | — | Uso indevido do botão | Limite de 1 manual / 5 min + teto de 20 chamadas; `AGENTE_AUTOMATICO=false` por padrão |

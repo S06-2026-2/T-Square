@@ -30,6 +30,9 @@ describe('AlertasEstoqueService', () => {
     materialId: 'mat-1',
     tipo: TipoAlertaEstoque.REPOSICAO,
     status,
+    saldoLivre: new Prisma.Decimal(5),
+    estoqueMinimo: new Prisma.Decimal(10),
+    ritmoDiario: new Prisma.Decimal(1),
   });
 
   beforeEach(async () => {
@@ -62,7 +65,7 @@ describe('AlertasEstoqueService', () => {
       expect(consulta.where).toEqual({ status: StatusAlertaEstoque.ATIVO });
       expect(consulta.include).toEqual({ material: true });
       expect(consulta.orderBy).toEqual({ criadoEm: 'asc' });
-      expect(resultado.alertas).toEqual(ativos);
+      expect(resultado.alertas).toEqual([{ ...ativos[0], motivo: 'ABAIXO_DO_MINIMO' }]);
     });
 
     it('ordena por urgência: abaixo → no mínimo → previsão (dias crescente) → informativo; empate por criadoEm', async () => {
@@ -78,6 +81,8 @@ describe('AlertasEstoqueService', () => {
         status: StatusAlertaEstoque.ATIVO,
         saldoLivre: d(saldoLivre),
         estoqueMinimo: d(10),
+        // Sem dias = ritmo 0.
+        ritmoDiario: d(diasAteMinimo === null ? 0 : 1),
         diasAteMinimo: diasAteMinimo === null ? null : d(diasAteMinimo),
       });
       // Ordem de criadoEm crescente, como a consulta devolve.
@@ -102,6 +107,16 @@ describe('AlertasEstoqueService', () => {
         'prev-6',
         'prev-sem-dias',
         'info',
+      ]);
+      // motivo vem pronto da API; o front so exibe.
+      expect(resultado.alertas.map((x) => x.motivo)).toEqual([
+        'ABAIXO_DO_MINIMO',
+        'ABAIXO_DO_MINIMO',
+        'NO_MINIMO_COM_CONSUMO',
+        'PREVISAO',
+        'PREVISAO',
+        null,
+        null,
       ]);
     });
 

@@ -13,3 +13,4 @@ npm-debug.log*
 apps/web/dist/
 apps/api/dist/
 uploads/
+apps/api/tmp/

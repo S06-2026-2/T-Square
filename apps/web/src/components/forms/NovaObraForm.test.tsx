@@ -1,17 +1,23 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { api } from '../../lib/api';
-import type { Gesseiro } from '../../types';
+import type { Gesseiro, Material } from '../../types';
 import NovaObraForm from './NovaObraForm';
 
-jest.mock('../../lib/api', () => ({ api: { post: jest.fn() } }));
+jest.mock('../../lib/api', () => ({ api: { post: jest.fn(), get: jest.fn() } }));
 
 const post = api.post as jest.Mock;
+const get = api.get as jest.Mock;
 
 const gesseiros: Gesseiro[] = [
   { id: 'g-ana', nome: 'Ana', ativo: true },
   { id: 'g-beto', nome: 'Beto', ativo: true },
   { id: 'g-caio', nome: 'Caio', ativo: false },
+];
+
+const materiais: Material[] = [
+  { id: 'm-cal', nome: 'Cal', unidade: 'saco', saldoAtual: '25', estoqueMinimo: '10' },
+  { id: 'm-gesso', nome: 'Gesso', unidade: 'saco', saldoAtual: '40', estoqueMinimo: '5' },
 ];
 
 function preencher(rotulo: string, valor: string) {
@@ -37,6 +43,10 @@ function salvar() {
 
 beforeEach(() => {
   post.mockReset();
+  get.mockReset();
+  get.mockImplementation(async (caminho: string) =>
+    caminho === '/estoque/materiais' ? materiais : [],
+  );
 });
 
 describe('NovaObraForm', () => {
@@ -196,5 +206,74 @@ describe('NovaObraForm', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Salvar obra' })).toBeEnabled(),
     );
+  });
+  describe('materiais previstos (EAP-37)', () => {
+    it('carrega os materiais da API para a seção "Materiais previstos"', async () => {
+      render(<NovaObraForm gesseiros={gesseiros} onSalvo={jest.fn()} />);
+
+      expect(get).toHaveBeenCalledWith('/estoque/materiais');
+      fireEvent.click(screen.getByRole('button', { name: 'Adicionar material' }));
+      await waitFor(() =>
+        expect(opcoes(screen.getByLabelText('Material'))).toEqual(['m-cal', 'm-gesso']),
+      );
+    });
+
+    it('obra com itens envia materiaisPrevistos com a quantidade numérica', async () => {
+      post.mockResolvedValue({ id: 'o1' });
+      const onSalvo = jest.fn();
+      render(<NovaObraForm gesseiros={gesseiros} onSalvo={onSalvo} />);
+      await waitFor(() => expect(get).toHaveBeenCalled());
+
+      preencherObrigatorios();
+      fireEvent.click(screen.getByRole('button', { name: 'Adicionar material' }));
+      await waitFor(() =>
+        expect(opcoes(screen.getByLabelText('Material'))).toEqual(['m-cal', 'm-gesso']),
+      );
+      fireEvent.change(screen.getByLabelText('Material'), { target: { value: 'm-cal' } });
+      fireEvent.change(screen.getByLabelText('Quantidade'), { target: { value: '20' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Adicionar material' }));
+      fireEvent.change(screen.getAllByLabelText('Material')[1], { target: { value: 'm-gesso' } });
+      fireEvent.change(screen.getAllByLabelText('Quantidade')[1], { target: { value: '7.5' } });
+      salvar();
+
+      await waitFor(() => expect(onSalvo).toHaveBeenCalled());
+      expect(post).toHaveBeenCalledWith('/obras', {
+        titulo: 'Forro sala',
+        clienteNome: 'Maria Silva',
+        valorTotal: 8500,
+        materiaisPrevistos: [
+          { materialId: 'm-cal', quantidade: 20 },
+          { materialId: 'm-gesso', quantidade: 7.5 },
+        ],
+      });
+      // O formulário volta vazio, inclusive a seção de materiais.
+      expect(screen.queryByLabelText('Material')).not.toBeInTheDocument();
+    });
+
+    it('obra sem itens (ou com a linha removida) não envia o campo', async () => {
+      post.mockResolvedValue({ id: 'o1' });
+      render(<NovaObraForm gesseiros={gesseiros} onSalvo={jest.fn()} />);
+      await waitFor(() => expect(get).toHaveBeenCalled());
+
+      preencherObrigatorios();
+      fireEvent.click(screen.getByRole('button', { name: 'Adicionar material' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Remover material' }));
+      salvar();
+
+      await waitFor(() => expect(post).toHaveBeenCalled());
+      expect(post.mock.calls[0][1]).not.toHaveProperty('materiaisPrevistos');
+    });
+
+    it('mostra o erro ao carregar materiais sem bloquear a criação da obra', async () => {
+      get.mockRejectedValue(new Error('Falha ao listar materiais'));
+      post.mockResolvedValue({ id: 'o1' });
+      const onSalvo = jest.fn();
+      render(<NovaObraForm gesseiros={gesseiros} onSalvo={onSalvo} />);
+
+      expect(await screen.findByText('Falha ao listar materiais')).toBeInTheDocument();
+      preencherObrigatorios();
+      salvar();
+      await waitFor(() => expect(onSalvo).toHaveBeenCalled());
+    });
   });
 });

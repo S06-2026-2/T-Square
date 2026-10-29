@@ -53,7 +53,7 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 | Quantidade do alerta obrigatório | Sempre é a fórmula C. Com as regras acima, ela é sempre ≥ 1 num alerta obrigatório, então não existe piso artificial | Decidido na discussão (4: remover "sugere no mínimo 1") | y |
 | Alerta de previsão | `ritmoDiario > 0` e `diasAteMinimo <= 7`. Fica a critério do agente (não é garantido pela rede de segurança) | Decidido na discussão (1.a, B) | y |
 | Material sem SAIDA solta na janela | Sem previsão de dias; alerta só se `saldoLivre < estoqueMinimo`, com `sugerido = ceil(estoqueMinimo − saldoLivre)` e justificativa padrão "sem consumo nos últimos N dias", com N = janela real do cálculo (7 a 30; 30 para material com 30 dias ou mais) | Decidido na discussão (5, 4); N = janela real aprovado na revisão da Fase 2 | y |
-| Exibição de dias | O card mostra `floor(diasAteMinimo)` como "cruza o mínimo em ~N dias". Com `saldoLivre <= estoqueMinimo`, mostra "abaixo do mínimo"; com ritmo 0, mostra "sem consumo recente" | O usuário pediu "dias até o MÍNIMO, não até zerar" | y |
+| Exibição de dias | O card mostra o texto a partir do `motivo` que a API devolve em cada alerta (o front não compara nem converte números): `ABAIXO_DO_MINIMO` → "abaixo do mínimo"; `NO_MINIMO_COM_CONSUMO` → "no mínimo"; `PREVISAO` → N = parte inteira de `diasAteMinimo`: N = 0 "cruza o mínimo hoje", N = 1 "cruza o mínimo em ~1 dia", N >= 2 "cruza o mínimo em ~N dias"; `REPOSICAO` sem motivo (ritmo 0) → "sem consumo recente"; `INFORMATIVO` → "observação do agente" | O usuário pediu "dias até o MÍNIMO, não até zerar"; motivo vindo da API e textos de N aprovados na revisão da Fase 5 | y |
 | Acentuação | Todo texto da UI e toda justificativa padrão gravada usam acentuação correta ("mínimo", "análise", "além") | Decidido na discussão (10) | y |
 | Mensagens de erro da API | As mensagens de erro **novas** desta feature (agente, alertas, materiais previstos) usam acentuação correta (ex.: `Já existe uma análise de estoque em andamento`). As mensagens que já existem no backend (ex.: `Nao e possivel …`) não mudam nesta spec | Decidido na discussão: padronizar as antigas afeta código e testes já entregues e vira tarefa separada (ver Out of Scope) | y |
 | Papel da LLM | Agente de verdade: Claude API com tool use. Ferramentas somente leitura devolvem números já calculados pelas regras acima; uma única ferramenta de escrita, `sugerirReposicao`, grava só em `AlertaEstoque` | Decidido na discussão (1) | y |
@@ -168,7 +168,7 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 
 1. WHEN o operador acessa `/dashboard` THEN the system SHALL chamar `GET /estoque/agente/alertas` e exibir um card por alerta ATIVO com material, unidade, quantidade sugerida, situação em dias e justificativa, na ordem de urgência devolvida pela API: abaixo do mínimo (`saldoLivre < estoqueMinimo`) → no mínimo com consumo (`saldoLivre = estoqueMinimo`) → previsão (`diasAteMinimo` crescente; sem dias por último) → `INFORMATIVO`; empate por `criadoEm` crescente.
 2. The system SHALL exibir no card os valores numéricos dos campos gravados no alerta, e nunca números extraídos da justificativa.
-3. WHEN o alerta tem `saldoLivre <= estoqueMinimo` THEN the system SHALL exibir "abaixo do mínimo" no lugar dos dias; WHEN tem `ritmoDiario > 0` e `saldoLivre > estoqueMinimo` THEN the system SHALL exibir "cruza o mínimo em ~N dias", com `N = floor(diasAteMinimo)`; WHEN tem `ritmoDiario = 0` e `saldoLivre > estoqueMinimo` THEN the system SHALL exibir "sem consumo recente".
+3. WHEN o alerta `REPOSICAO` tem `motivo = ABAIXO_DO_MINIMO` (`saldoLivre < estoqueMinimo`) THEN the system SHALL exibir "abaixo do mínimo" no lugar dos dias; WHEN tem `motivo = NO_MINIMO_COM_CONSUMO` (`saldoLivre = estoqueMinimo`) THEN the system SHALL exibir "no mínimo"; WHEN tem `motivo = PREVISAO` (`ritmoDiario > 0` e `saldoLivre > estoqueMinimo`) THEN the system SHALL exibir, com `N = floor(diasAteMinimo)`, "cruza o mínimo hoje" se N = 0, "cruza o mínimo em ~1 dia" se N = 1 e "cruza o mínimo em ~N dias" se N >= 2; WHEN não tem motivo (`ritmoDiario = 0`) THEN the system SHALL exibir "sem consumo recente". O `motivo` é calculado pela API em `GET /estoque/agente/alertas` a partir dos números gravados; o front não compara nem converte esses números.
 4. WHEN o alerta tem `origemTexto = PADRAO` THEN the system SHALL exibir o selo "sem agente — alerta básico" no card.
 5. The system SHALL exibir a data e a hora de início da última análise terminada, no formato `dd/mm/aaaa hh:mm`.
 6. IF existe análise terminada e nenhum alerta ATIVO THEN the system SHALL exibir o estado vazio "Estoque em dia".
@@ -179,6 +179,7 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 11. IF `POST /estoque/agente/analisar` responde 409 ou 429 THEN the system SHALL exibir a mensagem da API no padrão `erro` da seção de estoque.
 12. WHEN o alerta é `REPOSICAO` THEN the system SHALL exibir o ícone ⚠️ no card.
 13. WHEN o alerta é `INFORMATIVO` THEN the system SHALL exibir o ícone ℹ️ e o rótulo "observação do agente", sem quantidade sugerida.
+14. WHILE `GET /estoque/agente/alertas` não respondeu the system SHALL exibir "Carregando alertas..." na seção de estoque (texto diferente do "Carregando..." do funil, que aparece ao mesmo tempo).
 
 **Independent Test**: com um alerta ATIVO gravado (via análise com LLM mockada), abrir `/dashboard` e ver o card com ⚠️, a quantidade e o texto; com um `INFORMATIVO` gravado, ver o card com ℹ️, "observação do agente" e sem quantidade; rodar sem chave e ver o selo "sem agente — alerta básico" e o aviso de `FALHA`; com o banco sem alertas e com uma análise `SUCESSO`, ver "Estoque em dia".
 
@@ -278,79 +279,80 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| EAP-01 | P1: Análise — cálculo determinístico | T2, T3 | In Tasks |
-| EAP-02 | P1: Análise — exclusões do consumo solto | T2, T3 | In Tasks |
-| EAP-03 | P1: Análise — alerta obrigatório (`<=`) | T2, T8 | In Tasks |
-| EAP-04 | P1: Análise — exceção mínimo 0 | T2 | In Tasks |
-| EAP-05 | P1: Análise — sugestão aceita | T6 | In Tasks |
-| EAP-06 | P1: Análise — sugestão recusada | T6 | In Tasks |
-| EAP-07 | P1: Análise — rede de segurança | T8 | In Tasks |
-| EAP-08 | P1: Análise — sem chave / falha da API | T5, T7, T9 | In Tasks |
-| EAP-09 | P1: Análise — limites (PARCIAL) | T7 | In Tasks |
-| EAP-10 | P1: Análise — nunca movimenta estoque | T7, T8 | In Tasks |
-| EAP-11 | P1: Análise — marcadores, sem dados de cliente | T4, T6 | In Tasks |
-| EAP-12 | P1: Análise — troca de marcadores | T4, T8 | In Tasks |
-| EAP-13 | P1: Análise — marcador inválido | T4 | In Tasks |
-| EAP-14 | P1: Análise — idempotência | T8 | In Tasks |
-| EAP-15 | P1: Análise — fechamento automático | T8 | In Tasks |
-| EAP-16 | P1: Análise — FALHA não fecha alertas | T8 | In Tasks |
-| EAP-17 | P1: Análise — registro em AnaliseEstoque | T1, T7, T9 | In Tasks |
-| EAP-18 | P1: Execução — cron 06:00 | T12 | In Tasks |
-| EAP-19 | P1: Execução — catch-up | T12 | In Tasks |
-| EAP-20 | P1: Execução — AGENTE_AUTOMATICO=false | T12, T13 | In Tasks |
-| EAP-21 | P1: Execução — manual (201) | T9, T11 | In Tasks |
-| EAP-22 | P1: Execução — manual concorrente (409) | T9 | In Tasks |
-| EAP-23 | P1: Execução — limite manual (429) | T9 | In Tasks |
-| EAP-24 | P1: Execução — agendada pulada | T9, T12 | In Tasks |
-| EAP-25 | P1: Execução — análise travada | T9 | In Tasks |
-| EAP-26 | P1: Dashboard — cards de alerta | T18 | In Tasks |
-| EAP-27 | P1: Dashboard — números dos campos | T18 | In Tasks |
-| EAP-28 | P1: Dashboard — situação em dias | T18 | In Tasks |
-| EAP-29 | P1: Dashboard — selo alerta básico | T18 | In Tasks |
-| EAP-30 | P1: Dashboard — data da última análise | T18 | In Tasks |
-| EAP-31 | P1: Dashboard — estado vazio | T18 | In Tasks |
-| EAP-32 | P1: Dashboard — nunca analisado | T18 | In Tasks |
-| EAP-33 | P1: Dashboard — aviso FALHA/PARCIAL | T18 | In Tasks |
-| EAP-34 | P1: Dashboard — erro isolado | T20 | In Tasks |
-| EAP-35 | P1: Dashboard — botão rodar análise | T19 | In Tasks |
-| EAP-36 | P1: Dashboard — erro 409/429 | T19 | In Tasks |
-| EAP-37 | P2: Previstos — criação com obra | T15, T21, T22 | In Tasks |
-| EAP-38 | P2: Previstos — substituir lista | T14, T16, T21, T23 | In Tasks |
-| EAP-39 | P2: Previstos — travado em CONCLUIDA/CANCELADA | T14 | In Tasks |
-| EAP-40 | P2: Previstos — material repetido | T14, T15 | In Tasks |
-| EAP-41 | P2: Previstos — quantidade inválida | T14 | In Tasks |
-| EAP-42 | P2: Previstos — material inexistente | T14, T15 | In Tasks |
-| EAP-43 | P2: Previstos — ação no card | T24 | In Tasks |
-| EAP-44 | P2: Previstos — sem edição em status final | T24 | In Tasks |
-| EAP-45 | P2: Previstos — reservado por status | T3 | In Tasks |
-| EAP-46 | P2: Dispensar/resolver — dispensar | T10, T11, T19 | In Tasks |
-| EAP-47 | P2: Dispensar/resolver — resolver | T10, T11, T19 | In Tasks |
-| EAP-48 | P2: Dispensar/resolver — alerta não ativo | T10 | In Tasks |
-| EAP-49 | P2: Dispensar/resolver — alerta inexistente | T10 | In Tasks |
-| EAP-50 | P2: Dispensar/resolver — silêncio 5 dias | T6, T8 | In Tasks |
-| EAP-51 | P2: Dispensar/resolver — tolerância 3 dias | T6, T8 | In Tasks |
-| EAP-52 | P2: Dispensar/resolver — reabertura | T8 | In Tasks |
-| EAP-53 | P2: Dispensar/resolver — erro na UI | T19 | In Tasks |
-| EAP-54 | P3: Previsto × utilizado — endpoint | T14, T16 | In Tasks |
-| EAP-55 | P3: Previsto × utilizado — tabela no card | T23 | In Tasks |
-| EAP-56 | P3: Previsto × utilizado — rótulo da situação | T23 | In Tasks |
-| EAP-57 | P3: Previsto × utilizado — sem previstos | T23 | In Tasks |
-| EAP-58 | P1: Análise — INFORMATIVO aceito (`calculado <= 0`) | T6 | In Tasks |
-| EAP-59 | P1: Análise — INFORMATIVO recusado (`calculado > 0`) | T6 | In Tasks |
-| EAP-60 | P1: Análise — rede de segurança só cria REPOSICAO | T8 | In Tasks |
-| EAP-61 | P1: Análise — marcador ausente ("Reservado para:") | T4 | In Tasks |
-| EAP-62 | P1: Dashboard — ícone ⚠️ em REPOSICAO | T18 | In Tasks |
-| EAP-63 | P1: Dashboard — card INFORMATIVO (ℹ️, sem quantidade) | T18 | In Tasks |
-| EAP-64 | P2: Previstos — devolução abate o utilizado | T2, T3 | In Tasks |
-| EAP-65 | P2: Dispensar/resolver — dispensa de INFORMATIVO | T6 | In Tasks |
+| EAP-01 | P1: Análise — cálculo determinístico | T2, T3 | Implementing |
+| EAP-02 | P1: Análise — exclusões do consumo solto | T2, T3 | Implementing |
+| EAP-03 | P1: Análise — alerta obrigatório (`<=`) | T2, T8 | Implementing |
+| EAP-04 | P1: Análise — exceção mínimo 0 | T2 | Implementing |
+| EAP-05 | P1: Análise — sugestão aceita | T6 | Implementing |
+| EAP-06 | P1: Análise — sugestão recusada | T6 | Implementing |
+| EAP-07 | P1: Análise — rede de segurança | T8 | Implementing |
+| EAP-08 | P1: Análise — sem chave / falha da API | T5, T7, T9 | Implementing |
+| EAP-09 | P1: Análise — limites (PARCIAL) | T7 | Implementing |
+| EAP-10 | P1: Análise — nunca movimenta estoque | T7, T8 | Implementing |
+| EAP-11 | P1: Análise — marcadores, sem dados de cliente | T4, T6 | Implementing |
+| EAP-12 | P1: Análise — troca de marcadores | T4, T8 | Implementing |
+| EAP-13 | P1: Análise — marcador inválido | T4 | Implementing |
+| EAP-14 | P1: Análise — idempotência | T8 | Implementing |
+| EAP-15 | P1: Análise — fechamento automático | T8 | Implementing |
+| EAP-16 | P1: Análise — FALHA não fecha alertas | T8 | Implementing |
+| EAP-17 | P1: Análise — registro em AnaliseEstoque | T1, T7, T9 | Implementing |
+| EAP-18 | P1: Execução — cron 06:00 | T12 | Implementing |
+| EAP-19 | P1: Execução — catch-up | T12 | Implementing |
+| EAP-20 | P1: Execução — AGENTE_AUTOMATICO=false | T12, T13 | Implementing |
+| EAP-21 | P1: Execução — manual (201) | T9, T11 | Implementing |
+| EAP-22 | P1: Execução — manual concorrente (409) | T9 | Implementing |
+| EAP-23 | P1: Execução — limite manual (429) | T9 | Implementing |
+| EAP-24 | P1: Execução — agendada pulada | T9, T12 | Implementing |
+| EAP-25 | P1: Execução — análise travada | T9 | Implementing |
+| EAP-26 | P1: Dashboard — cards de alerta | T18 | Implementing |
+| EAP-27 | P1: Dashboard — números dos campos | T18 | Implementing |
+| EAP-28 | P1: Dashboard — situação em dias | T10, T18 | Implementing |
+| EAP-29 | P1: Dashboard — selo alerta básico | T18 | Implementing |
+| EAP-30 | P1: Dashboard — data da última análise | T18 | Implementing |
+| EAP-31 | P1: Dashboard — estado vazio | T18 | Implementing |
+| EAP-32 | P1: Dashboard — nunca analisado | T18 | Implementing |
+| EAP-33 | P1: Dashboard — aviso FALHA/PARCIAL | T18 | Implementing |
+| EAP-34 | P1: Dashboard — erro isolado | T20 | Implementing |
+| EAP-35 | P1: Dashboard — botão rodar análise | T19 | Implementing |
+| EAP-36 | P1: Dashboard — erro 409/429 | T19 | Implementing |
+| EAP-37 | P2: Previstos — criação com obra | T15, T21, T22 | Implementing |
+| EAP-38 | P2: Previstos — substituir lista | T14, T16, T21, T23 | Implementing |
+| EAP-39 | P2: Previstos — travado em CONCLUIDA/CANCELADA | T14 | Implementing |
+| EAP-40 | P2: Previstos — material repetido | T14, T15 | Implementing |
+| EAP-41 | P2: Previstos — quantidade inválida | T14 | Implementing |
+| EAP-42 | P2: Previstos — material inexistente | T14, T15 | Implementing |
+| EAP-43 | P2: Previstos — ação no card | T24 | Implementing |
+| EAP-44 | P2: Previstos — sem edição em status final | T24 | Implementing |
+| EAP-45 | P2: Previstos — reservado por status | T3 | Implementing |
+| EAP-46 | P2: Dispensar/resolver — dispensar | T10, T11, T19 | Implementing |
+| EAP-47 | P2: Dispensar/resolver — resolver | T10, T11, T19 | Implementing |
+| EAP-48 | P2: Dispensar/resolver — alerta não ativo | T10 | Implementing |
+| EAP-49 | P2: Dispensar/resolver — alerta inexistente | T10 | Implementing |
+| EAP-50 | P2: Dispensar/resolver — silêncio 5 dias | T6, T8 | Implementing |
+| EAP-51 | P2: Dispensar/resolver — tolerância 3 dias | T6, T8 | Implementing |
+| EAP-52 | P2: Dispensar/resolver — reabertura | T8 | Implementing |
+| EAP-53 | P2: Dispensar/resolver — erro na UI | T19 | Implementing |
+| EAP-54 | P3: Previsto × utilizado — endpoint | T14, T16 | Implementing |
+| EAP-55 | P3: Previsto × utilizado — tabela no card | T23 | Implementing |
+| EAP-56 | P3: Previsto × utilizado — rótulo da situação | T23 | Implementing |
+| EAP-57 | P3: Previsto × utilizado — sem previstos | T23 | Implementing |
+| EAP-58 | P1: Análise — INFORMATIVO aceito (`calculado <= 0`) | T6 | Implementing |
+| EAP-59 | P1: Análise — INFORMATIVO recusado (`calculado > 0`) | T6 | Implementing |
+| EAP-60 | P1: Análise — rede de segurança só cria REPOSICAO | T8 | Implementing |
+| EAP-61 | P1: Análise — marcador ausente ("Reservado para:") | T4 | Implementing |
+| EAP-62 | P1: Dashboard — ícone ⚠️ em REPOSICAO | T18 | Implementing |
+| EAP-63 | P1: Dashboard — card INFORMATIVO (ℹ️, sem quantidade) | T18 | Implementing |
+| EAP-64 | P2: Previstos — devolução abate o utilizado | T2, T3 | Implementing |
+| EAP-65 | P2: Dispensar/resolver — dispensa de INFORMATIVO | T6 | Implementing |
+| EAP-66 | P1: Dashboard — carregando a seção ("Carregando alertas...") | T18 | Implementing |
 
-Os IDs seguem a ordem dos critérios dentro de cada story; os critérios acrescentados na rodada 2 receberam EAP-58..65 em vez de renumerar os anteriores.
+Os IDs seguem a ordem dos critérios dentro de cada story; os critérios acrescentados na rodada 2 receberam EAP-58..65 em vez de renumerar os anteriores; EAP-66 entrou na revisão da Fase 5.
 
 **ID format:** `EAP-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 65 total, 65 mapped to tasks, 0 unmapped (ver `tasks.md`)
+**Coverage:** 66 total, 66 mapped to tasks, 0 unmapped (ver `tasks.md`)
 
 ---
 

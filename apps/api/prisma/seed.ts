@@ -2,7 +2,13 @@
  * Popula o banco com dados minimos para a equipe conseguir testar as telas.
  * Rode com: npm run db:seed --workspace apps/api
  */
-import { PrismaClient, StatusObra, FormaPagamento, TipoLancamento } from '@prisma/client';
+import {
+  PrismaClient,
+  StatusObra,
+  FormaPagamento,
+  TipoLancamento,
+  TipoMovimentacao,
+} from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -111,8 +117,179 @@ async function main() {
     create: { nome: 'Gesso em po', unidade: 'saco', saldoAtual: 45, estoqueMinimo: 10 },
   });
 
+  await seedDemonstracaoAgente();
+
   console.log('Seed concluido. Login: admin@gesso.com / admin123');
   console.log(`Usuario admin: ${admin.id}`);
+}
+
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Cenario de demonstracao do agente de estoque (feature estoque-agente-proativo, T25).
+ * Sem chave da Claude API, "Rodar analise agora" ja gera os alertas obrigatorios:
+ * - Gesso cola: saldo 6, minimo 10 (abaixo do minimo, com consumo solto);
+ * - Perfil montante 48mm: saldo 20 = minimo 20, com consumo solto (no minimo);
+ * - Placa de drywall ST: saldo 70, mas a obra FECHADA reserva 60 -> saldo livre 10 < minimo 20;
+ * - Fita para juntas: cruza o minimo em ~6 dias (previsao; fica a criterio do agente).
+ *
+ * Idempotente: materiais por nome, obra/previsto/movimentacoes por id fixo.
+ * Rodar de novo nao duplica nada; so traz as datas das movimentacoes para perto de "agora",
+ * para as saidas continuarem dentro da janela de 30 dias.
+ * O saldoAtual de cada material bate com as movimentacoes (entrada inicial - saidas).
+ */
+async function seedDemonstracaoAgente() {
+  const agora = new Date();
+  const diasAtras = (dias: number) => new Date(agora.getTime() - dias * DIA_MS);
+
+  // Criados ha 40 dias: a janela de consumo do agente fica em 30 dias.
+  const material = (nome: string, unidade: string, saldoAtual: number, estoqueMinimo: number) =>
+    prisma.material.upsert({
+      where: { nome },
+      update: {},
+      create: { nome, unidade, saldoAtual, estoqueMinimo, criadoEm: diasAtras(40) },
+    });
+
+  const gessoCola = await material('Gesso cola', 'saco', 6, 10);
+  const perfil = await material('Perfil montante 48mm', 'barra', 20, 20);
+  const placaDrywall = await material('Placa de drywall ST 1,20x1,80', 'un', 70, 20);
+  const fita = await material('Fita para juntas', 'rolo', 11, 5);
+
+  const obraFechada = await prisma.obra.upsert({
+    where: { id: '55555555-5555-5555-5555-555555555555' },
+    update: {},
+    create: {
+      id: '55555555-5555-5555-5555-555555555555',
+      titulo: 'Drywall - Clinica Bem Estar',
+      descricao: 'Divisorias em drywall nas 4 salas de atendimento.',
+      clienteNome: 'Clinica Bem Estar Ltda',
+      clienteTelefone: '(35) 98888-0003',
+      endereco: 'Av. Brasil, 455 - Campos Gerais/MG',
+      status: StatusObra.FECHADA,
+      valorTotal: 9800,
+    },
+  });
+
+  await prisma.materialPrevistoObra.upsert({
+    where: { obraId_materialId: { obraId: obraFechada.id, materialId: placaDrywall.id } },
+    update: {},
+    create: { obraId: obraFechada.id, materialId: placaDrywall.id, quantidade: 60 },
+  });
+
+  const { ENTRADA, SAIDA } = TipoMovimentacao;
+  const movimentacoes: {
+    id: string;
+    materialId: string;
+    tipo: TipoMovimentacao;
+    quantidade: number;
+    dias: number;
+    observacao: string;
+  }[] = [
+    {
+      id: '66666666-6666-6666-6666-666666666601',
+      materialId: gessoCola.id,
+      tipo: ENTRADA,
+      quantidade: 30,
+      dias: 35,
+      observacao: 'Compra inicial',
+    },
+    {
+      id: '66666666-6666-6666-6666-666666666602',
+      materialId: gessoCola.id,
+      tipo: SAIDA,
+      quantidade: 8,
+      dias: 20,
+      observacao: 'Retirada para reparos',
+    },
+    {
+      id: '66666666-6666-6666-6666-666666666603',
+      materialId: gessoCola.id,
+      tipo: SAIDA,
+      quantidade: 10,
+      dias: 9,
+      observacao: 'Retirada para reparos',
+    },
+    {
+      id: '66666666-6666-6666-6666-666666666604',
+      materialId: gessoCola.id,
+      tipo: SAIDA,
+      quantidade: 6,
+      dias: 3,
+      observacao: 'Retirada para reparos',
+    },
+    {
+      id: '66666666-6666-6666-6666-666666666605',
+      materialId: perfil.id,
+      tipo: ENTRADA,
+      quantidade: 50,
+      dias: 35,
+      observacao: 'Compra inicial',
+    },
+    {
+      id: '66666666-6666-6666-6666-666666666606',
+      materialId: perfil.id,
+      tipo: SAIDA,
+      quantidade: 18,
+      dias: 15,
+      observacao: 'Retirada avulsa',
+    },
+    {
+      id: '66666666-6666-6666-6666-666666666607',
+      materialId: perfil.id,
+      tipo: SAIDA,
+      quantidade: 12,
+      dias: 5,
+      observacao: 'Retirada avulsa',
+    },
+    {
+      id: '66666666-6666-6666-6666-666666666608',
+      materialId: placaDrywall.id,
+      tipo: ENTRADA,
+      quantidade: 80,
+      dias: 35,
+      observacao: 'Compra inicial',
+    },
+    {
+      id: '66666666-6666-6666-6666-666666666609',
+      materialId: placaDrywall.id,
+      tipo: SAIDA,
+      quantidade: 10,
+      dias: 12,
+      observacao: 'Retirada avulsa',
+    },
+    {
+      id: '66666666-6666-6666-6666-666666666610',
+      materialId: fita.id,
+      tipo: ENTRADA,
+      quantidade: 40,
+      dias: 35,
+      observacao: 'Compra inicial',
+    },
+    {
+      id: '66666666-6666-6666-6666-666666666611',
+      materialId: fita.id,
+      tipo: SAIDA,
+      quantidade: 14,
+      dias: 20,
+      observacao: 'Retirada avulsa',
+    },
+    {
+      id: '66666666-6666-6666-6666-666666666612',
+      materialId: fita.id,
+      tipo: SAIDA,
+      quantidade: 15,
+      dias: 6,
+      observacao: 'Retirada avulsa',
+    },
+  ];
+
+  for (const { dias, ...mov } of movimentacoes) {
+    await prisma.movimentacaoEstoque.upsert({
+      where: { id: mov.id },
+      update: { criadoEm: diasAtras(dias) },
+      create: { ...mov, criadoEm: diasAtras(dias) },
+    });
+  }
 }
 
 main()

@@ -1,9 +1,13 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 
 import { api } from '../../lib/api';
 import { numero, numeroOpcional, semVazios, textoOpcional } from '../../lib/corpo';
 import { useEnvio } from '../../lib/useEnvio';
-import type { FormaPagamento, Gesseiro } from '../../types';
+import type { FormaPagamento, Gesseiro, Material } from '../../types';
+import ItensMateriaisPrevistos, {
+  LinhaMaterialPrevisto,
+  paraItensPrevistos,
+} from './ItensMateriaisPrevistos';
 
 const formas: Array<{ valor: FormaPagamento; rotulo: string }> = [
   { valor: 'PIX', rotulo: 'Pix' },
@@ -34,6 +38,7 @@ export interface EstadoNovaObra {
   parcelas: string;
   valorEntrada: string;
   equipe: LinhaEquipe[];
+  materiaisPrevistos: LinhaMaterialPrevisto[];
 }
 
 const vazio: EstadoNovaObra = {
@@ -48,6 +53,7 @@ const vazio: EstadoNovaObra = {
   parcelas: '',
   valorEntrada: '',
   equipe: [],
+  materiaisPrevistos: [],
 };
 
 /** Converte o estado do formulario no corpo aceito por POST /obras (CreateObraDto). */
@@ -76,6 +82,9 @@ export function montarCorpoObra(estado: EstadoNovaObra) {
           }),
         )
       : undefined,
+    materiaisPrevistos: estado.materiaisPrevistos.length
+      ? paraItensPrevistos(estado.materiaisPrevistos)
+      : undefined,
   });
 }
 
@@ -88,6 +97,17 @@ export default function NovaObraForm({ gesseiros, onSalvo }: Props) {
   const [estado, setEstado] = useState<EstadoNovaObra>(vazio);
   const [proximaChave, setProximaChave] = useState(1);
   const { enviando, erro, enviar } = useEnvio();
+  const [materiais, setMateriais] = useState<Material[]>([]);
+  const [erroMateriais, setErroMateriais] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .get<Material[]>('/estoque/materiais')
+      .then(setMateriais)
+      .catch((e) =>
+        setErroMateriais(e instanceof Error ? e.message : 'Erro ao carregar materiais'),
+      );
+  }, []);
 
   const ativos = gesseiros.filter((gesseiro) => gesseiro.ativo);
 
@@ -289,6 +309,16 @@ export default function NovaObraForm({ gesseiros, onSalvo }: Props) {
             Adicionar gesseiro
           </button>
         </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Materiais previstos</legend>
+        {erroMateriais && <p className="erro">{erroMateriais}</p>}
+        <ItensMateriaisPrevistos
+          materiais={materiais}
+          itens={estado.materiaisPrevistos}
+          onChange={(itens) => alterar('materiaisPrevistos', itens)}
+        />
       </fieldset>
 
       {erro && <p className="erro">{erro}</p>}

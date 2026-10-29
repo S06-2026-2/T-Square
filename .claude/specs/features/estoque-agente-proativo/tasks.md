@@ -507,9 +507,9 @@ T26 → T27
 
 **Done when**:
 
-- [ ] `formato.test.ts` cobre `dataHora` → `dd/mm/aaaa hh:mm` (fuso fixo no teste) e valor nulo
-- [ ] `types.ts` e `api.ts` atualizados; `npm run build --workspace apps/web` sem erro de tipo
-- [ ] Gate check passes: `npm run test --workspace apps/web`
+- [x] `formato.test.ts` cobre `dataHora` → `dd/mm/aaaa hh:mm` (fuso fixo no teste) e valor nulo
+- [x] `types.ts` e `api.ts` atualizados; `npm run build --workspace apps/web` sem erro de tipo
+- [x] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit
 **Gate**: quick
@@ -523,7 +523,7 @@ T26 → T27
 **Where**: `apps/web/src/components/AlertasEstoque.tsx`
 **Depends on**: T17
 **Reuses**: padrão `erro`/"Carregando..." do `Dashboard.tsx`; classes `card`
-**Requirement**: EAP-26, EAP-27, EAP-28, EAP-29, EAP-30, EAP-31, EAP-32, EAP-33, EAP-62, EAP-63
+**Requirement**: EAP-26, EAP-27, EAP-28, EAP-29, EAP-30, EAP-31, EAP-32, EAP-33, EAP-62, EAP-63, EAP-66
 
 **Tools**:
 
@@ -532,8 +532,8 @@ T26 → T27
 
 **Done when**:
 
-- [ ] `AlertasEstoque.test.tsx` cobre: card com material, unidade, quantidade dos campos (mesmo com outro número no texto), justificativa; "abaixo do mínimo", "cruza o mínimo em ~4 dias" (`diasAteMinimo = 4,9`), "sem consumo recente"; selo "sem agente — alerta básico" só em `PADRAO`; ⚠️ em `REPOSICAO`; ℹ️ + "observação do agente" sem quantidade em `INFORMATIVO`; "Estoque em dia"; "Nenhuma análise executada ainda"; aviso `FALHA`/`PARCIAL`; data e hora da última análise; erro da API no padrão `erro`; "Carregando..."
-- [ ] Gate check passes: `npm run test --workspace apps/web`
+- [x] `AlertasEstoque.test.tsx` cobre: card com material, unidade, quantidade dos campos (mesmo com outro número no texto), justificativa; "abaixo do mínimo", "no mínimo", "cruza o mínimo em ~4 dias" (`diasAteMinimo = 4,9`), "sem consumo recente" a partir do `motivo` da API (textos de N = 0/1/2+ em `formato.test.ts`); selo "sem agente — alerta básico" só em `PADRAO`; ⚠️ em `REPOSICAO`; ℹ️ + "observação do agente" sem quantidade em `INFORMATIVO`; "Estoque em dia"; "Nenhuma análise executada ainda"; aviso `FALHA`/`PARCIAL`; data e hora da última análise; erro da API no padrão `erro`; "Carregando alertas..." (EAP-66)
+- [x] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit
 **Gate**: quick
@@ -556,8 +556,8 @@ T26 → T27
 
 **Done when**:
 
-- [ ] Testes cobrem: clique chama `POST /estoque/agente/analisar`, botão desabilitado até a resposta, recarrega alertas; 409 e 429 mostram a mensagem da API; Dispensar/Resolver chamam o `PATCH` certo e removem o card; falha mantém o card e mostra o erro
-- [ ] Gate check passes: `npm run test --workspace apps/web`
+- [x] Testes cobrem: clique chama `POST /estoque/agente/analisar`, botão desabilitado até a resposta, recarrega alertas; 409 e 429 mostram a mensagem da API; Dispensar/Resolver chamam o `PATCH` certo e removem o card; falha mantém o card e mostra o erro
+- [x] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit
 **Gate**: quick
@@ -580,9 +580,9 @@ T26 → T27
 
 **Done when**:
 
-- [ ] Testes DSH-01..03 existentes continuam passando
-- [ ] Novo teste: erro em `/estoque/agente/alertas` mostra o erro só na seção de estoque e mantém os cards do funil; erro em `/obras/resumo` não esconde a seção de estoque
-- [ ] Gate check passes: `npm run test --workspace apps/web`
+- [x] Testes DSH-01..03 existentes continuam passando
+- [x] Novo teste: erro em `/estoque/agente/alertas` mostra o erro só na seção de estoque e mantém os cards do funil; erro em `/obras/resumo` não esconde a seção de estoque
+- [x] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit
 **Gate**: quick
@@ -605,8 +605,8 @@ T26 → T27
 
 **Done when**:
 
-- [ ] Testes cobrem: adicionar, remover, editar quantidade; material já escolhido não aparece nas outras linhas; `onChange` recebe `{ materialId, quantidade }[]`
-- [ ] Gate check passes: `npm run test --workspace apps/web`
+- [x] Testes cobrem: adicionar, remover, editar quantidade; material já escolhido não aparece nas outras linhas; `onChange` recebe `{ materialId, quantidade }[]`
+- [x] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit
 **Gate**: quick
@@ -629,8 +629,8 @@ T26 → T27
 
 **Done when**:
 
-- [ ] Testes: obra com itens envia `materiaisPrevistos`; obra sem itens não envia o campo; testes existentes do formulário passam
-- [ ] Gate check passes: `npm run test --workspace apps/web`
+- [x] Testes: obra com itens envia `materiaisPrevistos`; obra sem itens não envia o campo; testes existentes do formulário passam
+- [x] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit
 **Gate**: quick
@@ -653,8 +653,8 @@ T26 → T27
 
 **Done when**:
 
-- [ ] Testes cobrem: colunas material, previsto, utilizado, situação; "12 pendentes", "+5 além do previsto", "conforme previsto"; "Nenhum material previsto"; salvar chama `PUT /obras/:id/materiais-previstos` e recarrega; erro da API no formulário; em `CONCLUIDA` só a tabela, sem editor
-- [ ] Gate check passes: `npm run test --workspace apps/web`
+- [x] Testes cobrem: colunas material, previsto, utilizado, situação; "12 pendentes", "+5 além do previsto", "conforme previsto"; "Nenhum material previsto"; salvar chama `PUT /obras/:id/materiais-previstos` e recarrega; erro da API no formulário; em `CONCLUIDA` só a tabela, sem editor
+- [x] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit
 **Gate**: quick
@@ -677,8 +677,8 @@ T26 → T27
 
 **Done when**:
 
-- [ ] `Obras.test.tsx` ganha: ação presente nos 3 status editáveis com editor; em `CONCLUIDA`/`CANCELADA` sem editor; testes existentes passam
-- [ ] Gate check passes: `npm run test --workspace apps/api && npm run test --workspace apps/web`
+- [x] `Obras.test.tsx` ganha: ação presente nos 3 status editáveis com editor; em `CONCLUIDA`/`CANCELADA` sem editor; testes existentes passam
+- [x] Gate check passes: `npm run test --workspace apps/api && npm run test --workspace apps/web`
 
 **Tests**: unit
 **Gate**: full
@@ -701,9 +701,9 @@ T26 → T27
 
 **Done when**:
 
-- [ ] Seed idempotente (rodar duas vezes não duplica movimentações)
-- [ ] Com o seed e sem chave, `POST /estoque/agente/analisar` gera pelo menos 1 alerta obrigatório
-- [ ] Gate check passes: `npm run build && npm test`
+- [x] Seed idempotente (rodar duas vezes não duplica movimentações)
+- [x] Com o seed e sem chave, `POST /estoque/agente/analisar` gera pelo menos 1 alerta obrigatório
+- [x] Gate check passes: `npm run build && npm test`
 
 **Tests**: none
 **Gate**: build
@@ -726,10 +726,10 @@ T26 → T27
 
 **Done when**:
 
-- [ ] Função `renderizarRaciocinio(analise, titulosObras)` pura; spec cobre: um bloco por passo na ordem, marcadores trocados pelo título só na legenda, nenhum `clienteNome`/telefone/endereço no HTML, HTML sem recursos externos (CSS inline)
-- [ ] `renderizarRaciocinio` vive em `src/agente-estoque/relatorio-raciocinio.ts`; o script em `scripts/` não tem lógica de render
-- [ ] Script npm `agente:exportar` em `apps/api/package.json`, gravando em `apps/api/tmp/` (pasta ignorada pelo Git; `apps/api/tmp/` adicionada ao `.gitignore`)
-- [ ] Gate check passes: `npm run test --workspace apps/api`
+- [x] Função `renderizarRaciocinio(analise, titulosObras)` pura; spec cobre: um bloco por passo na ordem, marcadores trocados pelo título só na legenda, nenhum `clienteNome`/telefone/endereço no HTML, HTML sem recursos externos (CSS inline)
+- [x] `renderizarRaciocinio` vive em `src/agente-estoque/relatorio-raciocinio.ts`; o script em `scripts/` não tem lógica de render
+- [x] Script npm `agente:exportar` em `apps/api/package.json`, gravando em `apps/api/tmp/` (pasta ignorada pelo Git; `apps/api/tmp/` adicionada ao `.gitignore`)
+- [x] Gate check passes: `npm run test --workspace apps/api`
 
 **Tests**: unit
 **Gate**: quick
@@ -752,7 +752,7 @@ T26 → T27
 
 **Done when**:
 
-- [ ] Passo manual do usuário: colocar a chave no `.env` (nunca commitado) e `docker restart gesso_api`
+- [ ] Passo manual do usuário: colocar a chave no `.env` da raiz (nunca commitado) e recriar o container com `docker compose up -d api` (`docker restart gesso_api` não relê o `.env`)
 - [ ] Análise real termina `SUCESSO` ou `PARCIAL`; `response.usage` anotado para confirmar a estimativa de custo da spec
 - [ ] HTML gerado, aberto no navegador e revisado (sem dado de cliente)
 - [ ] Gate check passes: `npm run build && npm test`
