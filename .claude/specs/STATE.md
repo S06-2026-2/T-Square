@@ -53,15 +53,16 @@
 ## Handoff
 
 - **Feature**: `estoque-agente-proativo` em Execute (2026-10-28)
-- **Phase / Task**: T1–T29 concluídas (T27 com a execução real final; T28 e T29 vieram depois da 1ª execução). Falta o Verifier independente e o `validation.md`
+- **Phase / Task**: T1–T29 concluídas e verificadas. Verifier independente: rodada 1 FAIL só por lacunas de teste (3 mutantes sobreviventes); rodada 2 PASS, com 69/69 EAP com evidência e 23/23 mutantes mortos (`validation.md`).
 - **Completed**:
   - Fases 1–2 em `b5e2ba6`; Fases 3–4 em `a6e6522` (branch `feat/agente-estoque`).
   - Fases 5–6 (T17–T24), ajustes da revisão da Fase 5 (EAP-66), T25 e T26 em `f7e6664`. Depois: texto "pendente: N" / "excedente: N" na situação do previsto x utilizado (sem commit).
   - T28: listarMateriais só com visão geral e risco, calculado e faixa em consumoDoMaterial, trava de investigação no sugerirReposicao, prompt novo e seed com "Massa para drywall" (SEM_RISCO, obra ANDAMENTO acima do previsto).
   - T29: "Resolver" de REPOSICAO leva à ENTRADA no Estoque e resolve o alerta depois de salvar (EAP-68). Ajustes de front pedidos pelo usuário: card do agente sem a linha de saldo livre, justificativa atrás de um "+", grade sem esticar os vizinhos; Dashboard sem o subtítulo do funil.
-  - Rastreabilidade com os 68 EAP em `Implementing` (vão para `Verified` depois do Verifier). API 231 testes, web 137, builds ok.
+  - Verifier: 4 testes acrescentados na rodada 2 (alerta fechado pelo AGENTE, janela real no texto sem consumo, fronteira de 7 dias, zero materiais); a regra de previsão em até 7 dias virou o critério EAP-69. Remoção do subtítulo registrada na spec `front-dashboard-resumo`.
+  - Rastreabilidade com os 69 EAP em `Verified`. API 236 testes, web 137, builds ok.
 - **In-progress**: none
-- **Next step**: commit do usuário → Verifier independente (spec-anchored + discrimination sensor, inclusive T28 e T29) → `validation.md` → conferir o veredito lendo (sem Python na máquina) → EAP para `Verified`.
+- **Next step**: commit do usuário (testes da rodada 2, EAP-69, spec do dashboard, `validation.md`, STATE) → push → PR da `feat/agente-estoque` → depois a spec `obras-transicoes-status` num branch novo.
 - **Regras do usuário**: sub-agentes em sequência; sem commit/push/`git add` pelo agente; nenhuma dependência nova sem perguntar; `ANTHROPIC_API_KEY` só no `.env`.
 - **Blockers**: none.
 - **Uncommitted files**: conferir `git status`. Fora da feature, nunca commitar junto: `CLAUDE.md`, `migration_lock.toml` (só metadado, conteúdo igual), `.claude/specs/features/obras-transicoes-status/`.

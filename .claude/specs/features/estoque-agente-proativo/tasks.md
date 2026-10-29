@@ -983,5 +983,6 @@ Dependências entre fases (todas para trás): T3 usa o snapshot de T2; T6 usa T3
 | EAP-64 | T2, T3 |
 | EAP-67 | T28 |
 | EAP-68 | T29 |
+| EAP-69 | T2 (teste de fronteira no Verifier) |
 
-68 de 68 requisitos mapeados (EAP-66 em T18, EAP-67 em T28, EAP-68 em T29).
+69 de 69 requisitos mapeados (EAP-66 em T18, EAP-67 em T28, EAP-68 em T29, EAP-69 em T2).

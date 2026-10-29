@@ -30,6 +30,7 @@ lista de `Obras.tsx` ou consultar o Swagger.
 | Status exibidos | Todos os 5 valores de `StatusObra` (`ORCAMENTO`, `FECHADA`, `ANDAMENTO`, `CONCLUIDA`, `CANCELADA`), mesmo os que não aparecem na resposta (0 obras) | `GET /obras/resumo` só retorna status com pelo menos 1 obra (`groupBy`); a tela deve mostrar 0 para os que faltam, não escondê-los | y |
 | Login | Após entrar, `Login.tsx` navega para `/` (que redireciona para `/dashboard`) em vez de `/obras` | Consequência direta da linha acima; sem isso o login continuaria caindo em Obras | n — derivado na implementação, confirmar com o time |
 | Rótulos de status | Reaproveita os mesmos rótulos em português já usados nos filtros de `Obras.tsx` (`ORCAMENTO`→"Aguardando cliente" etc.), acrescentando `CANCELADA`→"Canceladas" | Consistência de vocabulário entre as telas | y |
+| Cabeçalho da página | Só o título "Visao geral", sem subtítulo. O subtítulo "Quantidade e valor das obras em cada etapa do funil." foi removido em 2026-10-29 a pedido do usuário, para limpar a tela (feito no branch `feat/agente-estoque`, `Dashboard.tsx`) | Pedido do usuário: menos texto na visualização; nenhum critério de aceite dependia do subtítulo | y |
 
 **Open questions:** none - all resolved or logged above.
 
