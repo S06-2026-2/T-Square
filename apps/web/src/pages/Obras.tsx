@@ -6,6 +6,7 @@ import NovaObraForm from '../components/forms/NovaObraForm';
 import Icone from '../components/Icone';
 import StatusBadge from '../components/StatusBadge';
 import { api } from '../lib/api';
+import { useAoReconectar } from '../lib/conexao';
 import { moeda } from '../lib/formato';
 import { STATUS_FUNIL, rotuloPlural } from '../lib/status';
 import type { Gesseiro, Obra, StatusObra } from '../types';
@@ -49,12 +50,23 @@ export default function Obras() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtro]);
 
-  useEffect(() => {
+  function carregarGesseiros() {
     api
       .get<Gesseiro[]>('/gesseiros')
       .then(setGesseiros)
       .catch((e) => setErro(e instanceof Error ? e.message : 'Erro ao carregar gesseiros'));
+  }
+
+  useEffect(() => {
+    carregarGesseiros();
   }, []);
+
+  // A conexão voltou: obras do filtro atual e gesseiros de novo (OFF-15). O formulário aberto
+  // tem estado próprio e não é remontado.
+  useAoReconectar(() => {
+    void carregar();
+    carregarGesseiros();
+  });
 
   async function obraCriada() {
     setMostrarForm(false);

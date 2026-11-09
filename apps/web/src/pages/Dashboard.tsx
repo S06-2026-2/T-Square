@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import AlertasEstoque from '../components/AlertasEstoque';
 import { api } from '../lib/api';
+import { useAoReconectar } from '../lib/conexao';
 import { moeda } from '../lib/formato';
 import { STATUS_FUNIL, rotuloPlural } from '../lib/status';
 import type { ResumoStatus } from '../types';
@@ -11,13 +12,24 @@ export default function Dashboard() {
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
 
-  useEffect(() => {
+  function carregar() {
     api
       .get<ResumoStatus[]>('/obras/resumo')
       .then(setResumo)
       .catch((e) => setErro(e instanceof Error ? e.message : 'Erro ao carregar resumo'))
       .finally(() => setCarregando(false));
+  }
+
+  useEffect(() => {
+    carregar();
   }, []);
+
+  // A conexão voltou: busca o resumo de novo, sem recarregar a página (OFF-15). A seção de
+  // alertas busca os dela sozinha.
+  useAoReconectar(() => {
+    setErro(null);
+    carregar();
+  });
 
   // A API so devolve status com pelo menos uma obra; os demais aparecem zerados.
   const linhas = STATUS_FUNIL.map(

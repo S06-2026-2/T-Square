@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { api } from '../lib/api';
 import type { Gesseiro, LinhaPrevistoUtilizado, Material, Obra, StatusObra } from '../types';
@@ -207,5 +207,38 @@ describe('Obras', () => {
       expect(alvo.queryByRole('button', { name: 'Adicionar material' })).not.toBeInTheDocument();
       expect(alvo.queryByRole('button', { name: 'Salvar materiais' })).not.toBeInTheDocument();
     }
+  });
+});
+
+describe('Obras: conexão de volta (OFF-15)', () => {
+  function chamadas(caminho: string) {
+    return get.mock.calls.filter(([c]) => c === caminho).length;
+  }
+
+  it('o evento online busca de novo as obras do filtro atual e os gesseiros, sem fechar o formulário preenchido', async () => {
+    render(<Obras />);
+    await screen.findByText('Obra orc');
+    fireEvent.click(screen.getByRole('button', { name: 'Fechadas' }));
+    await waitFor(() => expect(ultimaChamadaObras()).toBe('/obras?status=FECHADA'));
+    fireEvent.click(screen.getByRole('button', { name: 'Nova obra' }));
+    fireEvent.change(screen.getByLabelText('Titulo'), { target: { value: 'Forro sala' } });
+    fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'Maria Silva' } });
+    const obrasAntes = chamadas('/obras?status=FECHADA');
+    expect(chamadas('/gesseiros')).toBe(1);
+    get.mockImplementation(async (caminho: string) =>
+      caminho === '/gesseiros' ? gesseiros : [obra('reconectada', 'FECHADA')],
+    );
+
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Obra reconectada' })).toBeInTheDocument();
+    expect(chamadas('/obras?status=FECHADA')).toBe(obrasAntes + 1);
+    await waitFor(() => expect(chamadas('/gesseiros')).toBe(2));
+    expect(screen.getByLabelText('Titulo')).toHaveValue('Forro sala');
+    expect(screen.getByLabelText('Cliente')).toHaveValue('Maria Silva');
+    expect(screen.getByRole('button', { name: 'Fechadas' })).toHaveClass('ativo');
+    expect(post).not.toHaveBeenCalled();
   });
 });

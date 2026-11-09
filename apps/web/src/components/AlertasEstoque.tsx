@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '../lib/api';
+import { useAoReconectar } from '../lib/conexao';
 import { dataHora } from '../lib/formato';
 import type { AlertaEstoque, RespostaAlertasEstoque, StatusAnaliseEstoque } from '../types';
 import CardAlertaEstoque from './CardAlertaEstoque';
@@ -53,6 +54,13 @@ export default function AlertasEstoque() {
   useEffect(() => {
     void carregar();
   }, []);
+
+  // A conexão voltou: só a leitura dos alertas é refeita (OFF-15). Nunca roda a análise do
+  // agente sozinha; isso continua sendo só pelo botão.
+  useAoReconectar(() => {
+    setErro(null);
+    void carregar();
+  });
 
   /** POST síncrono: a API só responde com a análise terminada; depois recarrega os alertas. */
   async function rodarAnalise() {

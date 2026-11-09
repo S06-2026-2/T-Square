@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 import { api } from '../lib/api';
@@ -409,4 +409,27 @@ describe('AlertasEstoque: ações', () => {
       expect(cal.getByRole('button', { name: botao })).toBeEnabled();
     },
   );
+});
+
+describe('AlertasEstoque: conexão de volta (OFF-15)', () => {
+  const SEM_CONEXAO = 'Sem conexão e sem dados salvos desta tela neste aparelho.';
+
+  it('o evento online lê os alertas de novo, troca o erro pela lista e nunca roda a análise do agente', async () => {
+    get
+      .mockRejectedValueOnce(new Error(SEM_CONEXAO))
+      .mockResolvedValueOnce({ ultimaAnalise: analise(), alertas: [alerta('cal')] });
+    renderizar();
+    expect(await screen.findByText(SEM_CONEXAO)).toHaveClass('erro');
+
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+
+    expect(await screen.findByRole('heading', { name: /Material cal/ })).toBeInTheDocument();
+    expect(screen.queryByText(SEM_CONEXAO)).not.toBeInTheDocument();
+    expect(get.mock.calls).toEqual([['/estoque/agente/alertas'], ['/estoque/agente/alertas']]);
+    // Reconectar só lê: POST /estoque/agente/analisar (LLM) e PATCH de alerta nunca saem.
+    expect(post).not.toHaveBeenCalled();
+    expect(patch).not.toHaveBeenCalled();
+  });
 });

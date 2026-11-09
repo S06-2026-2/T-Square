@@ -5,6 +5,7 @@ import MovimentacaoForm from '../components/forms/MovimentacaoForm';
 import NovoMaterialForm from '../components/forms/NovoMaterialForm';
 import Icone from '../components/Icone';
 import { api } from '../lib/api';
+import { useAoReconectar } from '../lib/conexao';
 import type { Material, Obra } from '../types';
 
 type FormAberto = 'material' | 'movimentacao' | null;
@@ -31,13 +32,25 @@ export default function Estoque() {
     }
   }
 
-  useEffect(() => {
-    void carregar();
+  function carregarObras() {
     api
       .get<Obra[]>('/obras')
       .then(setObras)
       .catch((e) => setErro(e instanceof Error ? e.message : 'Erro ao carregar obras'));
+  }
+
+  useEffect(() => {
+    void carregar();
+    carregarObras();
   }, []);
+
+  // A conexão voltou: materiais e obras de novo (OFF-15). O formulário aberto tem estado
+  // próprio e não é remontado (a key dele só depende do alerta da URL).
+  useAoReconectar(() => {
+    setErro(null);
+    void carregar();
+    carregarObras();
+  });
 
   function alternar(form: Exclude<FormAberto, null>) {
     // Mexer nos formularios desfaz o atalho: o alerta continua ATIVO.

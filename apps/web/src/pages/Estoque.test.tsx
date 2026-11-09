@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 
 import { api } from '../lib/api';
@@ -260,5 +260,57 @@ describe('Estoque: atalho do "Resolver" de um alerta de reposição (EAP-68)', (
     await waitFor(() => expect(chamadasMateriais()).toBe(2));
     expect(patch).not.toHaveBeenCalled();
     expect(screen.queryByText('Tela do dashboard')).not.toBeInTheDocument();
+  });
+});
+
+describe('Estoque: conexão de volta (OFF-15)', () => {
+  function chamadasObras() {
+    return get.mock.calls.filter(([c]) => c === '/obras').length;
+  }
+
+  it('o evento online busca materiais e obras de novo e mantém a movimentação aberta com os valores', async () => {
+    renderizar();
+    await screen.findByRole('cell', { name: 'Placa de gesso' });
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar entrada/saida' }));
+    fireEvent.change(screen.getByLabelText('Material'), { target: { value: 'm-placa' } });
+    fireEvent.change(screen.getByLabelText('Tipo'), { target: { value: 'SAIDA' } });
+    fireEvent.change(screen.getByLabelText('Quantidade'), { target: { value: '5' } });
+    fireEvent.change(screen.getByLabelText('Observacao'), { target: { value: 'Forro da sala' } });
+    expect(chamadasMateriais()).toBe(1);
+    expect(chamadasObras()).toBe(1);
+    materiais = [
+      placa,
+      { id: 'm-massa', nome: 'Massa corrida', unidade: 'saco', saldoAtual: 0, estoqueMinimo: 0 },
+    ];
+
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+
+    expect(await screen.findByRole('cell', { name: 'Massa corrida' })).toBeInTheDocument();
+    expect(chamadasMateriais()).toBe(2);
+    await waitFor(() => expect(chamadasObras()).toBe(2));
+    expect(screen.getByLabelText('Material')).toHaveValue('m-placa');
+    expect(screen.getByLabelText('Tipo')).toHaveValue('SAIDA');
+    expect(screen.getByLabelText('Quantidade')).toHaveValue(5);
+    expect(screen.getByLabelText('Observacao')).toHaveValue('Forro da sala');
+    expect(post).not.toHaveBeenCalled();
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it('o novo material aberto e preenchido continua com os valores depois de reconectar', async () => {
+    renderizar();
+    await screen.findByRole('cell', { name: 'Placa de gesso' });
+    fireEvent.click(screen.getByRole('button', { name: 'Novo material' }));
+    fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'Massa corrida' } });
+    fireEvent.change(screen.getByLabelText('Unidade'), { target: { value: 'saco' } });
+
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+
+    await waitFor(() => expect(chamadasMateriais()).toBe(2));
+    expect(screen.getByLabelText('Nome')).toHaveValue('Massa corrida');
+    expect(screen.getByLabelText('Unidade')).toHaveValue('saco');
   });
 });
