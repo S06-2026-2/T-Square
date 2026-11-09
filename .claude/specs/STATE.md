@@ -66,8 +66,25 @@
 - **Date**: 2026-10-29
 - **Status**: active
 
+### AD-009
+- **Decision**: Todo POST de criação (hoje: gesseiro, lançamento, obra, material, movimentação) aceita `Idempotency-Key` (UUID). O controller chama `IdempotenciaService.executar(ctx, (tx) => service.criar(dto, tx))` (`apps/api/src/idempotencia/`), e a chave é gravada em `chaves_idempotencia` **na mesma `$transaction`** que a entidade. O escopo é (usuário, método + path, chave), com vida de 24 h. Mesma chave e mesmo corpo devolvem a resposta original; outro corpo dá 422; pedido simultâneo dá 409 (por `pg_try_advisory_xact_lock`); erro desfaz entidade e chave juntas. O CORS lista `Idempotency-Key` em `allowedHeaders` (`src/cors.ts`). No front, a chave vem do `useEnvio`.
+- **Reason**: Com sinal ruim, a resposta se perde e o reenvio duplicaria lançamentos. Como o saldo é derivado de lançamentos, isso vira saldo errado. A gravação na mesma transação evita chave presa e lançamento sem chave se a API cair no meio (decisão do usuário).
+- **Trade-off**: Todo método de criação precisa aceitar `tx: ClientePrisma = this.prisma` e nunca abrir `this.prisma.$transaction` quando recebe um `tx` (o Prisma não aninha transações interativas). Os controllers das rotas de criação ganham uma linha de `executar()`.
+- **Scope**: `pwa-instalavel-responsivo`. Convenção para qualquer POST de criação novo.
+- **Date**: 2026-11-09
+- **Status**: active
+
+### AD-010
+- **Decision**: O front não usa rotas lazy (`React.lazy`/`import()`): o build sai num único chunk JS. Todo fim e início de sessão passa por `lib/sessao.ts`, que apaga o cache `api-dados` do service worker; nada além de `sessao.ts` chama `auth.logout()`.
+- **Reason**: Com `skipWaiting` + `clientsClaim`, uma página aberta da versão antiga pediria chunks que não existem mais (UPD-04). O cache de dados guarda informação financeira, e a chave do cache é só a URL.
+- **Trade-off**: O bundle inicial cresce com o app; revisar se o número de telas crescer muito.
+- **Scope**: `pwa-instalavel-responsivo` e qualquer tela ou fluxo de login/logout novo.
+- **Date**: 2026-11-09
+- **Status**: active
+
 ## Handoff
 
+- **Feature ativa (2026-11-09)**: `pwa-instalavel-responsivo`. Spec (50 requisitos), Design e Tasks (31 tasks, 6 fases) aprovados em 2026-11-09. Nenhum código escrito. Base: API 251 testes, web 147. Execução com sub-agentes em 5 lotes sequenciais (L1 T1–T5; L2 T6–T14; L3 T15–T21; L4 T22–T25; L5 T26–T31). Ao fim de cada lote: suítes + gate, relatório (mudanças, requisitos cobertos, desvios) e parada para o usuário revisar e commitar; o próximo lote só com o OK dele. **Próximo passo**: aguardar o aviso de que o branch `feat/pwa-instalavel-responsivo` (a partir de `main`) foi criado, e então iniciar o L1. `obras-transicoes-status` (abaixo) continua parada em Tasks.
 - **Feature**: `obras-transicoes-status` em Tasks (2026-10-29), branch `feat/obras-transicoes-status` criado a partir de `main` depois do merge da PR #6 (`estoque-agente-proativo`, verificada: 69/69 EAP `Verified`, `validation.md` PASS na rodada 2).
 - **Phase / Task**: Spec, Design e Tasks aprovados (2026-10-29). Execute **adiado pelo usuário** — nenhum código escrito. Ao retomar, começar pela T1.
 - **Decisões do usuário (2026-10-29)**: endpoint por ação; confirmação só no concluir (lista quem recebe crédito) e no cancelar; remover gesseiro permitido em obra aberta, inclusive o último de `ANDAMENTO`; "Iniciar obra" sem equipe desabilitado com "Aloque pelo menos um gesseiro para iniciar"; mensagens novas com acento; 404 ao remover gesseiro não alocado; crédito de gesseiro removido fica para a spec futura "remanejamento de gesseiros".

@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "audit:responsive": "node scripts/audit-responsive.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -25,6 +26,7 @@
     "@vitejs/plugin-react": "^4.3.2",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
+    "puppeteer-core": "23.11.1",
     "ts-jest": "^29.2.5",
     "typescript": "^5.6.2",
     "vite": "^5.4.8"

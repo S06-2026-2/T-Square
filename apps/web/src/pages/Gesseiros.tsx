@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import LancamentoForm from '../components/forms/LancamentoForm';
 import NovoGesseiroForm from '../components/forms/NovoGesseiroForm';
@@ -12,6 +12,9 @@ export default function Gesseiros() {
   const [extrato, setExtrato] = useState<Extrato | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [mostrarForm, setMostrarForm] = useState(false);
+  const refExtrato = useRef<HTMLDivElement>(null);
+  /** true entre o clique num gesseiro e o extrato dele aparecer (RSP-10). */
+  const rolarAoAbrir = useRef(false);
 
   async function carregar() {
     try {
@@ -35,9 +38,25 @@ export default function Gesseiros() {
     try {
       setExtrato(await api.get<Extrato>(`/gesseiros/${id}/extrato`));
     } catch (e) {
+      rolarAoAbrir.current = false;
       setErro(e instanceof Error ? e.message : 'Erro ao carregar extrato');
     }
   }
+
+  function selecionar(id: string) {
+    rolarAoAbrir.current = true;
+    void abrirExtrato(id);
+  }
+
+  // Com lista e extrato empilhados (<= 760px), o extrato fica abaixo da lista: rola até ele.
+  // Só na seleção, não ao recarregar o extrato depois de um lançamento.
+  useEffect(() => {
+    if (!extrato || !rolarAoAbrir.current) return;
+    rolarAoAbrir.current = false;
+    if (window.matchMedia('(max-width: 760px)').matches) {
+      refExtrato.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+  }, [extrato]);
 
   return (
     <section>
@@ -63,13 +82,16 @@ export default function Gesseiros() {
       <div className="duas-colunas">
         <ul className="lista lista-pessoas">
           {gesseiros.map((gesseiro) => (
+            // A linha inteira abre o extrato (RSP-09). O botão do nome fica para teclado e leitor
+            // de tela; o clique nele sobe até o li, então é uma chamada só.
             <li
               key={gesseiro.id}
               className={extrato?.gesseiro.id === gesseiro.id ? 'selecionado' : undefined}
+              onClick={() => selecionar(gesseiro.id)}
             >
               <span className="avatar">{iniciais(gesseiro.nome)}</span>
               <span className="pessoa">
-                <button type="button" className="btn-texto" onClick={() => abrirExtrato(gesseiro.id)}>
+                <button type="button" className="btn-texto">
                   {gesseiro.nome}
                 </button>
                 <span className="secundario">{gesseiro.telefone ?? 'sem telefone'}</span>
@@ -78,7 +100,7 @@ export default function Gesseiros() {
           ))}
         </ul>
 
-        <div className="card">
+        <div className="card" ref={refExtrato}>
           {!extrato && (
             <div className="estado-vazio">
               <Icone nome="gesseiros" tamanho={28} />
