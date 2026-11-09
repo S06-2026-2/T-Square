@@ -82,6 +82,14 @@
 - **Date**: 2026-11-09
 - **Status**: active
 
+### AD-011
+- **Decision**: O `Dockerfile` de produção da API (`apps/api/Dockerfile`) usa a **raiz do repositório** como contexto de build (`docker build -f apps/api/Dockerfile .`), copia só os manifestos e o código da API (mais o `package.json` do web, que o `npm ci` valida contra o lock) e instala com `npm ci --workspace apps/api`. Há um `.dockerignore` na raiz. O CI (`.github/workflows/ci.yml`, job `docker`) builda a imagem e a sobe contra um Postgres, checando `/api/health`. O job `api` do CI passou a rodar o seed e os testes e2e (`--runInBand`).
+- **Reason**: O Dockerfile antigo usava contexto `apps/api`, onde não existe `package-lock.json` (só o da raiz, por causa dos workspaces); `npm ci` falha com `EUSAGE` (reproduzido). O CI não cobria nem o Dockerfile nem os e2e, então nada avisava.
+- **Trade-off**: O Render precisa estar configurado com `Dockerfile Path = apps/api/Dockerfile` e `Root Directory` vazio (config fora do repositório, fácil de divergir). O contexto na raiz é maior, mitigado pelo `.dockerignore`.
+- **Scope**: Deploy da API e CI. Qualquer arquivo novo que o build da API precise tem que entrar num `COPY` explícito do Dockerfile.
+- **Date**: 2026-11-09
+- **Status**: active
+
 ## Handoff
 
 - **Feature ativa (2026-11-09)**: `pwa-instalavel-responsivo`. Spec (50 requisitos), Design e Tasks (31 tasks, 6 fases) aprovados em 2026-11-09. L1, L2 e L3 commitados no branch `feat/pwa-instalavel-responsivo` (T1–T21; mais o commit aditivo do `codigo: EM_PROCESSAMENTO` no 409). Contagens no fim do L3: API 283 unit + 14 e2e, web 246; `audit:responsive` 84/84. Execução com sub-agentes em 5 lotes sequenciais (L1 T1–T5; L2 T6–T14; L3 T15–T21; L4 T22–T25; L5 T26–T31). Ao fim de cada lote: suítes + gate, relatório (mudanças, requisitos cobertos, desvios) e parada para o usuário revisar e commitar; o próximo lote só com o OK dele. **Próximo passo**: L4 (T22–T25) com o OK do usuário. Antes do L5, o usuário precisa pôr `CORS_ORIGIN=http://localhost:5173,http://localhost:4173` no `.env` e rodar `docker compose up -d api`. `obras-transicoes-status` (abaixo) continua parada em Tasks.

@@ -1,0 +1,14 @@
+# Usado pelo build de producao da API (contexto = raiz do repo; ver apps/api/Dockerfile).
+# Os builds do docker-compose usam o .dockerignore da propria pasta (apps/api, apps/web).
+.git
+.github
+.claude
+docs
+**/node_modules
+**/dist
+**/coverage
+**/*.log
+**/.env
+# Da pasta web so o package.json entra (o npm ci valida o lock contra todos os workspaces).
+apps/web/*
+!apps/web/package.json
