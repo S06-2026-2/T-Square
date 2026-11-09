@@ -23,10 +23,44 @@ describe('EstoqueService', () => {
     movimentacaoEstoque: { findMany: jest.Mock; create: jest.Mock };
     $transaction: jest.Mock;
   };
+  // Cliente da transacao: um objeto DIFERENTE do prisma, para o teste distinguir uma escrita
+  // feita dentro da transacao (tx.*) de uma feita fora dela (this.prisma.*).
+  let tx: {
+    material: { update: jest.Mock; updateMany: jest.Mock };
+    movimentacaoEstoque: { create: jest.Mock };
+  };
+  // Escritas da transacao que foram de fato aguardadas, na ordem em que rodaram.
+  let executadas: string[];
 
   const dec = (valor: number) => new Prisma.Decimal(valor);
 
+  /**
+   * O Prisma real devolve promessas "preguicosas": a query so roda quando alguem da await nela.
+   * Esta imitacao so registra a escrita em `executadas` quando ela e aguardada, entao um `await`
+   * esquecido no service faz o teste falhar em vez de passar despercebido.
+   */
+  const preguicosa = (nome: string, valor: unknown) => ({
+    then(resolve?: (v: unknown) => unknown, reject?: (e: unknown) => unknown) {
+      executadas.push(nome);
+      return Promise.resolve(valor).then(resolve, reject);
+    },
+  });
+
+  /** Troca o valor que uma escrita da transacao devolve, mantendo-a preguicosa. */
+  const devolve = (mock: jest.Mock, nome: string, valor: unknown) =>
+    mock.mockImplementation(() => preguicosa(nome, valor));
+
   beforeEach(async () => {
+    executadas = [];
+    tx = {
+      material: {
+        update: jest.fn(() => preguicosa('material.update', {})),
+        updateMany: jest.fn(() => preguicosa('material.updateMany', { count: 1 })),
+      },
+      movimentacaoEstoque: {
+        create: jest.fn(() => preguicosa('movimentacaoEstoque.create', { id: 'mov-tx' })),
+      },
+    };
     prisma = {
       material: {
         findMany: jest.fn(),
@@ -37,8 +71,8 @@ describe('EstoqueService', () => {
       },
       obra: { findUnique: jest.fn() },
       movimentacaoEstoque: { findMany: jest.fn(), create: jest.fn() },
-      // Executa o callback da transacao passando o proprio mock como "tx".
-      $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
+      // Executa o callback da transacao com o tx proprio, nunca com o prisma.
+      $transaction: jest.fn((callback: (cliente: unknown) => unknown) => callback(tx)),
     };
 
     const modulo: TestingModule = await Test.createTestingModule({
@@ -95,6 +129,18 @@ describe('EstoqueService', () => {
         'conexao perdida',
       );
     });
+
+    it('so traduz para 409 o nome duplicado (P2002); outro erro conhecido do Prisma segue', async () => {
+      const erroDeChaveEstrangeira = new Prisma.PrismaClientKnownRequestError(
+        'Foreign key constraint failed',
+        { code: 'P2003', clientVersion: 'test' },
+      );
+      prisma.material.create.mockRejectedValue(erroDeChaveEstrangeira);
+
+      await expect(service.criarMaterial({ nome: 'Cal', unidade: 'saco' })).rejects.toBe(
+        erroDeChaveEstrangeira,
+      );
+    });
   });
 
   // ---------------------------------------------------------------- EST-03..07
@@ -106,16 +152,14 @@ describe('EstoqueService', () => {
     });
 
     it('ENTRADA cria a movimentacao e incrementa o saldo na mesma transacao (EST-03)', async () => {
-      prisma.movimentacaoEstoque.create.mockResolvedValue({ id: 'mov-1' });
-
       await service.movimentar({ materialId: 'm-1', tipo: TipoMovimentacao.ENTRADA, quantidade: 5 });
 
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(prisma.material.update).toHaveBeenCalledWith({
+      expect(tx.material.update).toHaveBeenCalledWith({
         where: { id: 'm-1' },
         data: { saldoAtual: { increment: 5 } },
       });
-      expect(prisma.movimentacaoEstoque.create).toHaveBeenCalledWith(
+      expect(tx.movimentacaoEstoque.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             materialId: 'm-1',
@@ -124,11 +168,38 @@ describe('EstoqueService', () => {
           }),
         }),
       );
+      // As duas escritas rodaram dentro da transacao, aguardadas, e nenhuma escapou para fora dela.
+      expect(executadas).toEqual(['material.update', 'movimentacaoEstoque.create']);
+      expect(prisma.material.update).not.toHaveBeenCalled();
+      expect(prisma.movimentacaoEstoque.create).not.toHaveBeenCalled();
+    });
+
+    it('ENTRADA em material com saldo 0 e aceita (a checagem de saldo vale so para SAIDA)', async () => {
+      prisma.material.findUnique.mockResolvedValue({ ...material, saldoAtual: dec(0) });
+
+      await expect(
+        service.movimentar({ materialId: 'm-1', tipo: TipoMovimentacao.ENTRADA, quantidade: 20 }),
+      ).resolves.toBeDefined();
+
+      expect(tx.material.update).toHaveBeenCalledWith({
+        where: { id: 'm-1' },
+        data: { saldoAtual: { increment: 20 } },
+      });
+    });
+
+    it('se gravar a movimentacao falhar, o erro sai da transacao para o Prisma desfazer o saldo', async () => {
+      tx.movimentacaoEstoque.create.mockRejectedValue(new Error('falha ao gravar'));
+
+      await expect(
+        service.movimentar({ materialId: 'm-1', tipo: TipoMovimentacao.ENTRADA, quantidade: 5 }),
+      ).rejects.toThrow('falha ao gravar');
+
+      // O saldo ja tinha sido alterado dentro da transacao; e o erro escapando dela que faz o rollback.
+      expect(executadas).toEqual(['material.update']);
     });
 
     it('SAIDA dentro do saldo decrementa e registra a movimentacao (EST-04)', async () => {
-      prisma.material.updateMany.mockResolvedValue({ count: 1 });
-      prisma.movimentacaoEstoque.create.mockResolvedValue({ id: 'mov-2' });
+      devolve(tx.movimentacaoEstoque.create, 'movimentacaoEstoque.create', { id: 'mov-2' });
 
       const resultado = await service.movimentar({
         materialId: 'm-1',
@@ -136,18 +207,26 @@ describe('EstoqueService', () => {
         quantidade: 5,
       });
 
-      expect(prisma.material.updateMany).toHaveBeenCalledWith({
+      expect(tx.material.updateMany).toHaveBeenCalledWith({
         where: { id: 'm-1', saldoAtual: { gte: 5 } },
         data: { saldoAtual: { decrement: 5 } },
       });
-      expect(prisma.movimentacaoEstoque.create).toHaveBeenCalled();
+      // A SAIDA e gravada como SAIDA e com quantidade positiva: quem da o sinal e o tipo.
+      expect(tx.movimentacaoEstoque.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            materialId: 'm-1',
+            tipo: TipoMovimentacao.SAIDA,
+            quantidade: 5,
+          }),
+        }),
+      );
+      expect(executadas).toEqual(['material.updateMany', 'movimentacaoEstoque.create']);
+      expect(prisma.material.updateMany).not.toHaveBeenCalled();
       expect(resultado).toEqual({ id: 'mov-2' });
     });
 
     it('SAIDA exatamente igual ao saldo e permitida (saldo vai a zero)', async () => {
-      prisma.material.updateMany.mockResolvedValue({ count: 1 });
-      prisma.movimentacaoEstoque.create.mockResolvedValue({ id: 'mov-3' });
-
       await expect(
         service.movimentar({ materialId: 'm-1', tipo: TipoMovimentacao.SAIDA, quantidade: 10 }),
       ).resolves.toBeDefined();
@@ -159,19 +238,19 @@ describe('EstoqueService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
 
       expect(prisma.$transaction).not.toHaveBeenCalled();
-      expect(prisma.material.updateMany).not.toHaveBeenCalled();
-      expect(prisma.movimentacaoEstoque.create).not.toHaveBeenCalled();
+      expect(tx.material.updateMany).not.toHaveBeenCalled();
+      expect(tx.movimentacaoEstoque.create).not.toHaveBeenCalled();
     });
 
     it('SAIDA concorrente: se o saldo acabou entre a leitura e a transacao, recusa e nao grava (EST-05)', async () => {
       // A leitura inicial viu saldo 10, mas o UPDATE condicional nao encontrou saldo suficiente.
-      prisma.material.updateMany.mockResolvedValue({ count: 0 });
+      devolve(tx.material.updateMany, 'material.updateMany', { count: 0 });
 
       await expect(
         service.movimentar({ materialId: 'm-1', tipo: TipoMovimentacao.SAIDA, quantidade: 8 }),
       ).rejects.toBeInstanceOf(BadRequestException);
 
-      expect(prisma.movimentacaoEstoque.create).not.toHaveBeenCalled();
+      expect(tx.movimentacaoEstoque.create).not.toHaveBeenCalled();
     });
 
     it('retorna 404 quando o material nao existe (EST-06)', async () => {
@@ -219,7 +298,6 @@ describe('EstoqueService', () => {
 
     it('ENTRADA (devolucao) para obra CONCLUIDA continua aceita (EST-09)', async () => {
       prisma.obra.findUnique.mockResolvedValue({ id: 'obra-1', status: 'CONCLUIDA' });
-      prisma.movimentacaoEstoque.create.mockResolvedValue({ id: 'mov-6' });
 
       await service.movimentar({
         materialId: 'm-1',
@@ -228,15 +306,13 @@ describe('EstoqueService', () => {
         quantidade: 2,
       });
 
-      expect(prisma.movimentacaoEstoque.create).toHaveBeenCalledWith(
+      expect(tx.movimentacaoEstoque.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ obraId: 'obra-1' }) }),
       );
     });
 
     it('aceita obra existente e a vincula a movimentacao', async () => {
       prisma.obra.findUnique.mockResolvedValue({ id: 'obra-1', status: 'ANDAMENTO' });
-      prisma.material.updateMany.mockResolvedValue({ count: 1 });
-      prisma.movimentacaoEstoque.create.mockResolvedValue({ id: 'mov-4' });
 
       await service.movimentar({
         materialId: 'm-1',
@@ -245,17 +321,38 @@ describe('EstoqueService', () => {
         quantidade: 2,
       });
 
-      expect(prisma.movimentacaoEstoque.create).toHaveBeenCalledWith(
+      expect(tx.movimentacaoEstoque.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ obraId: 'obra-1' }) }),
       );
     });
 
     it('nao consulta obra quando obraId nao e informado', async () => {
-      prisma.movimentacaoEstoque.create.mockResolvedValue({ id: 'mov-5' });
-
       await service.movimentar({ materialId: 'm-1', tipo: TipoMovimentacao.ENTRADA, quantidade: 1 });
 
       expect(prisma.obra.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------------------------------------------------------------- listagens
+  describe('listarMovimentacoes', () => {
+    beforeEach(() => {
+      prisma.movimentacaoEstoque.findMany.mockResolvedValue([]);
+    });
+
+    it('filtra pelo material quando materialId e informado', async () => {
+      await service.listarMovimentacoes('m-1');
+
+      expect(prisma.movimentacaoEstoque.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { materialId: 'm-1' } }),
+      );
+    });
+
+    it('sem materialId, nao filtra', async () => {
+      await service.listarMovimentacoes();
+
+      expect(prisma.movimentacaoEstoque.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: undefined }),
+      );
     });
   });
 

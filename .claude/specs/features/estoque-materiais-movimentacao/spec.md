@@ -9,10 +9,10 @@ material nunca muda e o alerta de "abaixo do mínimo" não tem como funcionar de
 
 ## Goals
 
-- [ ] Operador cadastra um material novo com unidade e estoque mínimo
-- [ ] Operador registra entrada/saída e o `saldoAtual` do material é atualizado atomicamente com o histórico de movimentação
-- [ ] Sistema recusa uma saída maior que o saldo disponível (nunca deixa `saldoAtual` negativo)
-- [ ] Sistema lista materiais com saldo no/abaixo do mínimo, para alerta de reposição
+- [x] Operador cadastra um material novo com unidade e estoque mínimo
+- [x] Operador registra entrada/saída e o `saldoAtual` do material é atualizado atomicamente com o histórico de movimentação
+- [x] Sistema recusa uma saída maior que o saldo disponível (nunca deixa `saldoAtual` negativo)
+- [x] Sistema lista materiais com saldo no/abaixo do mínimo, para alerta de reposição
 
 ## Out of Scope
 
@@ -33,7 +33,7 @@ material nunca muda e o alerta de "abaixo do mínimo" não tem como funcionar de
 | `materialId` que não existe em `movimentar` | Retorna 404 | Mesmo padrão de validação de FK usado em `ObrasService.alocarGesseiro` | y |
 | `obraId` opcional que não existe em `movimentar` | Retorna 404 | Mesma razão acima; evita erro de FK do banco vazando como 500 | y |
 | Implementação de `abaixoDoMinimo` | Busca todos os materiais e filtra em memória (`Number(saldoAtual) <= Number(estoqueMinimo)`) | TODO do repo aponta essa opção como alternativa ao `$queryRaw`; evita SQL cru e replica a mesma comparação que o front já faz hoje em `Estoque.tsx` | y |
-| Atomicidade de `movimentar` | `prisma.$transaction`: cria `MovimentacaoEstoque` **e** atualiza `material.saldoAtual` (increment/decrement) na mesma transação | TODO do repo instrui isso explicitamente; garante que nunca existe uma movimentação registrada sem o saldo refletir ela (ou vice-versa) | y |
+| Atomicidade de `movimentar` | `prisma.$transaction`: cria `MovimentacaoEstoque` **e** atualiza `material.saldoAtual` (increment/decrement) na mesma transação | TODO do repo instrui isso explicitamente; garante que nunca existe uma movimentação registrada sem o saldo refletir ela (ou vice-versa). A `SAIDA` decrementa com `updateMany` condicionado a `saldoAtual >= quantidade`, guarda contra duas saídas simultâneas que passariam juntas pela checagem inicial | y |
 
 **Open questions:** none - all resolved or logged above.
 
@@ -106,26 +106,26 @@ mínimo, para que eu saiba o que precisa ser reposto.
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| EST-01 | P1: Cadastrar material | Design | Pending |
-| EST-02 | P1: Cadastrar material (nome duplicado) | Design | Pending |
-| EST-03 | P1: Registrar entrada | Design | Pending |
-| EST-04 | P1: Registrar saída | Design | Pending |
-| EST-05 | P1: Registrar saída (saldo insuficiente) | Design | Pending |
-| EST-06 | P1: Registrar movimentação (404 material) | Design | Pending |
-| EST-07 | P1: Registrar movimentação (404 obra) | Design | Pending |
-| EST-08 | P2: Alerta abaixo do mínimo | Design | Pending |
-| EST-09 | P1: Registrar saída (obra encerrada) | Execute | Implementing |
+| EST-01 | P1: Cadastrar material | Execute | Verified |
+| EST-02 | P1: Cadastrar material (nome duplicado) | Execute | Verified |
+| EST-03 | P1: Registrar entrada | Execute | Verified |
+| EST-04 | P1: Registrar saída | Execute | Verified |
+| EST-05 | P1: Registrar saída (saldo insuficiente) | Execute | Verified |
+| EST-06 | P1: Registrar movimentação (404 material) | Execute | Verified |
+| EST-07 | P1: Registrar movimentação (404 obra) | Execute | Verified |
+| EST-08 | P2: Alerta abaixo do mínimo | Execute | Verified |
+| EST-09 | P1: Registrar saída (obra encerrada) | Execute | Verified |
 
 **ID format:** `EST-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 9 total, 0 mapped to tasks, 9 unmapped ⚠️ (Tasks phase ainda não rodou)
+**Coverage:** 9 total, 9 Verified. Implementada sem fase Tasks (fluxo `implementar-todo`); evidência e auditoria de testes em `validation.md` (2026-11-09).
 
 ---
 
 ## Success Criteria
 
-- [ ] Um operador consegue cadastrar material e registrar entrada/saída sem usar o Prisma Studio
-- [ ] `saldoAtual` nunca fica negativo em nenhum cenário testado
-- [ ] `GET /estoque/alertas` sempre reflete o `saldoAtual` mais recente após qualquer movimentação
+- [x] Um operador consegue cadastrar material e registrar entrada/saída sem usar o Prisma Studio
+- [x] `saldoAtual` nunca fica negativo em nenhum cenário testado
+- [x] `GET /estoque/alertas` sempre reflete o `saldoAtual` mais recente após qualquer movimentação

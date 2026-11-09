@@ -66,9 +66,18 @@
 - **Date**: 2026-10-29
 - **Status**: active
 
+### AD-009
+- **Decision**: Nenhum requisito de spec passa para `Verified` sem rodar o sub-agente `auditor-de-testes` (`.claude/agents/auditor-de-testes.md`) no service e no `.spec.ts` da feature. Mutação que o auditor aponta como não coberta vira teste, ou fica aceita com o motivo; o resultado vai numa seção `## Auditoria de testes` do `validation.md`.
+- **Reason**: O estoque foi dado como pronto com testes que não provavam a atomicidade: o mock de `$transaction` passava o próprio `prisma` como `tx`, então tirar uma escrita da transação não derrubava nenhum teste. O auditor existia desde outubro, mas nada o chamava.
+- **Trade-off**: Fechar uma spec fica mais lento (uma rodada de auditoria e, em geral, testes a mais). A regra vive no `CLAUDE.md` (seção "Auditoria de testes") e no passo 7 da skill `implementar-todo`: é instrução para o agente, não trava. Quem revisa o PR confere a seção no `validation.md`.
+- **Scope**: Todas as features, inclusive o Verifier do fluxo `tlc-spec-driven`. Primeira aplicação: `estoque-materiais-movimentacao` (2026-11-09).
+- **Date**: 2026-11-09
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: `obras-transicoes-status` em Tasks (2026-10-29), branch `feat/obras-transicoes-status` criado a partir de `main` depois do merge da PR #6 (`estoque-agente-proativo`, verificada: 69/69 EAP `Verified`, `validation.md` PASS na rodada 2).
+- **Estoque fechado (2026-11-09)**: `estoque-materiais-movimentacao` com EST-01..09 `Verified` pela AD-009 (ver `validation.md`). Só testes mudaram: `estoque.service.spec.ts` (mock de transação com `tx` próprio) e duas specs de DTO novas; código de produção intacto. Não commitado.
 - **Phase / Task**: Spec, Design e Tasks aprovados (2026-10-29). Execute **adiado pelo usuário** — nenhum código escrito. Ao retomar, começar pela T1.
 - **Decisões do usuário (2026-10-29)**: endpoint por ação; confirmação só no concluir (lista quem recebe crédito) e no cancelar; remover gesseiro permitido em obra aberta, inclusive o último de `ANDAMENTO`; "Iniciar obra" sem equipe desabilitado com "Aloque pelo menos um gesseiro para iniciar"; mensagens novas com acento; 404 ao remover gesseiro não alocado; crédito de gesseiro removido fica para a spec futura "remanejamento de gesseiros".
 - **Ajuste no agente de estoque (2026-10-29, fora da feature atual)**: T30–T32 / EAP-70..73: materiais usados numa obra sem previsão aparecem na tabela da obra ("não previsto") e o agente sabe de onde veio esse consumo. API 244 testes, web 140. Rastreabilidade em `Implementing` até um novo Verifier.
