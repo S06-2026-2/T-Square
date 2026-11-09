@@ -33,6 +33,19 @@ describe('sessao', () => {
     expect(NOME_CACHE_API).toBe('api-dados');
   });
 
+  it('apaga exatamente o cache em que o service worker grava (OFF-11/12)', async () => {
+    // O sw.ts passa NOME_CACHE_API de regras-cache ao NetworkFirst; é esse que o logout apaga.
+    const { NOME_CACHE_API: cacheDoSw } = await import('../pwa/regras-cache');
+    const deletar = jest.fn().mockResolvedValue(true);
+    instalarCaches(deletar);
+
+    await limparCacheApi();
+
+    expect(NOME_CACHE_API).toBe(cacheDoSw);
+    expect(deletar).toHaveBeenCalledTimes(1);
+    expect(deletar).toHaveBeenCalledWith(cacheDoSw);
+  });
+
   describe('limparCacheApi', () => {
     it('sem Cache Storage no navegador, resolve sem erro', async () => {
       expect(typeof caches).toBe('undefined');

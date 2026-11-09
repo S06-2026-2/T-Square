@@ -1,3 +1,4 @@
+import { NOME_CACHE_API } from '../pwa/nomes-cache';
 import type { LoginResponse } from '../types';
 import { auth } from './api';
 
@@ -7,8 +8,8 @@ import { auth } from './api';
  * módulo encerra a sessão.
  */
 
-/** Nome do cache de `GET /api/**` do service worker (o `sw.ts` usa o mesmo nome). */
-export const NOME_CACHE_API = 'api-dados';
+/** Nome do cache de `GET /api/**`: o mesmo do service worker, de `pwa/nomes-cache.ts`. */
+export { NOME_CACHE_API };
 
 /** Apaga o cache de dados. Sem Cache Storage (sem SW, jsdom) ou com falha, segue sem erro. */
 export async function limparCacheApi(): Promise<void> {
