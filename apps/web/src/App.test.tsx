@@ -6,7 +6,7 @@ import App from './App';
 jest.mock('./lib/api', () => ({
   api: { get: jest.fn(async () => []) },
   auth: {
-    estaLogado: () => true,
+    estaLogado: jest.fn(() => true),
     getUsuario: () => ({ nome: 'Admin' }),
     logout: jest.fn(),
   },
@@ -38,5 +38,40 @@ describe('App', () => {
     expect(links[0]).toHaveTextContent('Visao geral');
     expect(links[0]).toHaveAttribute('href', '/dashboard');
     await screen.findByRole('heading', { level: 1, name: 'Obras' });
+  });
+});
+
+describe('App: rota privada sem token (AD-010)', () => {
+  const { auth: authMock } = jest.requireMock('./lib/api');
+  let deletar: jest.Mock;
+
+  beforeEach(() => {
+    deletar = jest.fn().mockResolvedValue(true);
+    Object.defineProperty(globalThis, 'caches', {
+      value: { delete: deletar },
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  afterEach(() => {
+    authMock.estaLogado.mockReturnValue(true);
+    delete (globalThis as { caches?: unknown }).caches;
+  });
+
+  it('sem token, vai para o login e apaga o cache de dados que tiver sobrado', async () => {
+    authMock.estaLogado.mockReturnValue(false);
+
+    renderEm('/estoque');
+
+    expect(await screen.findByRole('button', { name: 'Entrar' })).toBeInTheDocument();
+    expect(deletar).toHaveBeenCalledWith('api-dados');
+  });
+
+  it('logado, não mexe no cache', async () => {
+    renderEm('/obras');
+
+    await screen.findByRole('heading', { level: 1, name: 'Obras' });
+    expect(deletar).not.toHaveBeenCalled();
   });
 });
