@@ -1,6 +1,7 @@
 // Auditoria de responsividade (spec pwa-instalavel-responsivo, RSP-01..RSP-10).
 //
-// Percorre 14 telas/estados em 6 larguras (84 combinações) num Chrome headless e mede o layout.
+// Percorre 15 telas/estados em 6 larguras com o UA do Safari da Apple (90 combinações) e, de novo,
+// 14 estados em 1024/1366 com o Chrome de desktop sem toque (28), num total de 118, e mede o layout.
 // Sai com código 1 se qualquer medida falhar, se algum estado não montar (NAO_MONTADO) ou se
 // sobrar dado "[audit]" no banco. Não existe estado "pulado".
 //
@@ -11,6 +12,12 @@
 //
 // Variáveis: AUDIT_BASE_URL, AUDIT_API_URL (padrão http://localhost:3000), CHROME_PATH,
 // AUDIT_API_CONTAINER (padrão gesso_api). Screenshots e relatorio.json vão para apps/web/.audit/.
+//
+// "Instalar app" (RSP-08, PWA-10): o headless nunca dispara beforeinstallprompt, então o botão só
+// existe no modo 'ios'. Por isso cada largura usa o UA do Safari de um aparelho Apple real
+// (iPhone até 768px, iPad em 1024/1366): o botão aparece em toda página logada e é medido.
+// A passada "chrome" em 1024/1366 mede o desktop com mouse como ele é no Chrome (sem o botão, que
+// lá só aparece com beforeinstallprompt): nela o botão não é exigido e o estado da instrução não roda.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -25,14 +32,26 @@ const CONTAINER = process.env.AUDIT_API_CONTAINER ?? 'gesso_api';
 const SAIDA = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.audit');
 const ESPERA_MONTAGEM = 5000;
 
+const UA_IPHONE =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+const UA_IPAD =
+  'Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+
 const LARGURAS = [
-  { largura: 320, altura: 640, toque: true, escala: 2 },
-  { largura: 360, altura: 780, toque: true, escala: 2 },
-  { largura: 390, altura: 844, toque: true, escala: 2 },
-  { largura: 768, altura: 1024, toque: true, escala: 1 },
-  { largura: 1024, altura: 768, toque: false, escala: 1 },
-  { largura: 1366, altura: 768, toque: false, escala: 1 },
+  { largura: 320, altura: 640, toque: true, escala: 2, ua: UA_IPHONE },
+  { largura: 360, altura: 780, toque: true, escala: 2, ua: UA_IPHONE },
+  { largura: 390, altura: 844, toque: true, escala: 2, ua: UA_IPHONE },
+  { largura: 768, altura: 1024, toque: true, escala: 1, ua: UA_IPHONE },
+  { largura: 1024, altura: 768, toque: false, escala: 1, ua: UA_IPAD },
+  { largura: 1366, altura: 768, toque: false, escala: 1, ua: UA_IPAD },
+  // Chrome de desktop, sem toque e sem trocar o UA (RSP-05 com mouse).
+  { largura: 1024, altura: 768, toque: false, escala: 1, ua: null, rotulo: '1024-chrome' },
+  { largura: 1366, altura: 768, toque: false, escala: 1, ua: null, rotulo: '1366-chrome' },
 ];
+
+/** Estados medidos numa largura: a instrução de instalação só existe com o UA da Apple. */
+const estadosDa = (v) => ESTADOS.filter((e) => v.ua || !e.precisaInstalar);
+const nomeDa = (v) => v.rotulo ?? String(v.largura);
 
 // ---------------------------------------------------------------- fixture
 
@@ -111,6 +130,13 @@ function visivelComTexto(seletor, texto) {
   });
 }
 
+function botaoInstalarVisivel() {
+  const b = document.querySelector('.btn-instalar');
+  if (!b) return false;
+  const r = b.getBoundingClientRect();
+  return r.width > 0 && r.height > 0;
+}
+
 function formularioAberto() {
   const f = document.querySelector('.conteudo form.formulario');
   return Boolean(f && f.getBoundingClientRect().height > 0);
@@ -119,6 +145,7 @@ function formularioAberto() {
 // ---------------------------------------------------------------- estados
 
 const ALERTA = '[audit] Alerta ativo';
+const INSTRUCAO_IOS = 'Toque em Compartilhar e depois em Adicionar à Tela de Início';
 const SILENCIADO = '[audit] Silenciado';
 
 /**
@@ -131,6 +158,17 @@ const ESTADOS = [
     rota: '/login',
     logado: false,
     montar: (p) => esperar(p, visivelComTexto, '.login-card input', ''),
+  },
+  {
+    // PWA-10: instrução do Safari do iOS aberta pelo "Instalar app" (só abre; nada a enviar).
+    id: 'instalar-instrucao',
+    rota: '/obras',
+    precisaInstalar: true,
+    montar: async (p) => {
+      if (!(await esperar(p, botaoInstalarVisivel))) return false;
+      await p.evaluate(() => document.querySelector('.btn-instalar').click());
+      return esperar(p, visivelComTexto, '#instrucao-instalar', INSTRUCAO_IOS);
+    },
   },
   {
     id: 'dashboard',
@@ -396,6 +434,14 @@ async function medir(page, logado, largura) {
         falha('RSP-02', `.tabela-wrap vai de ${Math.round(r.left)} a ${Math.round(r.right)} (viewport ${vw})`);
     }
 
+    // PWA-10: a instrução aberta cabe inteira na largura da tela.
+    const instrucao = document.querySelector('#instrucao-instalar');
+    if (instrucao && visivel(instrucao)) {
+      const r = instrucao.getBoundingClientRect();
+      if (r.left < -tolerancia || r.right > vw + tolerancia || r.top < -tolerancia)
+        falha('PWA-10', `instrução vai de x=${Math.round(r.left)} a ${Math.round(r.right)}, y=${Math.round(r.top)} (viewport ${vw})`);
+    }
+
     if (logado) {
       const sidebar = document.querySelector('.sidebar');
       const nav = document.querySelector('.nav');
@@ -487,9 +533,10 @@ async function auditar(browser, login, ctx, relatorio) {
       isMobile: v.toque,
       hasTouch: v.toque,
     });
+    if (v.ua) await page.setUserAgent(v.ua);
 
-    for (const estado of ESTADOS) {
-      const chave = `${v.largura}/${estado.id}`;
+    for (const estado of estadosDa(v)) {
+      const chave = `${nomeDa(v)}/${estado.id}`;
       const logado = estado.logado !== false;
       let resultado;
       try {
@@ -508,8 +555,14 @@ async function auditar(browser, login, ctx, relatorio) {
         await page.goto(`${BASE}${estado.rota}`, { waitUntil: 'networkidle0', timeout: 30000 });
 
         const montado = (!estado.precisaFixture || ctx.fixture) && (await estado.montar(page, ctx));
-        if (!montado) {
-          resultado = { status: 'NAO_MONTADO', falhas: [] };
+        // RSP-08/PWA-10: com o UA do Safari da Apple, toda página logada tem o "Instalar app".
+        // Sem ele, o alvo de toque não seria medido: o estado não conta como montado.
+        const semBotao = montado && logado && Boolean(v.ua) && !(await esperar(page, botaoInstalarVisivel));
+        if (!montado || semBotao) {
+          resultado = {
+            status: 'NAO_MONTADO',
+            falhas: semBotao ? ['botão "Instalar app" (.btn-instalar) ausente na página logada'] : [],
+          };
         } else {
           await page.evaluate(() => document.fonts.ready);
           const falhas = [];
@@ -521,13 +574,13 @@ async function auditar(browser, login, ctx, relatorio) {
           falhas.push(...(await medir(page, logado, v.largura)));
           resultado = { status: falhas.length ? 'FALHA' : 'OK', falhas };
         }
-        await page.screenshot({ path: path.join(SAIDA, `${v.largura}-${estado.id}.png`), fullPage: true });
+        await page.screenshot({ path: path.join(SAIDA, `${nomeDa(v)}-${estado.id}.png`), fullPage: true });
       } catch (erro) {
         resultado = { status: 'NAO_MONTADO', falhas: [`erro: ${erro.message.split('\n')[0]}`] };
       }
       relatorio[chave] = resultado;
       const detalhe = resultado.falhas.length ? `  ${resultado.falhas.join(' | ')}` : '';
-      console.log(`${String(v.largura).padStart(4)}  ${estado.id.padEnd(24)} ${resultado.status}${detalhe}`);
+      console.log(`${nomeDa(v).padStart(11)}  ${estado.id.padEnd(24)} ${resultado.status}${detalhe}`);
     }
     await page.close();
   }
@@ -571,7 +624,7 @@ async function principal() {
   }
 
   const valores = Object.values(relatorio);
-  const total = LARGURAS.length * ESTADOS.length;
+  const total = LARGURAS.reduce((n, v) => n + estadosDa(v).length, 0);
   const naoMontados = total - valores.filter((r) => r.status !== 'NAO_MONTADO').length;
   const medidos = total - naoMontados;
   const falhas = valores.filter((r) => r.status === 'FALHA').length;
@@ -589,6 +642,7 @@ principal()
   .catch((erro) => {
     console.error(`[audit] erro: ${erro.stack ?? erro}`);
     limparFixture();
-    console.log(`medidos: 0/${LARGURAS.length * ESTADOS.length}, nao montados: ${LARGURAS.length * ESTADOS.length}, falhas: 0`);
+    const total = LARGURAS.reduce((n, v) => n + estadosDa(v).length, 0);
+    console.log(`medidos: 0/${total}, nao montados: ${total}, falhas: 0`);
     process.exit(1);
   });

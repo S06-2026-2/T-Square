@@ -23,7 +23,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 | Code Layer | Required Test Type | Coverage Expectation | Location Pattern | Run Command |
 | --- | --- | --- | --- | --- |
-| CSS / estrutura de layout (web) | browser (auditoria Chrome headless) | Toda medida dos RSP da task nas 6 larguras × 14 telas/estados; o script sai ≠ 0 em qualquer falha | `apps/web/scripts/audit-responsive.mjs` | `npm run audit:responsive --workspace apps/web` |
+| CSS / estrutura de layout (web) | browser (auditoria Chrome headless) | Toda medida dos RSP da task nas 6 larguras × 15 telas/estados (mais 14 estados em 1024/1366 com o Chrome de desktop); o script sai ≠ 0 em qualquer falha | `apps/web/scripts/audit-responsive.mjs` | `npm run audit:responsive --workspace apps/web` |
 | Service worker em execução (web) | browser (auditoria Chrome headless, `setOfflineMode`) | OFF-01/03/04/05/06/07/11, PWA-01/03 de ponta a ponta no build de produção | `apps/web/scripts/audit-pwa.mjs` | `npm run audit:pwa --workspace apps/web` |
 | Regras puras do SW (web) | unit (`@jest-environment node`) | Todo ramo de `ehRequisicaoDeDados` (método, origem, `/api/`, `/api/auth/`), plugin (200 vs outros, 7 dias exatos e 1 ms depois, `X-From-Cache`) | `apps/web/src/pwa/*.test.ts` | `npm run test --workspace apps/web` |
 | Libs e hooks (web) | unit | Todo AC da task, incluindo os ramos de falha (sem `caches`, sem `randomUUID`, 0/409/422/401) e o texto exato das mensagens | `apps/web/src/lib/*.test.ts` | `npm run test --workspace apps/web` |
@@ -43,7 +43,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 | --- | --- | --- |
 | Quick | Tasks com testes unitários de um workspace | `npm run test --workspace apps/api` ou `npm run test --workspace apps/web` (o do workspace tocado) |
 | Full (API) | Tasks com e2e e fim das fases 2 e 3 | `npm run test --workspace apps/api && docker exec gesso_api npm run test:e2e` |
-| Browser | Tasks de layout e de SW | `npm run build --workspace apps/web`, `npx vite preview --port 4173` (em `apps/web`, em segundo plano) e `npm run audit:responsive --workspace apps/web` ou `npm run audit:pwa --workspace apps/web`. Precisa da API no Docker (`gesso_api`, para a fixture). O `audit:responsive` só é verde com `medidos: 84/84, nao montados: 0, falhas: 0`; um estado não montado reprova o RSP-01 |
+| Browser | Tasks de layout e de SW | `npm run build --workspace apps/web`, `npx vite preview --port 4173` (em `apps/web`, em segundo plano) e `npm run audit:responsive --workspace apps/web` ou `npm run audit:pwa --workspace apps/web`. Precisa da API no Docker (`gesso_api`, para a fixture). O `audit:responsive` só é verde com `medidos: 118/118, nao montados: 0, falhas: 0` (84/84 até o L3; 118/118 desde o L4); um estado não montado reprova o RSP-01, e uma página logada sem o "Instalar app" conta como não montada |
 | Build | Schema, controller, config e fim de fase | `npm run build && npm test` (raiz: build de API e web, depois as duas suítes) |
 
 Base antes da feature: **API 251 testes, web 147** (todos passando em 2026-11-09; medido de novo no branch `feat/pwa-instalavel-responsivo` em `4fe273c`, a partir da `main` `8e99dc8`, com o mesmo resultado). Nenhuma task pode terminar com menos testes do que começou.
@@ -129,18 +129,19 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [x] Percorre `/login`, `/dashboard` (+ painel "Silenciados" aberto, + justificativa de um alerta aberta pelo "+"), `/obras` (+ "Nova obra", + `details` abertos), `/gesseiros` (+ extrato, + "Novo gesseiro"), `/estoque` (+ "Registrar entrada/saida", + "Novo material", + vindo do "Resolver" de um alerta com `?alerta=&material=&quantidade=`), ou seja, 14 estados, em 320, 360, 390, 768, 1024 e 1366px, com `isMobile`/`hasTouch` nas larguras ≤ 768
+- [x] Percorre `/login`, `/dashboard` (+ painel "Silenciados" aberto, + justificativa de um alerta aberta pelo "+"), `/obras` (+ "Nova obra", + `details` abertos), `/gesseiros` (+ extrato, + "Novo gesseiro"), `/estoque` (+ "Registrar entrada/saida", + "Novo material", + vindo do "Resolver" de um alerta com `?alerta=&material=&quantidade=`), ou seja, 14 estados (15 com a instrução de instalação aberta, desde o L4), em 320, 360, 390, 768, 1024 e 1366px, com `isMobile`/`hasTouch` nas larguras ≤ 768
 - [x] **Fixture** (`apps/api/scripts/fixture-auditoria.mjs`, Prisma Client do container, rodado pela auditoria com `docker exec gesso_api node scripts/fixture-auditoria.mjs preparar|limpar`):
   - `preparar` primeiro apaga qualquer resto `[audit]`. Depois cria dois materiais `[audit] Alerta ativo` (saldo 0, mínimo 10) e `[audit] Silenciado`, uma `AnaliseEstoque` `MANUAL`/`SUCESSO` com `iniciadoEm` em 2000-01-01, um `AlertaEstoque` `ATIVO` `REPOSICAO` com justificativa no primeiro material e um `AlertaEstoque` `DISPENSADO` com `dispensadoEm` = agora no segundo. Imprime em JSON `{ alertaId, materialId, quantidade }`
   - A análise com data de 2000 nunca vira a "última análise" (as consultas ordenam por `iniciadoEm desc`), então não muda o aviso do dashboard nem o catch-up do agendador (`agendador-agente.service.ts:54-58`). O agente LLM não é chamado
   - `limpar` apaga alertas, análise e materiais `[audit]`. A auditoria chama `limpar` num `finally`, inclusive quando falha ou é interrompida (`SIGINT`); ao terminar, nenhum `[audit]` sobra no banco (conferido pela própria auditoria)
   - Mesmo aviso do e2e no Handoff: não rodar durante uma análise real nem perto de uma demonstração do agente
-- [x] **Estado não montado é falha, nunca "pulado"**: para cada um dos 14 estados, a auditoria confere que o estado foi de fato montado antes de medir. Exemplos: o painel `#painel-silenciados` visível com o material `[audit] Silenciado`; a `.justificativa` do alerta `[audit]` visível; `[data-testid="aviso-alerta"]` visível no `/estoque` do "Resolver"; o formulário e o extrato abertos. Se algum não montar (fixture falhou, elemento não apareceu em 5 s), o estado sai como `NAO_MONTADO` no relatório e a auditoria **termina com código 1**, mesmo que as outras medidas tenham passado. Não existe status "pulado"
+- [x] **Estado não montado é falha, nunca "pulado"**: para cada um dos estados, a auditoria confere que o estado foi de fato montado antes de medir. Exemplos: o painel `#painel-silenciados` visível com o material `[audit] Silenciado`; a `.justificativa` do alerta `[audit]` visível; `[data-testid="aviso-alerta"]` visível no `/estoque` do "Resolver"; o formulário e o extrato abertos. Se algum não montar (fixture falhou, elemento não apareceu em 5 s), o estado sai como `NAO_MONTADO` no relatório e a auditoria **termina com código 1**, mesmo que as outras medidas tenham passado. Não existe status "pulado"
 - [x] **Ajuste da revisão do L1**: a auditoria trata `SIGINT` e `SIGTERM` (limpa a fixture e sai com 130) e, no início de cada execução, conta e apaga restos `[audit]` antes do `preparar`. Prova: um `preparar` solto deixou 5 restos; a execução seguinte registrou "5 resto(s) [audit] de uma execução anterior: limpando" e terminou com `{"restos":0}`. Ctrl+C real não é disparável por automação no Windows; a limpeza do início cobre esse caso
 - [x] **Trava de banco**: `fixture-auditoria.mjs` recusa (exit 3, sem abrir conexão, em `preparar`, `limpar` e `contar`) qualquer `DATABASE_URL` cujo host não seja `localhost`, `127.0.0.1`, `::1` ou `db`. Testado com host do Render, IP de rede, URL vazia e URL inválida (todos recusados) e com `db`/`localhost` (aceitos)
 - [x] A auditoria nunca envia formulários: o `/estoque` do "Resolver" é só aberto, nunca salvo, para o alerta `[audit]` não ser resolvido
 - [x] Mede: `scrollWidth == innerWidth`; `.tabela-wrap` rolando por dentro; `.nav` fixa com 4 links e topo ≤ 64px (≤ 900px); último filho de `.conteudo` acima da `.nav` no fim da rolagem; `font-size` ≥ 16 em `input/select/textarea` (≤ 900px); alvos do RSP-08 ≥ 44×44; extrato no topo da viewport depois de selecionar um gesseiro em 360px
-- [x] Imprime um relatório por tela × largura (84 combinações) e sai com código 1 se qualquer medida falhar ou qualquer estado ficar `NAO_MONTADO`. A última linha resume `medidos: N/84, nao montados: M, falhas: F`; o gate só é verde com `84/84, 0, 0`
+- [x] Imprime um relatório por tela × largura (84 combinações; 118 desde o L4) e sai com código 1 se qualquer medida falhar ou qualquer estado ficar `NAO_MONTADO`. A última linha resume `medidos: N/118, nao montados: M, falhas: F`; o gate só é verde com `118/118, 0, 0`
+- [x] **Ajuste da revisão do L4 ("Instalar app" medido de verdade)**: o headless nunca dispara `beforeinstallprompt`, então sem ajuste o `.btn-instalar` não existia e o RSP-08 dele era medido sobre uma lista vazia. Cada largura usa o UA do Safari de um aparelho Apple real (iPhone em 320–768, iPad em 1024/1366), em que o botão aparece no modo `'ios'`. (1) Em toda página logada o `.btn-instalar` precisa estar visível; sem ele o estado sai `NAO_MONTADO` ("botão Instalar app ausente na página logada") e a auditoria reprova. (2) Estado novo `instalar-instrucao` (`/obras`, clique no botão, `#instrucao-instalar` com o texto do PWA-10) e medida PWA-10: a instrução fica inteira dentro da largura da tela. Prova: com o botão forçado a 30×30 no CSS do build, RSP-08 reprova (`button.btn-instalar "Instalar app" 30x30`, exit 1); com o botão escondido, as páginas logadas saem `NAO_MONTADO` (exit 1). (3) Passada extra `1024-chrome` e `1366-chrome`: Chrome de desktop sem toque e sem trocar o UA, com os 14 estados (sem a instrução de instalação e sem exigir o botão), para o RSP-05 continuar medido com mouse. Total: 15 × 6 + 14 × 2 = 118
 - [x] Rodado contra o código atual, **falha** e aponta os mesmos problemas da auditoria de 2026-11-09 (transbordo em 320–390px, topo esticado em 768px, inputs de 14px, alvos pequenos). Esse é o "vermelho" do ciclo
 - [x] Screenshots em `apps/web/.audit/`, ignorado pelo git
 - [x] `CHROME_PATH` configurável, com padrão do Chrome do Windows
@@ -765,6 +766,8 @@ T28 → T29 → T30 → T31
 
 ### T22: Indicador de conexão no topo
 
+**Status**: ✅ Concluída (L4)
+
 **What**: `IndicadorConexao` com o ícone `wifi-off` vermelho, no topo ao lado do avatar.
 **Where**: `apps/web/src/components/IndicadorConexao.tsx` (+ `.test.tsx`), `apps/web/src/components/Icone.tsx`, `apps/web/src/components/Layout.tsx`, `apps/web/src/index.css`
 **Depends on**: None (dentro da fase; usa T17)
@@ -778,11 +781,11 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Desatualizado: renderiza `role="img"` com `aria-label` e `title` exatos "Dados possivelmente desatualizados" e nenhum texto visível
-- [ ] Não desatualizado: não renderiza nada
-- [ ] Testes: offline mostra; `registrarOrigem('cache')` mostra; `registrarOrigem('rede')` com online esconde
-- [ ] Cor `var(--alerta)`; aparece no topo mobile e na área do usuário da sidebar
-- [ ] Gate quick do web passando
+- [x] Desatualizado: renderiza `role="img"` com `aria-label` e `title` exatos "Dados possivelmente desatualizados" e nenhum texto visível
+- [x] Não desatualizado: não renderiza nada
+- [x] Testes: offline mostra; `registrarOrigem('cache')` mostra; `registrarOrigem('rede')` com online esconde
+- [x] Cor `var(--alerta)`; aparece no topo mobile e na área do usuário da sidebar
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -792,6 +795,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T23: Telas recarregam ao reconectar
+
+**Status**: ✅ Concluída (L4)
 
 **What**: `useAoReconectar(carregar)` em `Dashboard`, `Obras`, `Gesseiros` (lista + extrato aberto), `Estoque` e `AlertasEstoque`.
 **Where**: `apps/web/src/pages/` → `Dashboard.tsx`, `Obras.tsx`, `Gesseiros.tsx`, `Estoque.tsx`; `apps/web/src/components/AlertasEstoque.tsx` (+ testes de cada um)
@@ -806,10 +811,10 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Em cada tela, `window.dispatchEvent(new Event('online'))` chama de novo o GET da tela (`api.get` mockado)
-- [ ] Teste em `Estoque` e `Gesseiros`: com um formulário aberto e preenchido, o evento `online` recarrega os dados e o formulário continua aberto com os valores
-- [ ] `Gesseiros` com extrato aberto: o extrato também é buscado de novo
-- [ ] Gate quick do web passando
+- [x] Em cada tela, `window.dispatchEvent(new Event('online'))` chama de novo o GET da tela (`api.get` mockado)
+- [x] Teste em `Estoque` e `Gesseiros`: com um formulário aberto e preenchido, o evento `online` recarrega os dados e o formulário continua aberto com os valores
+- [x] `Gesseiros` com extrato aberto: o extrato também é buscado de novo
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -819,6 +824,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T24: Estado de instalação
+
+**Status**: ✅ Concluída (L4)
 
 **What**: `lib/instalacao.ts` com `iniciarCapturaInstalacao()` e `useInstalacao()`.
 **Where**: `apps/web/src/lib/instalacao.ts`, `instalacao.test.ts`
@@ -833,12 +840,12 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `beforeinstallprompt` chama `preventDefault()` e o modo vira `'prompt'`
-- [ ] `instalar()` chama `prompt()`, aguarda `userChoice` e o modo vira `null` tanto em `accepted` quanto em `dismissed`; um novo `beforeinstallprompt` volta a `'prompt'`
-- [ ] `appinstalled` vira `null`
-- [ ] `display-mode: standalone` ou `navigator.standalone`: `null`, mesmo com evento
-- [ ] UA de iPhone/iPad Safari (e `MacIntel` com `maxTouchPoints > 1`): `'ios'`; com `CriOS`/`FxiOS`/`EdgiOS`: `null`; Firefox desktop sem evento: `null`
-- [ ] Gate quick do web passando
+- [x] `beforeinstallprompt` chama `preventDefault()` e o modo vira `'prompt'`
+- [x] `instalar()` chama `prompt()`, aguarda `userChoice` e o modo vira `null` tanto em `accepted` quanto em `dismissed`; um novo `beforeinstallprompt` volta a `'prompt'`
+- [x] `appinstalled` vira `null`
+- [x] `display-mode: standalone` ou `navigator.standalone`: `null`, mesmo com evento
+- [x] UA de iPhone/iPad Safari (e `MacIntel` com `maxTouchPoints > 1`): `'ios'`; com `CriOS`/`FxiOS`/`EdgiOS`: `null`; Firefox desktop sem evento: `null`
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -848,6 +855,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T25: Botão "Instalar app"
+
+**Status**: ✅ Concluída (L4)
 
 **What**: `BotaoInstalar` (prompt e instrução do iOS) no topo mobile e na área do usuário da sidebar; ícone `instalar`.
 **Where**: `apps/web/src/components/BotaoInstalar.tsx` (+ `.test.tsx`), `apps/web/src/components/Icone.tsx`, `apps/web/src/components/Layout.tsx`, `apps/web/src/index.css`
@@ -862,11 +871,12 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `modo === null`: nada renderizado
-- [ ] `'prompt'`: botão com nome acessível "Instalar app"; clique chama `instalar()`
-- [ ] `'ios'`: o clique abre o texto exato "Toque em Compartilhar e depois em Adicionar à Tela de Início"; Esc ou clique fora fecha
-- [ ] `.btn-instalar` com 44×44 no ≤ 900px (regra da T4)
-- [ ] Gate quick do web passando; auditoria de responsividade continua verde (fim da fase 5)
+- [x] `modo === null`: nada renderizado
+- [x] `'prompt'`: botão com nome acessível "Instalar app"; clique chama `instalar()`
+- [x] `'ios'`: o clique abre o texto exato "Toque em Compartilhar e depois em Adicionar à Tela de Início"; Esc ou clique fora fecha
+- [x] `.btn-instalar` com 44×44 no ≤ 900px (regra da T4), **medido pela auditoria** (UA do Safari de iPhone/iPad; presença obrigatória nas páginas logadas, ver T1)
+- [x] Estado `instalar-instrucao` da auditoria: a instrução do PWA-10 aberta cabe na tela em todas as larguras (o painel é `position: fixed` com margens de 16px no ≤ 900px)
+- [x] Gate quick do web passando; auditoria de responsividade verde com `118/118, 0, 0` contra o `vite preview` 4173 (fim da fase 5)
 
 **Tests**: unit + browser
 **Gate**: quick (web) + browser
