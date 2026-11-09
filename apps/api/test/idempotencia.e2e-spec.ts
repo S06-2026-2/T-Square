@@ -205,6 +205,7 @@ describe('Idempotencia (e2e)', () => {
     expect(primeira.status).toBe(201);
     expect(segunda.status).toBe(409);
     expect(segunda.body.message).toBe('Este envio ainda está sendo processado.');
+    expect(segunda.body.codigo).toBe('EM_PROCESSAMENTO');
     expect(await contarLancamentos(gesseiro.id)).toBe(1);
   });
 

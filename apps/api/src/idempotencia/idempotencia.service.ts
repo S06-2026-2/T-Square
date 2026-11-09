@@ -9,6 +9,19 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClientePrisma, ContextoIdempotencia } from './tipos';
 
+/** Código no corpo do 409 de chave em processamento (IDP-04/08): o front decide por ele, não pelo texto. */
+export const CODIGO_EM_PROCESSAMENTO = 'EM_PROCESSAMENTO';
+
+/** 409 de chave em processamento: corpo padrão do Nest + `codigo` (aditivo). */
+function emProcessamento() {
+  return new ConflictException({
+    statusCode: 409,
+    message: 'Este envio ainda está sendo processado.',
+    error: 'Conflict',
+    codigo: CODIGO_EM_PROCESSAMENTO,
+  });
+}
+
 /** Vida de uma chave (IDP-05). */
 export const VIDA_CHAVE_MS = 24 * 60 * 60 * 1000;
 
@@ -47,7 +60,7 @@ export class IdempotenciaService {
         const [{ ok }] = await tx.$queryRaw<{ ok: boolean }[]>`
           SELECT pg_try_advisory_xact_lock(hashtextextended(${textoTrava}::text, 0)) AS ok`;
         if (!ok) {
-          throw new ConflictException('Este envio ainda está sendo processado.');
+          throw emProcessamento();
         }
 
         const existente = await tx.chaveIdempotencia.findUnique({
@@ -80,7 +93,7 @@ export class IdempotenciaService {
         } catch (erro) {
           // Colisao no indice unico que passou pela trava: trata como "em processamento".
           if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === 'P2002') {
-            throw new ConflictException('Este envio ainda está sendo processado.');
+            throw emProcessamento();
           }
           throw erro;
         }

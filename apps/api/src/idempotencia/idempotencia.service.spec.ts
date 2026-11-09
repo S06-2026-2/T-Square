@@ -119,6 +119,9 @@ describe('IdempotenciaService', () => {
 
       await expect(promessa).rejects.toBeInstanceOf(ConflictException);
       await expect(promessa).rejects.toThrow('Este envio ainda está sendo processado.');
+      await expect(promessa).rejects.toMatchObject({
+        response: { message: 'Este envio ainda está sendo processado.', codigo: 'EM_PROCESSAMENTO' },
+      });
       expect(tx.chaveIdempotencia.findUnique).not.toHaveBeenCalled();
       expect(criar).not.toHaveBeenCalled();
       expect(tx.chaveIdempotencia.create).not.toHaveBeenCalled();
@@ -210,7 +213,9 @@ describe('IdempotenciaService', () => {
         }),
       );
 
-      await expect(service.executar(ctx, criar)).rejects.toBeInstanceOf(ConflictException);
+      const promessa = service.executar(ctx, criar);
+      await expect(promessa).rejects.toBeInstanceOf(ConflictException);
+      await expect(promessa).rejects.toMatchObject({ response: { codigo: 'EM_PROCESSAMENTO' } });
     });
   });
 
