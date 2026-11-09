@@ -88,3 +88,31 @@ export function criarPluginRecebimento(agora: () => number = Date.now): WorkboxP
 }
 
 export const pluginRecebimento = criarPluginRecebimento();
+
+/** Classes do Workbox que a estratégia usa; injetadas para o teste conferir as opções. */
+export interface ClassesWorkbox<E> {
+  NetworkFirst: new (opcoes: {
+    cacheName: string;
+    networkTimeoutSeconds: number;
+    plugins: WorkboxPlugin[];
+  }) => E;
+  CacheableResponsePlugin: new (opcoes: { statuses: number[] }) => WorkboxPlugin;
+  ExpirationPlugin: new (opcoes: { maxEntries: number; maxAgeSeconds: number }) => WorkboxPlugin;
+}
+
+/**
+ * Estratégia do cache de dados, montada aqui para o `sw.ts` não ter nenhum valor solto:
+ * rede primeiro com 5 s (OFF-03), só 200 (OFF-09), 200 entradas e 7 dias (OFF-14, OFF-10),
+ * `X-Recebido-Em`/`X-From-Cache` (OFF-04, OFF-10), no cache `api-dados`.
+ */
+export function criarEstrategiaDados<E>(classes: ClassesWorkbox<E>): E {
+  return new classes.NetworkFirst({
+    cacheName: NOME_CACHE_API,
+    networkTimeoutSeconds: TIMEOUT_REDE_SEGUNDOS,
+    plugins: [
+      new classes.CacheableResponsePlugin({ statuses: [200] }),
+      new classes.ExpirationPlugin({ maxEntries: MAX_ENTRADAS, maxAgeSeconds: SETE_DIAS_SEGUNDOS }),
+      pluginRecebimento,
+    ],
+  });
+}

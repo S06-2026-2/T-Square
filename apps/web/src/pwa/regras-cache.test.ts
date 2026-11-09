@@ -4,11 +4,13 @@
 import {
   CABECALHO_DO_CACHE,
   CABECALHO_RECEBIDO_EM,
+  criarEstrategiaDados,
   criarPluginRecebimento,
   ehRequisicaoDeDados,
   MAX_ENTRADAS,
   NOME_CACHE_API,
   origensApi,
+  pluginRecebimento,
   SETE_DIAS_SEGUNDOS,
   TIMEOUT_REDE_SEGUNDOS,
 } from './regras-cache';
@@ -141,5 +143,39 @@ describe('origensApi', () => {
   it('sem VITE_API_URL, ou igual à própria: só a própria', () => {
     expect(origensApi(undefined, PAGINA)).toEqual([PAGINA]);
     expect(origensApi(`${PAGINA}/api`, `${PAGINA}/`)).toEqual([PAGINA]);
+  });
+});
+
+describe('criarEstrategiaDados: o que o sw.ts registra para GET /api/** (OFF-03/09/10/14)', () => {
+  class NetworkFirstFalso {
+    constructor(public opcoes: unknown) {}
+  }
+  class CacheableFalso {
+    constructor(public opcoes: unknown) {}
+  }
+  class ExpirationFalso {
+    constructor(public opcoes: unknown) {}
+  }
+
+  it('NetworkFirst em api-dados, 5 s, só 200, 200 entradas, 7 dias e o plugin de recebimento', () => {
+    const estrategia = criarEstrategiaDados({
+      NetworkFirst: NetworkFirstFalso,
+      CacheableResponsePlugin: CacheableFalso,
+      ExpirationPlugin: ExpirationFalso,
+    } as never) as unknown as NetworkFirstFalso;
+
+    expect(estrategia).toBeInstanceOf(NetworkFirstFalso);
+    const opcoes = estrategia.opcoes as { plugins: unknown[] };
+    expect(opcoes).toEqual({
+      cacheName: 'api-dados',
+      networkTimeoutSeconds: 5,
+      plugins: [expect.any(CacheableFalso), expect.any(ExpirationFalso), pluginRecebimento],
+    });
+    expect((opcoes.plugins[0] as CacheableFalso).opcoes).toEqual({ statuses: [200] });
+    expect((opcoes.plugins[1] as ExpirationFalso).opcoes).toEqual({
+      maxEntries: 200,
+      maxAgeSeconds: 604_800,
+    });
+    expect(opcoes.plugins[2]).toBe(pluginRecebimento);
   });
 });

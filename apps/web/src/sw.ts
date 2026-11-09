@@ -17,15 +17,7 @@ import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { CacheFirst, NetworkFirst, StaleWhileRevalidate } from 'workbox-strategies';
 
 import { BASE_URL } from './lib/config';
-import {
-  ehRequisicaoDeDados,
-  MAX_ENTRADAS,
-  NOME_CACHE_API,
-  origensApi,
-  pluginRecebimento,
-  SETE_DIAS_SEGUNDOS,
-  TIMEOUT_REDE_SEGUNDOS,
-} from './pwa/regras-cache';
+import { criarEstrategiaDados, ehRequisicaoDeDados, origensApi } from './pwa/regras-cache';
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<PrecacheEntry | string>;
@@ -52,17 +44,11 @@ registerRoute(
 // Só 200 vai para o cache; um 401 ou 500 da rede chega à tela como veio (nunca é trocado pelo cache).
 // Mesma origem que o api.ts usa (lib/config.ts), inclusive o padrão localhost:3000.
 const origens = origensApi(BASE_URL, self.location.origin);
+// Todas as opções (nome, 5 s, só 200, 200 entradas, 7 dias, cabeçalhos) vêm de regras-cache.ts,
+// onde são testadas; aqui só entram as classes do Workbox.
 registerRoute(
   (opcoes) => ehRequisicaoDeDados(opcoes, origens),
-  new NetworkFirst({
-    cacheName: NOME_CACHE_API,
-    networkTimeoutSeconds: TIMEOUT_REDE_SEGUNDOS,
-    plugins: [
-      new CacheableResponsePlugin({ statuses: [200] }),
-      new ExpirationPlugin({ maxEntries: MAX_ENTRADAS, maxAgeSeconds: SETE_DIAS_SEGUNDOS }),
-      pluginRecebimento,
-    ],
-  }),
+  criarEstrategiaDados({ NetworkFirst, CacheableResponsePlugin, ExpirationPlugin }),
 );
 
 // Fontes do Google (assumption do spec): a fonte não muda offline.
