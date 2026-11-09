@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { api } from '../../lib/api';
 import NovoMaterialForm from './NovoMaterialForm';
+import { chaveDoEnvio, erroApi, testarChaveDeIdempotencia } from './chaveIdempotencia.testes';
 
 jest.mock('../../lib/api', () => ({ api: { post: jest.fn() } }));
 
@@ -44,7 +45,7 @@ describe('NovoMaterialForm', () => {
       nome: 'Placa de gesso',
       unidade: 'un',
       estoqueMinimo: 10,
-    });
+    }, { idempotencyKey: expect.any(String) });
     expect(screen.getByLabelText('Nome')).toHaveValue('');
     expect(screen.getByLabelText('Unidade')).toHaveValue('');
     expect(screen.getByLabelText('Estoque minimo')).toHaveValue(null);
@@ -91,5 +92,45 @@ describe('NovoMaterialForm', () => {
     expect(screen.getByRole('button', { name: 'Salvar material' })).toBeDisabled();
     terminar({ id: 'm1' });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Salvar material' })).toBeEnabled());
+  });
+});
+
+describe('NovoMaterialForm: Idempotency-Key', () => {
+  testarChaveDeIdempotencia({
+    post,
+    botao: 'Salvar material',
+    renderizar: () => render(<NovoMaterialForm onSalvo={jest.fn()} />),
+    preencher: () => {
+      preencher('Nome', 'Placa de gesso');
+      preencher('Unidade', 'un');
+    },
+    conferirCampos: () => {
+      expect(screen.getByLabelText('Nome')).toHaveValue('Placa de gesso');
+      expect(screen.getByLabelText('Unidade')).toHaveValue('un');
+    },
+  });
+});
+
+describe('NovoMaterialForm: 409 de nome duplicado vindo do api.ts', () => {
+  it('mostra a mensagem da API (não a do IDP-08) e o reenvio leva a mesma chave', async () => {
+    post
+      .mockRejectedValueOnce(erroApi('Ja existe um material chamado "Placa de gesso"', 409))
+      .mockResolvedValueOnce({ id: 'm1' });
+    render(<NovoMaterialForm onSalvo={jest.fn()} />);
+
+    preencher('Nome', 'Placa de gesso');
+    preencher('Unidade', 'un');
+    salvar();
+
+    expect(await screen.findByText('Ja existe um material chamado "Placa de gesso"')).toHaveClass('erro');
+    expect(
+      screen.queryByText('Este envio ainda está sendo processado. Aguarde alguns segundos e tente de novo.'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Nome')).toHaveValue('Placa de gesso');
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Salvar material' })).toBeEnabled());
+    salvar();
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    expect(chaveDoEnvio(post, 1)).toBe(chaveDoEnvio(post, 0));
   });
 });

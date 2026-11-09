@@ -17,7 +17,7 @@ export default function NovoGesseiroForm({ onSalvo }: Props) {
 
   async function salvar(evento: FormEvent) {
     evento.preventDefault();
-    const ok = await enviar(async () => {
+    const ok = await enviar(async (chave) => {
       await api.post(
         '/gesseiros',
         semVazios({
@@ -25,6 +25,7 @@ export default function NovoGesseiroForm({ onSalvo }: Props) {
           telefone: textoOpcional(telefone),
           chavePix: textoOpcional(chavePix),
         }),
+        { idempotencyKey: chave },
       );
     });
     if (ok) {

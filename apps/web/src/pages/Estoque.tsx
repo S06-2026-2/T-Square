@@ -97,7 +97,15 @@ export default function Estoque() {
         </p>
       )}
       {formAberto === 'movimentacao' && (
-        <MovimentacaoForm materiais={materiais} obras={obras} onSalvo={salvo} inicial={entrada} />
+        // key: outro alerta com o formulário aberto remonta o formulário, e os campos e a
+        // Idempotency-Key mudam juntos (nunca os campos do material antigo com uma chave nova).
+        <MovimentacaoForm
+          key={entrada?.materialId}
+          materiais={materiais}
+          obras={obras}
+          onSalvo={salvo}
+          inicial={entrada}
+        />
       )}
 
       {erro && <p className="erro">{erro}</p>}

@@ -22,14 +22,15 @@ export default function LancamentoForm({ gesseiroId, onSalvo }: Props) {
   const [tipo, setTipo] = useState<TipoManual>('VALE');
   const [valor, setValor] = useState('');
   const [descricao, setDescricao] = useState('');
-  const { enviando, erro, enviar } = useEnvio();
+  const { enviando, erro, enviar } = useEnvio(gesseiroId);
 
   async function salvar(evento: FormEvent) {
     evento.preventDefault();
-    const ok = await enviar(async () => {
+    const ok = await enviar(async (chave) => {
       await api.post(
         `/gesseiros/${gesseiroId}/lancamentos`,
         semVazios({ tipo, valor: numero(valor), descricao: textoOpcional(descricao) }),
+        { idempotencyKey: chave },
       );
     });
     if (ok) {

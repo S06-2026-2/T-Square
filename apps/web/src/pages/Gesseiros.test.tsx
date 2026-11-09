@@ -57,7 +57,7 @@ describe('Gesseiros', () => {
 
     expect(await screen.findByRole('button', { name: 'Joao Ferreira' })).toBeInTheDocument();
     expect(chamadas('/gesseiros')).toBe(2);
-    expect(post).toHaveBeenCalledWith('/gesseiros', { nome: 'Joao Ferreira' });
+    expect(post).toHaveBeenCalledWith('/gesseiros', { nome: 'Joao Ferreira' }, { idempotencyKey: expect.any(String) });
   });
 
   it('so mostra o formulario de lancamento com um extrato aberto (FRM-07 AC3)', async () => {
@@ -91,7 +91,11 @@ describe('Gesseiros', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Registrar' }));
 
     await waitFor(() => expect(chamadas('/gesseiros/g-ana/extrato')).toBe(2));
-    expect(post).toHaveBeenCalledWith('/gesseiros/g-ana/lancamentos', { tipo: 'VALE', valor: 100 });
+    expect(post).toHaveBeenCalledWith(
+      '/gesseiros/g-ana/lancamentos',
+      { tipo: 'VALE', valor: 100 },
+      { idempotencyKey: expect.any(String) },
+    );
     await waitFor(() =>
       expect(screen.getByText('Saldo a receber').nextElementSibling).toHaveTextContent(/R\$\s0,00/),
     );

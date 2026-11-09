@@ -25,7 +25,7 @@ export default function MovimentacaoForm({ materiais, obras, onSalvo, inicial }:
   const [quantidade, setQuantidade] = useState(inicial?.quantidade ?? '');
   const [obraId, setObraId] = useState('');
   const [observacao, setObservacao] = useState('');
-  const { enviando, erro, enviar } = useEnvio();
+  const { enviando, erro, enviar } = useEnvio(inicial?.materialId);
 
   function trocarTipo(novo: TipoMovimentacao) {
     setTipo(novo);
@@ -34,7 +34,7 @@ export default function MovimentacaoForm({ materiais, obras, onSalvo, inicial }:
 
   async function salvar(evento: FormEvent) {
     evento.preventDefault();
-    const ok = await enviar(async () => {
+    const ok = await enviar(async (chave) => {
       await api.post(
         '/estoque/movimentacoes',
         semVazios({
@@ -44,6 +44,7 @@ export default function MovimentacaoForm({ materiais, obras, onSalvo, inicial }:
           obraId: tipo === 'SAIDA' ? textoOpcional(obraId) : undefined,
           observacao: textoOpcional(observacao),
         }),
+        { idempotencyKey: chave },
       );
     });
     if (ok) {

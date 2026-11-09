@@ -547,6 +547,8 @@ T28 → T29 → T30 → T31
 
 ### T15: Gerador de UUID com fallback
 
+**Status**: ✅ Concluída (L3)
+
 **What**: `gerarUuid()`: `crypto.randomUUID()` quando existe; senão v4 com `getRandomValues`.
 **Where**: `apps/web/src/lib/uuid.ts`, `uuid.test.ts`
 **Depends on**: None
@@ -560,9 +562,9 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Com `randomUUID`: usa ele
-- [ ] Sem `randomUUID`: devolve string que casa `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`; 1000 chamadas sem repetição
-- [ ] Gate quick do web passando
+- [x] Com `randomUUID`: usa ele
+- [x] Sem `randomUUID`: devolve string que casa `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`; 1000 chamadas sem repetição
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -572,6 +574,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T16: Sessão limpa o cache
+
+**Status**: ✅ Concluída (L3)
 
 **What**: `lib/sessao.ts` com `NOME_CACHE_API`, `limparCacheApi`, `encerrarSessao` e `iniciarSessao`; o `sair()` do `Layout` passa a usar `encerrarSessao`.
 **Where**: `apps/web/src/lib/sessao.ts` (+ `sessao.test.ts`), `apps/web/src/components/Layout.tsx`, `Layout.test.tsx`
@@ -586,10 +590,10 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `limparCacheApi()` chama `caches.delete('api-dados')`; sem `caches` no `window`, não falha; com `caches.delete` rejeitando, não falha
-- [ ] `encerrarSessao()` remove token e usuário **e** apaga o cache; `iniciarSessao(resposta)` apaga o cache **antes** de gravar token e usuário (ordem testada)
-- [ ] `Layout`: clicar em "Sair" espera `encerrarSessao()` e então navega para `/login` (teste com `caches` mockado)
-- [ ] Gate quick do web passando
+- [x] `limparCacheApi()` chama `caches.delete('api-dados')`; sem `caches` no `window`, não falha; com `caches.delete` rejeitando, não falha
+- [x] `encerrarSessao()` remove token e usuário **e** apaga o cache; `iniciarSessao(resposta)` apaga o cache **antes** de gravar token e usuário (ordem testada)
+- [x] `Layout`: clicar em "Sair" espera `encerrarSessao()` e então navega para `/login` (teste com `caches` mockado)
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -599,6 +603,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T17: Estado de conexão
+
+**Status**: ✅ Concluída (L3)
 
 **What**: `lib/conexao.ts` com `registrarOrigem`, `estaDesatualizado`, `assinar`, `useDesatualizado` e `useAoReconectar`.
 **Where**: `apps/web/src/lib/conexao.ts`, `conexao.test.ts`
@@ -613,11 +619,11 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Desatualizado quando `navigator.onLine === false` ou a última origem foi `'cache'`; volta a falso com `registrarOrigem('rede')` e online
-- [ ] Assinantes notificados em `registrarOrigem`, `online` e `offline`; o retorno de `assinar` cancela
-- [ ] `useDesatualizado` re-renderiza nas mudanças (`renderHook`)
-- [ ] `useAoReconectar(fn)` chama `fn` uma vez por evento `online`, não chama em `offline` e remove o listener ao desmontar
-- [ ] Gate quick do web passando
+- [x] Desatualizado quando `navigator.onLine === false` ou a última origem foi `'cache'`; volta a falso com `registrarOrigem('rede')` e online
+- [x] Assinantes notificados em `registrarOrigem`, `online` e `offline`; o retorno de `assinar` cancela
+- [x] `useDesatualizado` re-renderiza nas mudanças (`renderHook`)
+- [x] `useAoReconectar(fn)` chama `fn` uma vez por evento `online`, não chama em `offline` e remove o listener ao desmontar
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -627,6 +633,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T18: Cliente HTTP para offline, cache e idempotência
+
+**Status**: ✅ Concluída (L3)
 
 **What**: `lib/api.ts`: falha de rede vira `ApiError(…, 0)` com a mensagem por método; GET 200 registra a origem pelo `X-From-Cache`; 401 chama `encerrarSessao()`; `post` aceita `{ idempotencyKey }`.
 **Where**: `apps/web/src/lib/api.ts`, `apps/web/src/lib/api.test.ts` (novo)
@@ -641,14 +649,14 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `fetch` rejeitando com `TypeError` num GET: `ApiError` status 0 e mensagem exata "Sem conexão e sem dados salvos desta tela neste aparelho."
-- [ ] O mesmo em POST/PATCH/PUT/DELETE: mensagem exata "Sem conexão: não foi possível confirmar o envio. Tente de novo; o mesmo lançamento não será duplicado."
-- [ ] GET 200 com `X-From-Cache: 1` chama `registrarOrigem('cache')`; sem o cabeçalho, `registrarOrigem('rede')`; escrita não registra
-- [ ] 401: `encerrarSessao()` é aguardado antes do erro "Sessao expirada. Faca login novamente."
-- [ ] `api.post(caminho, corpo, { idempotencyKey: 'k' })` manda `Idempotency-Key: k`; sem opção, não manda
-- [ ] 409 e 422 sobem como `ApiError` com o `status` certo
-- [ ] `grep -rn "auth.logout" apps/web/src` só encontra `lib/sessao.ts` (AD-010)
-- [ ] Gate quick do web passando
+- [x] `fetch` rejeitando com `TypeError` num GET: `ApiError` status 0 e mensagem exata "Sem conexão e sem dados salvos desta tela neste aparelho."
+- [x] O mesmo em POST/PATCH/PUT/DELETE: mensagem exata "Sem conexão: não foi possível confirmar o envio. Tente de novo; o mesmo lançamento não será duplicado."
+- [x] GET 200 com `X-From-Cache: 1` chama `registrarOrigem('cache')`; sem o cabeçalho, `registrarOrigem('rede')`; escrita não registra
+- [x] 401: `encerrarSessao()` é aguardado antes do erro "Sessao expirada. Faca login novamente."
+- [x] `api.post(caminho, corpo, { idempotencyKey: 'k' })` manda `Idempotency-Key: k`; sem opção, não manda
+- [x] 409 e 422 sobem como `ApiError` com o `status` certo
+- [x] `grep -rn "auth.logout" apps/web/src` só encontra `lib/sessao.ts` (AD-010)
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -658,6 +666,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T19: `useEnvio` com chave de idempotência
+
+**Status**: ✅ Concluída (L3)
 
 **What**: O hook ganha `chave` e trata 0/409/422 conforme o spec.
 **Where**: `apps/web/src/lib/useEnvio.ts`, `useEnvio.test.ts`
@@ -672,16 +682,17 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `chave` criada na montagem e estável entre renders; `enviar(fn)` passa a `chave` para `fn`
-- [ ] `useEnvio(recurso?)`: quando `recurso` muda com o hook montado (`rerender` com outro valor), a chave é trocada; re-render com o mesmo `recurso` mantém a chave; a montagem não gera duas chaves
-- [ ] Depois de uma falha de rede (chave mantida), a troca de `recurso` ainda gera chave nova: o reenvio para o outro recurso nunca reusa a chave do primeiro
-- [ ] Sucesso: `true` e chave nova
-- [ ] 422: `false`, erro exato "O envio anterior pode ter sido gravado com outros dados. Confira a lista antes de enviar de novo." e chave nova
-- [ ] 409: `false`, erro exato "Este envio ainda está sendo processado. Aguarde alguns segundos e tente de novo." e mesma chave
-- [ ] Status 0: `false`, mensagem do `ApiError` e mesma chave
-- [ ] Outros erros: como hoje; mesma chave
-- [ ] Os testes antigos do hook continuam passando
-- [ ] Gate quick do web passando
+- [x] `chave` criada na montagem e estável entre renders; `enviar(fn)` passa a `chave` para `fn`
+- [x] `useEnvio(recurso?)`: quando `recurso` muda com o hook montado (`rerender` com outro valor), a chave é trocada; re-render com o mesmo `recurso` mantém a chave; a montagem não gera duas chaves
+- [x] Depois de uma falha de rede (chave mantida), a troca de `recurso` ainda gera chave nova: o reenvio para o outro recurso nunca reusa a chave do primeiro
+- [x] Sucesso: `true` e chave nova
+- [x] 422: `false`, erro exato "O envio anterior pode ter sido gravado com outros dados. Confira a lista antes de enviar de novo." e chave nova
+- [x] 409 com `codigo` `EM_PROCESSAMENTO`: `false`, erro exato "Este envio ainda está sendo processado. Aguarde alguns segundos e tente de novo." e mesma chave
+- [x] **Ajuste da revisão do L3**: qualquer outro 409 (sem `codigo`, com outro `codigo` ou só com o mesmo texto) mostra a mensagem da API e mantém a chave. A API manda o `codigo` (`idempotencia.service.ts`, `CODIGO_EM_PROCESSAMENTO`; commit aditivo, e2e do 409 simultâneo exige `body.codigo`); o `api.ts` o expõe em `ApiError.codigo`
+- [x] Status 0: `false`, mensagem do `ApiError` e mesma chave
+- [x] Outros erros: como hoje; mesma chave
+- [x] Os testes antigos do hook continuam passando
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -691,6 +702,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T20: Formulários de criação mandam a chave
+
+**Status**: ✅ Concluída (L3)
 
 **What**: Os 5 formulários de criação passam a `chave` do `useEnvio` no `api.post`. É a mesma mudança de uma linha em 5 arquivos.
 **Where**: `apps/web/src/components/forms/` → `NovoGesseiroForm.tsx`, `LancamentoForm.tsx`, `NovaObraForm.tsx`, `NovoMaterialForm.tsx`, `MovimentacaoForm.tsx` (+ os 5 `.test.tsx`)
@@ -705,13 +718,14 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Cada formulário chama `api.post(caminho, corpo, { idempotencyKey: chave })`
-- [ ] Teste por formulário: o primeiro envio leva uma chave; um reenvio depois de falha de rede leva a **mesma** chave e os campos continuam preenchidos; depois do sucesso, o próximo envio leva outra chave
-- [ ] `LancamentoForm` passa `gesseiroId` ao `useEnvio`, e `MovimentacaoForm` passa `inicial?.materialId`
-- [ ] Teste do `LancamentoForm` sem desmontar (`rerender` com outro `gesseiroId`, sem `key`): falha de rede no gesseiro A e depois envio no gesseiro B; o POST de B vai para `/gesseiros/B/lancamentos` com uma chave **diferente** da usada em A
-- [ ] Teste do `MovimentacaoForm`: `rerender` com outro `inicial` (como o "Resolver" de outro alerta com o formulário aberto) faz o próximo envio levar outra chave
-- [ ] `AlocarGesseiroForm` não muda
-- [ ] Gate quick do web passando (fim da fase 4)
+- [x] Cada formulário chama `api.post(caminho, corpo, { idempotencyKey: chave })`
+- [x] Teste por formulário: o primeiro envio leva uma chave; um reenvio depois de falha de rede leva a **mesma** chave e os campos continuam preenchidos; depois do sucesso, o próximo envio leva outra chave
+- [x] `LancamentoForm` passa `gesseiroId` ao `useEnvio`, e `MovimentacaoForm` passa `inicial?.materialId`
+- [x] Teste do `LancamentoForm` sem desmontar (`rerender` com outro `gesseiroId`, sem `key`): falha de rede no gesseiro A e depois envio no gesseiro B; o POST de B vai para `/gesseiros/B/lancamentos` com uma chave **diferente** da usada em A
+- [x] Teste do `MovimentacaoForm`: `rerender` com outro `inicial` (como o "Resolver" de outro alerta com o formulário aberto) faz o próximo envio levar outra chave
+- [x] **Ajuste da revisão do L3**: `Estoque.tsx` monta o `MovimentacaoForm` com `key={entrada?.materialId}`, para outro alerta com o formulário aberto trocar campos e chave juntos. Teste: `pages/Estoque.test.tsx` "outro alerta com o formulário aberto troca os campos e a chave juntos" (falha de rede no material A, navegação para o alerta de B sem desmontar o Estoque: campos de B e outra chave). Sem o `key`, o teste falha (conferido)
+- [x] `AlocarGesseiroForm` não muda
+- [x] Gate quick do web passando (fim da fase 4)
 
 **Tests**: unit
 **Gate**: quick (web) + build
@@ -721,6 +735,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T21: Login offline e limpeza no login
+
+**Status**: ✅ Concluída (L3)
 
 **What**: `Login.tsx` usa `iniciarSessao()` no sucesso e mostra a mensagem de sem conexão.
 **Where**: `apps/web/src/pages/Login.tsx`, `Login.test.tsx`
@@ -735,10 +751,10 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Sucesso: `iniciarSessao(resposta)` aguardado **antes** do `navigate('/')`
-- [ ] `ApiError` status 0: `.erro` com o texto exato "Sem conexão. Conecte-se à internet para entrar."; o e-mail digitado continua no campo; o campo de senha fica vazio
-- [ ] Outros erros: mensagem da API, como hoje
-- [ ] Gate quick do web passando
+- [x] Sucesso: `iniciarSessao(resposta)` aguardado **antes** do `navigate('/')`
+- [x] `ApiError` status 0: `.erro` com o texto exato "Sem conexão. Conecte-se à internet para entrar."; o e-mail digitado continua no campo; o campo de senha fica vazio
+- [x] Outros erros: mensagem da API, como hoje
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)

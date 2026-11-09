@@ -250,7 +250,7 @@ do cache, e apaga quando chega a primeira resposta GET da rede.
     o pré-preenchimento com o formulário já aberto (`Estoque.tsx:100` não tem `key`). Os outros 3
     não apontam para um recurso e não passam nada. Na montagem, o hook não troca a chave.
   - `enviar(fn: (chave: string) => Promise<void>)`. No sucesso, troca a chave (IDP-01). Com
-    `status 422`: mensagem do IDP-07 e troca a chave. Com `status 409`: mensagem do IDP-08 e mantém
+    `status 422`: mensagem do IDP-07 e troca a chave. Com `status 409` e `codigo === 'EM_PROCESSAMENTO'`: mensagem do IDP-08; outro 409, mensagem da API; em todo 409 mantém
     a chave. Com `status 0`: mensagem do `api.ts` (OFF-08) e mantém a chave. Os campos nunca são
     limpos aqui; quem chama só limpa quando recebe `true` (como hoje).
 - **Location**: `apps/web/src/lib/useEnvio.ts`; `gerarUuid()` em `lib/uuid.ts`
@@ -428,7 +428,7 @@ cada método de criação recebe o `tx`.
     a `$transaction` interna do `movimentar()` (IDP-06).
   - Senão, `this.prisma.$transaction(async (tx) => { ... }, { timeout: 15_000 })`:
     1. `SELECT pg_try_advisory_xact_lock(hashtextextended(${usuarioId}||' '||${rota}||' '||${chave}, 0)) AS ok`
-       por `tx.$queryRaw`. Se for `false`: `ConflictException('Este envio ainda está sendo processado.')` (IDP-04)
+       por `tx.$queryRaw`. Se for `false`: `ConflictException({ statusCode: 409, message: 'Este envio ainda está sendo processado.', error: 'Conflict', codigo: 'EM_PROCESSAMENTO' })` (IDP-04); o mesmo corpo no `P2002`
     2. `tx.chaveIdempotencia.findUnique({ where: { usuarioId_rota_chave } })`
        - mais de 24 h: `delete` e segue como nova (IDP-05)
        - `hashCorpo` diferente: `UnprocessableEntityException('Esta Idempotency-Key já foi usada com outros dados.')` (IDP-03)
