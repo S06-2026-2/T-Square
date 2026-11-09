@@ -18,17 +18,17 @@
 // (iPhone até 768px, iPad em 1024/1366): o botão aparece em toda página logada e é medido.
 // A passada "chrome" em 1024/1366 mede o desktop com mouse como ele é no Chrome (sem o botão, que
 // lá só aparece com beforeinstallprompt): nela o botão não é exigido e o estado da instrução não roda.
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import puppeteer from 'puppeteer-core';
 
+import { limparFixture, prepararFixture, relatarLimpeza } from './fixture-cliente.mjs';
+
 const BASE = (process.env.AUDIT_BASE_URL ?? 'http://localhost:4173').replace(/\/$/, '');
 const API = (process.env.AUDIT_API_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 const CHROME = process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const CONTAINER = process.env.AUDIT_API_CONTAINER ?? 'gesso_api';
 const SAIDA = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.audit');
 const ESPERA_MONTAGEM = 5000;
 
@@ -53,44 +53,8 @@ const LARGURAS = [
 const estadosDa = (v) => ESTADOS.filter((e) => v.ua || !e.precisaInstalar);
 const nomeDa = (v) => v.rotulo ?? String(v.largura);
 
-// ---------------------------------------------------------------- fixture
-
-function fixture(comando) {
-  const saida = execFileSync(
-    'docker',
-    ['exec', CONTAINER, 'node', 'scripts/fixture-auditoria.mjs', comando],
-    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
-  );
-  const linhas = saida.trim().split('\n');
-  return JSON.parse(linhas[linhas.length - 1]);
-}
-
-let limpo = false;
-function limparFixture() {
-  if (limpo) return null;
-  limpo = true;
-  try {
-    return fixture('limpar').restos;
-  } catch (erro) {
-    console.error(`[audit] falha ao limpar a fixture: ${erro.message}`);
-    return null;
-  }
-}
-
-// Ctrl+C (SIGINT) ou encerramento (SIGTERM): limpa antes de sair. Se nem isso rodar (processo
-// morto à força), a limpeza do início da próxima execução apaga os restos.
-for (const sinal of ['SIGINT', 'SIGTERM']) {
-  process.on(sinal, () => {
-    console.error(`\n[audit] ${sinal}: limpando a fixture antes de sair...`);
-    const restos = limparFixture();
-    console.error(
-      restos === 0
-        ? '[audit] fixture limpa: nenhum registro [audit] no banco'
-        : `[audit] ERRO: a limpeza deixou ${restos ?? '?'} registro(s) [audit] no banco`,
-    );
-    process.exit(130);
-  });
-}
+// A fixture (trava de banco local, limpeza no fim e em SIGINT/SIGTERM) fica em fixture-cliente.mjs,
+// compartilhada com a audit-pwa.mjs.
 
 // ---------------------------------------------------------------- helpers de página
 
@@ -533,7 +497,15 @@ async function auditar(browser, login, ctx, relatorio) {
       isMobile: v.toque,
       hasTouch: v.toque,
     });
-    if (v.ua) await page.setUserAgent(v.ua);
+    if (v.ua) {
+      await page.setUserAgent(v.ua);
+      // Safari não tem `beforeinstallprompt`. Com o app instalável (manifest + SW, L5) o Chrome
+      // headless dispara o evento mesmo com o UA da Apple, e o botão iria para o modo 'prompt'.
+      // Este listener roda antes do app e engole o evento, como no Safari de verdade.
+      await page.evaluateOnNewDocument(() => {
+        window.addEventListener('beforeinstallprompt', (e) => e.stopImmediatePropagation(), true);
+      });
+    }
 
     for (const estado of estadosDa(v)) {
       const chave = `${nomeDa(v)}/${estado.id}`;
@@ -597,12 +569,7 @@ async function principal() {
   try {
     try {
       // Restos de uma execução interrompida à força saem antes de qualquer coisa.
-      const restosAnteriores = fixture('contar').restos;
-      if (restosAnteriores > 0) {
-        console.log(`[audit] ${restosAnteriores} resto(s) [audit] de uma execução anterior: limpando`);
-      }
-      fixture('limpar');
-      ctx.fixture = fixture('preparar');
+      ctx.fixture = prepararFixture();
       console.log(`[audit] fixture preparada: ${JSON.stringify(ctx.fixture)}`);
     } catch (erro) {
       console.error(`[audit] fixture falhou (os estados do agente ficam NAO_MONTADO): ${erro.message.split('\n')[0]}`);
@@ -630,8 +597,7 @@ async function principal() {
   const falhas = valores.filter((r) => r.status === 'FALHA').length;
   fs.writeFileSync(path.join(SAIDA, 'relatorio.json'), JSON.stringify(relatorio, null, 2));
 
-  if (restos === 0) console.log('[audit] fixture limpa: nenhum registro [audit] no banco');
-  else console.log(`[audit] ERRO: a limpeza da fixture deixou ${restos ?? '?'} registro(s) [audit] no banco`);
+  relatarLimpeza(restos);
 
   console.log(`medidos: ${medidos}/${total}, nao montados: ${naoMontados}, falhas: ${falhas}`);
   return falhas === 0 && naoMontados === 0 && restos === 0 ? 0 : 1;

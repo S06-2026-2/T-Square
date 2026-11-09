@@ -887,6 +887,8 @@ T28 → T29 → T30 → T31
 
 ### T26: Ícones do app
 
+**Status**: ✅ Concluída (L5)
+
 **What**: Script que renderiza o SVG da marca em PNG e os ícones em `public/`; `index.html` com `apple-touch-icon` e `apple-mobile-web-app-title`.
 **Where**: `apps/web/scripts/gerar-icones.mjs` (novo), `apps/web/public/icone-192.png`, `icone-512.png`, `icone-512-maskable.png`, `apple-touch-icon.png` (gerados), `apps/web/index.html`
 **Depends on**: None (dentro da fase; usa o `puppeteer-core` da T1)
@@ -900,10 +902,10 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] PNGs com as dimensões exatas 192×192, 512×512, 512×512 e 180×180 (conferidas pelo próprio script, que lê o cabeçalho IHDR do PNG)
-- [ ] Maskable com fundo cheio `#1f6f5c` e desenho dentro do círculo de 80% (conferido visualmente e registrado no commit)
-- [ ] `index.html` com `<link rel="apple-touch-icon" href="/apple-touch-icon.png">` e `<meta name="apple-mobile-web-app-title" content="Gesso">`
-- [ ] Gate build passando
+- [x] PNGs com as dimensões exatas 192×192, 512×512, 512×512 e 180×180 (conferidas pelo próprio script, que lê o cabeçalho IHDR do PNG)
+- [x] Maskable com fundo cheio `#1f6f5c` e desenho dentro do círculo de 80% (conferido visualmente e registrado no commit)
+- [x] `index.html` com `<link rel="apple-touch-icon" href="/apple-touch-icon.png">` e `<meta name="apple-mobile-web-app-title" content="Gesso">`
+- [x] Gate build passando
 
 **Tests**: none
 **Gate**: build
@@ -913,6 +915,10 @@ T28 → T29 → T30 → T31
 ---
 
 ### T27: Regras de cache do service worker (puras)
+
+**Status**: ✅ Concluída (L5)
+
+**Desvio do design (L5)**: O nome `api-dados` mora em `apps/web/src/pwa/nomes-cache.ts` (sem dependências), importado pelo `regras-cache.ts` e reexportado pelo `lib/sessao.ts`: um valor só para quem grava e quem apaga, e o `sw.js` não carrega o `api.ts`. O plugin é criado por `criarPluginRecebimento(agora)` para o teste fixar o relógio; `pluginRecebimento` é a instância do SW.
 
 **What**: `src/pwa/regras-cache.ts` com `ehRequisicaoDeDados`, `pluginRecebimento`, `origensApi` e as constantes (`NOME_CACHE_API` reexportada de `sessao.ts`, `SETE_DIAS`).
 **Where**: `apps/web/src/pwa/regras-cache.ts`, `regras-cache.test.ts` (`@jest-environment node`)
@@ -927,11 +933,11 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `ehRequisicaoDeDados`: GET `/api/obras` da origem da API é verdadeiro; o mesmo com query string é verdadeiro; POST/PATCH/PUT/DELETE são falsos; `/api/auth/login` é falso; outra origem é falsa; `/assets/x.js` é falso
-- [ ] `cacheWillUpdate`: 200 devolve cópia com `X-Recebido-Em` numérico e o mesmo corpo; 404/500 devolvem `null`
-- [ ] `cachedResponseWillBeUsed`: recebida há exatamente 7 dias devolve a resposta; 7 dias + 1 ms devolve `null`; sem `X-Recebido-Em`, `null`; resposta válida sai com `X-From-Cache: 1` e corpo intacto
-- [ ] `origensApi('http://localhost:3000', 'http://localhost:4173')` devolve as duas; `undefined` ou igual à própria devolve uma
-- [ ] Gate quick do web passando
+- [x] `ehRequisicaoDeDados`: GET `/api/obras` da origem da API é verdadeiro; o mesmo com query string é verdadeiro; POST/PATCH/PUT/DELETE são falsos; `/api/auth/login` é falso; outra origem é falsa; `/assets/x.js` é falso
+- [x] `cacheWillUpdate`: 200 devolve cópia com `X-Recebido-Em` numérico e o mesmo corpo; 404/500 devolvem `null`
+- [x] `cachedResponseWillBeUsed`: recebida há exatamente 7 dias devolve a resposta; 7 dias + 1 ms devolve `null`; sem `X-Recebido-Em`, `null`; resposta válida sai com `X-From-Cache: 1` e corpo intacto
+- [x] `origensApi('http://localhost:3000', 'http://localhost:4173')` devolve as duas; `undefined` ou igual à própria devolve uma
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -941,6 +947,10 @@ T28 → T29 → T30 → T31
 ---
 
 ### T28: Service worker e manifest no build
+
+**Status**: ✅ Concluída (L5)
+
+**Desvio do design (L5)**: O manifest é `apps/web/src/pwa/manifest.json` (no lugar de `manifest.ts`), lido pelo `vite.config.ts`, pelo `manifest.test.ts` (`jest.requireActual`) e pelo `checar-build.mjs`: o ts-jest do web (CommonJS, sem `esModuleInterop`) não importa JSON por default import e o web não tem `@types/node`. O vite-plugin-pwa preenche `description` com a do `package.json`; o `vite.config.ts` passa `description: undefined` para o manifest ficar só com os campos do PWA-01. O `sw.ts` usa o `BASE_URL` de `lib/config.ts` (o mesmo do `api.ts`, com o padrão `http://localhost:3000`) em vez de ler `VITE_API_URL` direto. O `tsconfig.sw.json` inclui só `sw.ts`, `pwa/regras-cache.ts`, `pwa/nomes-cache.ts` e `lib/config.ts`.
 
 **What**: `vite-plugin-pwa@1.3.0` em `injectManifest` com o manifest do spec; `src/sw.ts` com precache, fallback de navegação, `NetworkFirst` de dados, fontes, `skipWaiting` e `clientsClaim`; `tsconfig.sw.json`; manifest em `src/pwa/manifest.ts` testado.
 **Where**: `apps/web/vite.config.ts`, `apps/web/src/sw.ts` (novo), `apps/web/src/pwa/manifest.ts` (+ `manifest.test.ts`), `apps/web/tsconfig.sw.json` (novo), `apps/web/tsconfig.json` (excluir `src/sw.ts`), `apps/web/package.json` (`vite-plugin-pwa`, `workbox-core`, `-precaching`, `-routing`, `-strategies`, `-expiration`, `-cacheable-response` `@7.4.1`; `build` também roda `tsc -p tsconfig.sw.json`)
@@ -955,12 +965,12 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `manifest.test.ts`: `id` "/", `name` "Gesso Manager", `short_name` "Gesso", `lang` "pt-BR", `start_url` e `scope` "/", `display` "standalone", `theme_color` "#0f2a24", `background_color` "#f3f5f4" e os 3 ícones com tamanhos e `purpose` exatos
-- [ ] `injectRegister: false`, `devOptions.enabled: false`
-- [ ] `sw.ts` registra exatamente o que o design lista: `NavigationRoute` com `denylist: [/^\/api\//]`; `NetworkFirst` com `networkTimeoutSeconds: 5`, `CacheableResponsePlugin([200])`, `ExpirationPlugin({ maxEntries: 200, maxAgeSeconds: 7 dias })` e `pluginRecebimento`; fontes conforme o design
-- [ ] `npm run build --workspace apps/web` gera `dist/sw.js` e `dist/manifest.webmanifest`, e o manifest gerado é igual ao do teste
-- [ ] `npm run dev` não gera nem registra SW (`/sw.js` em dev responde 404 ou o `index.html`)
-- [ ] Gate quick do web + build passando
+- [x] `manifest.test.ts`: `id` "/", `name` "Gesso Manager", `short_name` "Gesso", `lang` "pt-BR", `start_url` e `scope` "/", `display` "standalone", `theme_color` "#0f2a24", `background_color` "#f3f5f4" e os 3 ícones com tamanhos e `purpose` exatos
+- [x] `injectRegister: false`, `devOptions.enabled: false`
+- [x] `sw.ts` registra exatamente o que o design lista: `NavigationRoute` com `denylist: [/^\/api\//]`; `NetworkFirst` com `networkTimeoutSeconds: 5`, `CacheableResponsePlugin([200])`, `ExpirationPlugin({ maxEntries: 200, maxAgeSeconds: 7 dias })` e `pluginRecebimento`; fontes conforme o design
+- [x] `npm run build --workspace apps/web` gera `dist/sw.js` e `dist/manifest.webmanifest`, e o manifest gerado é igual ao do teste
+- [x] `npm run dev` não gera nem registra SW (`/sw.js` em dev responde 404 ou o `index.html`)
+- [x] Gate quick do web + build passando
 
 **Tests**: unit
 **Gate**: quick (web) + build
@@ -970,6 +980,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T29: Registro do service worker
+
+**Status**: ✅ Concluída (L5)
 
 **What**: `src/pwa/registrar-sw.ts` (registro só no build de produção, sem recarregar a página) e `main.tsx` chamando `iniciarCapturaInstalacao()` e `registrarSw()`.
 **Where**: `apps/web/src/pwa/registrar-sw.ts` (+ `.test.ts`), `apps/web/src/main.tsx`
@@ -984,11 +996,11 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `registrarSw({ prod: true })` com `serviceWorker` disponível chama `register('/sw.js', { scope: '/' })`
-- [ ] `prod: false` não registra; sem `serviceWorker` no navegador não registra nem lança erro
-- [ ] Nenhum listener de `controllerchange` ou chamada a `location.reload` (teste espia os dois)
-- [ ] `main.tsx` chama `iniciarCapturaInstalacao()` antes do `render` e `registrarSw({ prod: import.meta.env.PROD })`
-- [ ] Gate quick do web passando
+- [x] `registrarSw({ prod: true })` com `serviceWorker` disponível chama `register('/sw.js', { scope: '/' })`
+- [x] `prod: false` não registra; sem `serviceWorker` no navegador não registra nem lança erro
+- [x] Nenhum listener de `controllerchange` ou chamada a `location.reload` (teste espia os dois)
+- [x] `main.tsx` chama `iniciarCapturaInstalacao()` antes do `render` e `registrarSw({ prod: import.meta.env.PROD })`
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -998,6 +1010,10 @@ T28 → T29 → T30 → T31
 ---
 
 ### T30: Build em chunk único e `sw.js` sem cache longo
+
+**Status**: ✅ Concluída (L5)
+
+**Desvio do design (L5)**: O `scripts/checar-build.mjs` também confere o PWA-01/02/03 no `dist`: `sw.js` gerado, `manifest.webmanifest` igual a `src/pwa/manifest.json` (deepStrictEqual) e os PNGs com o tamanho declarado (IHDR). Provas de mutação (revertidas): `React.lazy` temporário → 2 chunks + `import()` reprovados (AD-010); cópia do `dist` com `description` a mais, sem `id`, maskable 192×192 e sem `sw.js` → 3 falhas.
 
 **What**: Script que falha se o build tiver mais de um `.js` em `dist/assets` ou algum `import()` dinâmico (AD-010, UPD-04); `vercel.json` com `Cache-Control: no-cache` em `/sw.js`.
 **Where**: `apps/web/scripts/checar-build.mjs` (novo), `apps/web/package.json` (`build` roda o checador no fim), `apps/web/vercel.json`
@@ -1012,10 +1028,10 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Build atual passa (um `.js` só)
-- [ ] Com um `React.lazy` temporário numa tela, o build falha com mensagem citando a AD-010 (testado e revertido; registrado no commit)
-- [ ] `vercel.json` com `headers` de `/sw.js`: `Cache-Control: no-cache`; os `rewrites` atuais continuam
-- [ ] Gate build passando
+- [x] Build atual passa (um `.js` só)
+- [x] Com um `React.lazy` temporário numa tela, o build falha com mensagem citando a AD-010 (testado e revertido; registrado no commit)
+- [x] `vercel.json` com `headers` de `/sw.js`: `Cache-Control: no-cache`; os `rewrites` atuais continuam
+- [x] Gate build passando
 
 **Tests**: none
 **Gate**: build
@@ -1025,6 +1041,10 @@ T28 → T29 → T30 → T31
 ---
 
 ### T31: Auditoria do PWA no navegador
+
+**Status**: ✅ Concluída (L5)
+
+**Desvio do design (L5)**: A fixture vem de `apps/web/scripts/fixture-cliente.mjs`, extraído da `audit-responsive.mjs` e usado pelas duas auditorias (mesma trava e mesma limpeza no fim, em erro e em SIGINT/SIGTERM). "Sem rede" e "API lenta (6 s)" são aplicados também no alvo do service worker via CDP (`Network.emulateNetworkConditions`), porque o `setOfflineMode` da página não alcança o fetch do SW. Conferências a mais: nenhuma entrada de `/api/auth`, só GET 200; 401 com rede chega como 401 (Edge Case); 401 automático apaga o cache; no fim, Cache Storage e SW removidos. Provas de mutação no SW (revertidas): sem `denylist` → a navegação a `/api/obras` offline recebe o app (OFF-01 reprova); `X-From-Cache` renomeado → OFF-04 e API lenta reprovam.
 
 **What**: `audit-pwa.mjs` contra o `vite preview`, verificando o PWA de ponta a ponta com `page.setOfflineMode`; script `audit:pwa`.
 **Where**: `apps/web/scripts/audit-pwa.mjs` (novo), `apps/web/package.json`
@@ -1039,16 +1059,16 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] SW ativo com escopo "/" e `manifest.webmanifest` servido com os campos do PWA-01 (PWA-03)
-- [ ] Online: abre `/obras`, `/estoque` e um extrato; o cache `api-dados` tem as 3 URLs com `X-Recebido-Em`
-- [ ] Offline + recarregar em `/estoque`: a página abre, a tabela mostra os materiais e o ícone com `aria-label` "Dados possivelmente desatualizados" aparece (OFF-01/04/06)
-- [ ] Offline, extrato de um gesseiro nunca aberto: `.erro` com o texto do OFF-05
-- [ ] Offline, `fetch('/api/obras')` direto pela página não recebe HTML (o fallback de navegação não responde `/api/**`)
-- [ ] De volta online: a tela busca de novo e o ícone some (OFF-07/15)
-- [ ] API lenta (requisição interceptada com atraso de 6 s): a tela mostra o cache e o ícone (OFF-03)
-- [ ] "Sair": `caches.has('api-dados')` falso ou cache vazio (OFF-11)
-- [ ] Sai com código ≠ 0 em qualquer falha; screenshots em `.audit/`
-- [ ] Gate browser (as duas auditorias) + build passando (fim da fase 6)
+- [x] SW ativo com escopo "/" e `manifest.webmanifest` servido com os campos do PWA-01 (PWA-03)
+- [x] Online: abre `/obras`, `/estoque` e um extrato; o cache `api-dados` tem as 3 URLs com `X-Recebido-Em`
+- [x] Offline + recarregar em `/estoque`: a página abre, a tabela mostra os materiais e o ícone com `aria-label` "Dados possivelmente desatualizados" aparece (OFF-01/04/06)
+- [x] Offline, extrato de um gesseiro nunca aberto: `.erro` com o texto do OFF-05
+- [x] Offline, `fetch('/api/obras')` direto pela página não recebe HTML (o fallback de navegação não responde `/api/**`)
+- [x] De volta online: a tela busca de novo e o ícone some (OFF-07/15)
+- [x] API lenta (requisição interceptada com atraso de 6 s): a tela mostra o cache e o ícone (OFF-03)
+- [x] "Sair": `caches.has('api-dados')` falso ou cache vazio (OFF-11)
+- [x] Sai com código ≠ 0 em qualquer falha; screenshots em `.audit/`
+- [x] Gate browser (as duas auditorias) + build passando (fim da fase 6)
 
 **Tests**: browser
 **Gate**: browser + build

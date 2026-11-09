@@ -269,30 +269,30 @@ instrução. No app já adicionado à tela de início, o botão não aparece.
 | RSP-10 | P1: Celular sem transbordar | T1, T5 | Implementing |
 | RSP-11 | P1: Celular sem transbordar | T2 | Implementing |
 | RSP-12 | P1: Celular sem transbordar | T3 | Implementing |
-| PWA-01 | P1: Instalar o app | - | Pending |
-| PWA-02 | P1: Instalar o app | - | Pending |
-| PWA-03 | P1: Instalar o app | - | Pending |
-| PWA-04 | P1: Instalar o app | - | Pending |
+| PWA-01 | P1: Instalar o app | T26, T28, T31 | Implementing |
+| PWA-02 | P1: Instalar o app | T26 | Implementing |
+| PWA-03 | P1: Instalar o app | T28, T29, T31 | Implementing |
+| PWA-04 | P1: Instalar o app | T28, T29 | Implementing |
 | PWA-05 | P1: Instalar o app | T24, T25 | Implementing |
 | PWA-06 | P1: Instalar o app | T24, T25 | Implementing |
 | PWA-07 | P1: Instalar o app | T24 | Implementing |
 | PWA-08 | P1: Instalar o app | T24, T25 | Implementing |
 | PWA-09 | P1: Instalar o app | T24, T25 | Implementing |
-| OFF-01 | P1: Consultar sem internet | - | Pending |
-| OFF-02 | P1: Consultar sem internet | - | Pending |
-| OFF-03 | P1: Consultar sem internet | - | Pending |
-| OFF-04 | P1: Consultar sem internet | T18 | Implementing |
-| OFF-05 | P1: Consultar sem internet | T18 | Implementing |
-| OFF-06 | P1: Consultar sem internet | T17, T22 | Implementing |
-| OFF-07 | P1: Consultar sem internet | T17, T22 | Implementing |
+| OFF-01 | P1: Consultar sem internet | T28, T31 | Implementing |
+| OFF-02 | P1: Consultar sem internet | T27 | Implementing |
+| OFF-03 | P1: Consultar sem internet | T28, T31 | Implementing |
+| OFF-04 | P1: Consultar sem internet | T18, T27, T31 | Implementing |
+| OFF-05 | P1: Consultar sem internet | T18, T31 | Implementing |
+| OFF-06 | P1: Consultar sem internet | T17, T22, T31 | Implementing |
+| OFF-07 | P1: Consultar sem internet | T17, T22, T31 | Implementing |
 | OFF-08 | P1: Consultar sem internet | T18, T19 | Implementing |
-| OFF-09 | P1: Consultar sem internet | - | Pending |
-| OFF-10 | P1: Consultar sem internet | - | Pending |
-| OFF-11 | P1: Consultar sem internet | T16, T18 | Implementing |
+| OFF-09 | P1: Consultar sem internet | T27 | Implementing |
+| OFF-10 | P1: Consultar sem internet | T27 | Implementing |
+| OFF-11 | P1: Consultar sem internet | T16, T18, T31 | Implementing |
 | OFF-12 | P1: Consultar sem internet | T16, T21 | Implementing |
 | OFF-13 | P1: Consultar sem internet | T21 | Implementing |
-| OFF-14 | P1: Consultar sem internet | - | Pending |
-| OFF-15 | P1: Consultar sem internet | T17, T23 | Implementing |
+| OFF-14 | P1: Consultar sem internet | T28 | Implementing |
+| OFF-15 | P1: Consultar sem internet | T17, T23, T31 | Implementing |
 | IDP-01 | P1: Reenviar sem duplicar | T15, T18, T19, T20 | Implementing |
 | IDP-02 | P1: Reenviar sem duplicar | T6, T8, T9, T10, T11, T12, T14 | Implementing |
 | IDP-03 | P1: Reenviar sem duplicar | T7, T9, T14 | Implementing |
@@ -302,10 +302,10 @@ instrução. No app já adicionado à tela de início, o botão não aparece.
 | IDP-07 | P1: Reenviar sem duplicar | T19 | Implementing |
 | IDP-08 | P1: Reenviar sem duplicar | T19 | Implementing |
 | IDP-09 | P1: Reenviar sem duplicar | T13 | Implementing |
-| UPD-01 | P2: Versões novas | - | Pending |
-| UPD-02 | P2: Versões novas | - | Pending |
-| UPD-03 | P2: Versões novas | - | Pending |
-| UPD-04 | P2: Versões novas | - | Pending |
+| UPD-01 | P2: Versões novas | T29 | Implementing |
+| UPD-02 | P2: Versões novas | T28 | Implementing |
+| UPD-03 | P2: Versões novas | T29 | Implementing |
+| UPD-04 | P2: Versões novas | T30 | Implementing |
 | PWA-10 | P3: Instrução no iPhone | T24, T25 | Implementing |
 
 **ID format:** `RSP-NN` (responsividade), `PWA-NN` (instalação), `OFF-NN` (offline), `IDP-NN` (idempotência), `UPD-NN` (atualização)
