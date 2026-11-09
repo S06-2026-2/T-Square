@@ -48,10 +48,13 @@ body {
 
 /* ---------- layout ---------- */
 
+/* minmax(0, 1fr): a coluna do conteúdo encolhe até a viewport. Com 1fr o mínimo é o
+   min-content, e o maior filho (topo, tabela) alargava a página (RSP-01). */
 .app {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 240px minmax(0, 1fr);
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .sidebar {
@@ -201,42 +204,76 @@ body {
   padding: 32px 32px 56px;
 }
 
+.rotulo-curto {
+  display: none;
+}
+
+/* Celular e tablet em pé: topo compacto (marca, usuário, Sair) e o mesmo <nav> vira barra
+   inferior fixa com rótulos curtos. Trocar de largura não remonta nada (RSP-03..06, RSP-12). */
 @media (max-width: 900px) {
+  :root {
+    --altura-nav: 64px;
+  }
+
   .app {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    /* Sem isso a linha do topo estica junto com o min-height da tela (RSP-04). */
+    grid-template-rows: auto 1fr;
   }
 
   .sidebar {
     position: sticky;
     z-index: 10;
-    height: auto;
+    height: calc(56px + env(safe-area-inset-top));
     flex-direction: row;
     align-items: center;
     gap: 12px;
-    padding: 10px 16px;
+    padding: env(safe-area-inset-top) 16px 0;
   }
 
-  .marca-texto small,
+  .marca-texto,
   .usuario-nome {
     display: none;
   }
 
   .nav {
-    flex-direction: row;
-    justify-content: center;
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 20;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    padding: 0 0 env(safe-area-inset-bottom);
+    background: var(--sidebar);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .nav-link span {
+  .nav-link {
+    height: var(--altura-nav);
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 4px;
+    border-radius: 0;
+    font-size: 12px;
+  }
+
+  .rotulo {
     display: none;
   }
 
+  .rotulo-curto {
+    display: inline;
+  }
+
   .usuario {
+    margin-left: auto;
     padding: 0;
     border: none;
   }
 
   .conteudo {
-    padding: 20px 16px 48px;
+    padding: 20px 16px calc(var(--altura-nav) + env(safe-area-inset-bottom) + 16px);
   }
 }
 
@@ -286,9 +323,23 @@ h1 {
   margin: 0 0 4px;
 }
 
+/* Nomes longos (até 120 caracteres) quebram dentro do card em vez de alargar a página. */
+.card h2,
+.card h4,
+.cliente,
+.pessoa {
+  overflow-wrap: anywhere;
+}
+
+/* Na tabela, que rola por dentro (.tabela-wrap), só quebra palavra maior que a coluna:
+   "Reguladores" fica inteiro em vez de virar "Regulado/res". */
+.tabela td {
+  overflow-wrap: break-word;
+}
+
 .grade {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
   gap: 16px;
 }
 
@@ -301,9 +352,12 @@ h1 {
     transform 0.15s;
 }
 
-.card-obra:hover {
-  box-shadow: var(--sombra);
-  transform: translateY(-1px);
+/* Só com mouse: no toque o hover "gruda" depois do clique. */
+@media (hover: hover) {
+  .card-obra:hover {
+    box-shadow: var(--sombra);
+    transform: translateY(-1px);
+  }
 }
 
 .card-obra[data-status='ORCAMENTO'] {
@@ -324,7 +378,7 @@ h1 {
 
 .grade-resumo {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
   gap: 16px;
 }
 
@@ -425,6 +479,11 @@ h1 {
 @media (max-width: 760px) {
   .duas-colunas {
     grid-template-columns: 1fr;
+  }
+
+  /* A rolagem até o extrato (RSP-10) para logo abaixo do topo fixo, não atrás dele. */
+  .duas-colunas > .card {
+    scroll-margin-top: calc(56px + env(safe-area-inset-top) + 8px);
   }
 }
 
@@ -899,7 +958,7 @@ h1 {
   padding: 0;
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
   gap: 16px;
   /* Cada card na sua altura: abrir o "+" de um não estica os vizinhos da mesma linha. */
   align-items: start;
@@ -992,6 +1051,7 @@ h1 {
 
 .login {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   grid-template-columns: 1.1fr 1fr;
 }
@@ -1074,8 +1134,10 @@ h1 {
 }
 
 @media (max-width: 860px) {
-  .login {
-    grid-template-columns: 1fr;
+  /* minmax(0, 1fr): com 1fr, os campos de 16px (RSP-07) alargavam a coluna em 320px. */
+  .login,
+  .login-area {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .login-marca {
@@ -1124,7 +1186,7 @@ textarea {
 
 .formulario {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
   gap: 14px;
   margin-bottom: 24px;
   padding: 22px;
@@ -1134,7 +1196,7 @@ textarea {
 .formulario fieldset {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
   gap: 12px;
   border: 1px solid var(--borda);
   border-radius: var(--raio-sm);
@@ -1192,5 +1254,40 @@ textarea {
 @media (max-width: 720px) {
   .linha-form {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- toque (celular) ---------- */
+
+/* 16px evita o zoom automático do iOS ao focar um campo (RSP-07). */
+@media (max-width: 900px), (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Área de toque mínima de 44x44 (RSP-08). */
+@media (max-width: 900px) {
+  .nav-link,
+  .btn-sair,
+  .btn-instalar,
+  .chip,
+  .btn-detalhes,
+  .btn-icone,
+  .card-obra summary,
+  .linha-form .btn-texto {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .btn-sair {
+    justify-content: center;
+  }
+
+  .card-obra summary {
+    display: flex;
+    align-items: center;
   }
 }

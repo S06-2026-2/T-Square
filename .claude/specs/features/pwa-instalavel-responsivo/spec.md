@@ -62,6 +62,7 @@ vira saldo errado.
 | Service worker em dev | Desligado no `npm run dev` (Vite); só no build (`vite build` / `vite preview`) | SW em dev cacheia código antigo e piora o hot-reload, que já é instável no OneDrive (CLAUDE.md) | y |
 | HTTPS | Fora do `localhost`, instalação e SW exigem HTTPS; o deploy com HTTPS não faz parte desta spec | `localhost` já é contexto seguro para desenvolvimento e demonstração | y |
 | Verificação de responsividade | `puppeteer-core` (devDependency) usando o Chrome instalado; script versionado em `apps/web/scripts/audit-responsive.mjs`, rodando contra `vite preview`, com o comando `npm run audit:responsive`. Mede `scrollWidth`, altura do topo e alvos de toque em 320, 360, 390, 768, 1024 e 1366px em todas as telas | Aprovado pelo usuário (2026-11-09). jsdom não calcula layout; a auditoria de 2026-11-09 já provou o método | y |
+| Telas futuras de `obras-transicoes-status` | Os botões de ação de status (`AcoesStatusObra`) e o formulário de cancelamento entram no RSP-01/RSP-08 e no `audit:responsive` quando aquela feature for mergeada; o PR que chegar depois à `main` acrescenta os estados à auditoria | Aquela feature está planejada, mas sem código na `main` (revalidação de 2026-11-09) | y |
 | Larguras-alvo | 320px a 1366px; desktop acima de 1366 já funciona hoje | 320px é o menor celular ainda comum; a auditoria cobriu essa faixa | y |
 | Endereço da API | Origens separadas, como hoje: o front chama `VITE_API_URL` (dev/preview `http://localhost:3000`, produção Render) e o service worker cacheia `/api/**` dessa origem e da própria. Sem proxy no preview nem rewrite na Vercel | Decisão do usuário no Design (2026-11-09). Produção já é Vercel + Render (`docs/ARQUITETURA.md`); preview e produção seguem o mesmo caminho e o deploy não muda. O CORS do Nest (`main.ts`) aceita o cabeçalho `Idempotency-Key` | y |
 | Reenvio com campos editados | Depois de uma falha, se o operador muda um campo e reenvia, a mesma chave com corpo diferente cai no 422; a tela avisa e gera uma chave nova (IDP-07) | Decisão do usuário no Design (2026-11-09): mais seguro para dinheiro do que trocar a chave sozinho e arriscar dois lançamentos | y |
@@ -86,14 +87,14 @@ nem errar o toque, para registrar vales, movimentações e acompanhar obras pelo
 
 **Acceptance Criteria**:
 
-1. The system SHALL renderizar cada tela (`/login`, `/dashboard`, `/obras`, `/gesseiros`, `/estoque`, com os formulários "Nova obra", "Novo gesseiro", "Novo material", "Registrar entrada/saida", o extrato de um gesseiro e os `details` de obra abertos) com `document.documentElement.scrollWidth` igual a `window.innerWidth` nas larguras 320, 360, 390, 768, 1024 e 1366px. <!-- RSP-01 -->
+1. The system SHALL renderizar cada tela (`/login`, `/dashboard`, `/obras`, `/gesseiros`, `/estoque`, com os formulários "Nova obra", "Novo gesseiro", "Novo material", "Registrar entrada/saida", o extrato de um gesseiro, os `details` de obra abertos, o painel "Silenciados pelo operador" aberto e a justificativa de um alerta aberta no `/dashboard`, e o `/estoque` aberto pelo "Resolver" de um alerta, com o aviso e a movimentação preenchida) com `document.documentElement.scrollWidth` igual a `window.innerWidth` nas larguras 320, 360, 390, 768, 1024 e 1366px. <!-- RSP-01 -->
 2. WHILE a largura da tabela de materiais for maior que a área disponível the system SHALL rolar a tabela na horizontal dentro de `.tabela-wrap`, sem aumentar a largura da página. <!-- RSP-02 -->
 3. WHILE a largura da janela for ≤ 900px the system SHALL exibir a navegação como barra inferior fixa com as 4 abas (ícone + rótulo curto) e destacar a aba da rota atual. <!-- RSP-03 -->
 4. WHILE a largura da janela for ≤ 900px the system SHALL exibir no topo só o ícone da marca, o indicador de conexão (quando visível, ver OFF-06), o avatar, o botão "Instalar app" (quando disponível, ver PWA-05) e o botão "Sair", com o topo em no máximo 64px de altura, sem contar a área de `safe-area-inset-top`. <!-- RSP-04 -->
 5. WHILE a largura da janela for > 900px the system SHALL manter a sidebar lateral atual, com os rótulos atuais ("Visao geral", "Obras", "Gesseiros", "Estoque"). <!-- RSP-05 -->
 6. WHILE a barra inferior estiver visível the system SHALL reservar no fim do conteúdo um espaço igual à altura da barra inferior, incluindo `safe-area-inset-bottom`, para que o último elemento de cada tela fique visível acima da barra ao rolar até o fim. <!-- RSP-06 -->
 7. WHILE a largura da janela for ≤ 900px OR o dispositivo for de toque (`pointer: coarse`) the system SHALL exibir `input`, `select` e `textarea` com `font-size` de pelo menos 16px. <!-- RSP-07 -->
-8. WHILE a largura da janela for ≤ 900px the system SHALL dar pelo menos 44×44px de área de toque às abas da barra inferior, ao "Sair", ao "Instalar app", aos chips de filtro de Obras, ao botão "+" dos alertas, aos `summary` dos cards de obra e ao botão "remover" das linhas de material. <!-- RSP-08 -->
+8. WHILE a largura da janela for ≤ 900px the system SHALL dar pelo menos 44×44px de área de toque às abas da barra inferior, ao "Sair", ao "Instalar app", aos chips de filtro de Obras, ao botão "+" dos alertas, ao botão "Ver silenciados" dos alertas, aos `summary` dos cards de obra e ao botão "remover" das linhas de material. <!-- RSP-08 -->
 9. The system SHALL tornar a linha inteira de um gesseiro na lista (`.lista-pessoas li`) clicável para abrir o extrato, não só o nome. <!-- RSP-09 -->
 10. WHEN o operador seleciona um gesseiro WHILE a largura da janela for ≤ 760px (lista e extrato empilhados) THEN the system SHALL rolar a página até o início do card do extrato. <!-- RSP-10 -->
 11. The system SHALL dimensionar a altura mínima das telas cheias (`.app`, `.login`) por `100dvh`, com `100vh` como fallback para navegadores sem `dvh`. <!-- RSP-11 -->
@@ -256,18 +257,18 @@ instrução. No app já adicionado à tela de início, o botão não aparece.
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| RSP-01 | P1: Celular sem transbordar | - | Pending |
-| RSP-02 | P1: Celular sem transbordar | - | Pending |
-| RSP-03 | P1: Celular sem transbordar | - | Pending |
-| RSP-04 | P1: Celular sem transbordar | - | Pending |
-| RSP-05 | P1: Celular sem transbordar | - | Pending |
-| RSP-06 | P1: Celular sem transbordar | - | Pending |
-| RSP-07 | P1: Celular sem transbordar | - | Pending |
-| RSP-08 | P1: Celular sem transbordar | - | Pending |
-| RSP-09 | P1: Celular sem transbordar | - | Pending |
-| RSP-10 | P1: Celular sem transbordar | - | Pending |
-| RSP-11 | P1: Celular sem transbordar | - | Pending |
-| RSP-12 | P1: Celular sem transbordar | - | Pending |
+| RSP-01 | P1: Celular sem transbordar | T1, T2, T3, T4 | Implementing |
+| RSP-02 | P1: Celular sem transbordar | T1, T2 | Implementing |
+| RSP-03 | P1: Celular sem transbordar | T1, T3 | Implementing |
+| RSP-04 | P1: Celular sem transbordar | T1, T3 | Implementing |
+| RSP-05 | P1: Celular sem transbordar | T3 | Implementing |
+| RSP-06 | P1: Celular sem transbordar | T1, T3 | Implementing |
+| RSP-07 | P1: Celular sem transbordar | T1, T4 | Implementing |
+| RSP-08 | P1: Celular sem transbordar | T1, T4 | Implementing |
+| RSP-09 | P1: Celular sem transbordar | T5 | Implementing |
+| RSP-10 | P1: Celular sem transbordar | T1, T5 | Implementing |
+| RSP-11 | P1: Celular sem transbordar | T2 | Implementing |
+| RSP-12 | P1: Celular sem transbordar | T3 | Implementing |
 | PWA-01 | P1: Instalar o app | - | Pending |
 | PWA-02 | P1: Instalar o app | - | Pending |
 | PWA-03 | P1: Instalar o app | - | Pending |

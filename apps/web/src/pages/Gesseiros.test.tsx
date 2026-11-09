@@ -28,9 +28,19 @@ function chamadas(caminho: string) {
   return get.mock.calls.filter(([c]) => c === caminho).length;
 }
 
+// O jsdom não tem matchMedia nem scrollIntoView (RSP-10). Padrão: tela larga.
+const scrollIntoView = jest.fn();
+let telaEstreita = false;
+const matchMedia = jest.fn((consulta: string) => ({ matches: telaEstreita, media: consulta }));
+
 beforeEach(() => {
   get.mockReset();
   post.mockReset();
+  scrollIntoView.mockReset();
+  matchMedia.mockClear();
+  telaEstreita = false;
+  Element.prototype.scrollIntoView = scrollIntoView;
+  window.matchMedia = matchMedia as unknown as typeof window.matchMedia;
 });
 
 describe('Gesseiros', () => {
@@ -85,5 +95,54 @@ describe('Gesseiros', () => {
     await waitFor(() =>
       expect(screen.getByText('Saldo a receber').nextElementSibling).toHaveTextContent(/R\$\s0,00/),
     );
+  });
+
+  describe('linha clicável e rolagem até o extrato', () => {
+    const anaComTelefone: Gesseiro = { id: 'g-ana', nome: 'Ana', telefone: '35 99999-0000', ativo: true };
+
+    function montar() {
+      get.mockImplementation(async (caminho: string) =>
+        caminho === '/gesseiros' ? [anaComTelefone] : extrato(0, 100),
+      );
+      render(<Gesseiros />);
+    }
+
+    it('clicar na linha fora do nome (no telefone) abre o extrato (RSP-09)', async () => {
+      montar();
+      fireEvent.click(await screen.findByText('35 99999-0000'));
+
+      expect(await screen.findByRole('heading', { level: 2, name: 'Ana' })).toBeInTheDocument();
+      expect(chamadas('/gesseiros/g-ana/extrato')).toBe(1);
+    });
+
+    it('um clique no nome faz uma chamada só ao extrato (RSP-09)', async () => {
+      montar();
+      fireEvent.click(await screen.findByRole('button', { name: 'Ana' }));
+
+      await screen.findByRole('heading', { level: 2, name: 'Ana' });
+      expect(chamadas('/gesseiros/g-ana/extrato')).toBe(1);
+    });
+
+    it('com tela de até 760px, rola até o início do card do extrato (RSP-10)', async () => {
+      telaEstreita = true;
+      montar();
+      fireEvent.click(await screen.findByRole('button', { name: 'Ana' }));
+
+      const titulo = await screen.findByRole('heading', { level: 2, name: 'Ana' });
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+      expect(matchMedia).toHaveBeenCalledWith('(max-width: 760px)');
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' });
+      // O elemento rolado é o card que contém o extrato.
+      expect(scrollIntoView.mock.contexts[0]).toBe(titulo.closest('.card'));
+    });
+
+    it('com tela mais larga que 760px, não rola (RSP-10)', async () => {
+      montar();
+      fireEvent.click(await screen.findByRole('button', { name: 'Ana' }));
+
+      await screen.findByRole('heading', { level: 2, name: 'Ana' });
+      expect(matchMedia).toHaveBeenCalledWith('(max-width: 760px)');
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    });
   });
 });

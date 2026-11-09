@@ -23,7 +23,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 | Code Layer | Required Test Type | Coverage Expectation | Location Pattern | Run Command |
 | --- | --- | --- | --- | --- |
-| CSS / estrutura de layout (web) | browser (auditoria Chrome headless) | Toda medida dos RSP da task nas 6 larguras × 11 telas/estados; o script sai ≠ 0 em qualquer falha | `apps/web/scripts/audit-responsive.mjs` | `npm run audit:responsive --workspace apps/web` |
+| CSS / estrutura de layout (web) | browser (auditoria Chrome headless) | Toda medida dos RSP da task nas 6 larguras × 14 telas/estados; o script sai ≠ 0 em qualquer falha | `apps/web/scripts/audit-responsive.mjs` | `npm run audit:responsive --workspace apps/web` |
 | Service worker em execução (web) | browser (auditoria Chrome headless, `setOfflineMode`) | OFF-01/03/04/05/06/07/11, PWA-01/03 de ponta a ponta no build de produção | `apps/web/scripts/audit-pwa.mjs` | `npm run audit:pwa --workspace apps/web` |
 | Regras puras do SW (web) | unit (`@jest-environment node`) | Todo ramo de `ehRequisicaoDeDados` (método, origem, `/api/`, `/api/auth/`), plugin (200 vs outros, 7 dias exatos e 1 ms depois, `X-From-Cache`) | `apps/web/src/pwa/*.test.ts` | `npm run test --workspace apps/web` |
 | Libs e hooks (web) | unit | Todo AC da task, incluindo os ramos de falha (sem `caches`, sem `randomUUID`, 0/409/422/401) e o texto exato das mensagens | `apps/web/src/lib/*.test.ts` | `npm run test --workspace apps/web` |
@@ -43,10 +43,10 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 | --- | --- | --- |
 | Quick | Tasks com testes unitários de um workspace | `npm run test --workspace apps/api` ou `npm run test --workspace apps/web` (o do workspace tocado) |
 | Full (API) | Tasks com e2e e fim das fases 2 e 3 | `npm run test --workspace apps/api && docker exec gesso_api npm run test:e2e` |
-| Browser | Tasks de layout e de SW | `npm run build --workspace apps/web`, `npx vite preview --port 4173` (em `apps/web`, em segundo plano) e `npm run audit:responsive --workspace apps/web` ou `npm run audit:pwa --workspace apps/web`. Precisa da API no Docker |
+| Browser | Tasks de layout e de SW | `npm run build --workspace apps/web`, `npx vite preview --port 4173` (em `apps/web`, em segundo plano) e `npm run audit:responsive --workspace apps/web` ou `npm run audit:pwa --workspace apps/web`. Precisa da API no Docker (`gesso_api`, para a fixture). O `audit:responsive` só é verde com `medidos: 84/84, nao montados: 0, falhas: 0`; um estado não montado reprova o RSP-01 |
 | Build | Schema, controller, config e fim de fase | `npm run build && npm test` (raiz: build de API e web, depois as duas suítes) |
 
-Base antes da feature: **API 251 testes, web 147** (todos passando em 2026-11-09, `feat/agente-estoque` em `aa52d2a`). Nenhuma task pode terminar com menos testes do que começou.
+Base antes da feature: **API 251 testes, web 147** (todos passando em 2026-11-09; medido de novo no branch `feat/pwa-instalavel-responsivo` em `4fe273c`, a partir da `main` `8e99dc8`, com o mesmo resultado). Nenhuma task pode terminar com menos testes do que começou.
 
 Lembretes de ambiente (CLAUDE.md): depois de editar `apps/api/src/**`, rodar `docker restart gesso_api`; depois da migration, `docker exec gesso_api npx prisma migrate dev`. Hot-reload não é confiável no OneDrive.
 
@@ -114,8 +114,10 @@ T28 → T29 → T30 → T31
 
 ### T1: Script de auditoria de responsividade
 
-**What**: Versionar `audit-responsive.mjs` (evolução do script de 2026-11-09) com todas as medidas do RSP e saída ≠ 0 em falha; `puppeteer-core@23.11.1` como devDependency; script `audit:responsive`; `.audit/` no `.gitignore`.
-**Where**: `apps/web/scripts/audit-responsive.mjs` (novo); `apps/web/package.json`; `.gitignore`
+**Status**: ✅ Concluída (L1)
+
+**What**: Versionar `audit-responsive.mjs` (evolução do script de 2026-11-09) com todas as medidas do RSP e saída ≠ 0 em falha; fixture que monta os dados dos estados do agente antes de medir e limpa depois; `puppeteer-core@23.11.1` como devDependency; script `audit:responsive`; `.audit/` no `.gitignore`.
+**Where**: `apps/web/scripts/audit-responsive.mjs` (novo); `apps/api/scripts/fixture-auditoria.mjs` (novo); `apps/web/package.json`; `.gitignore`
 **Depends on**: None
 **Reuses**: `audit.mjs` da auditoria de 2026-11-09 (scratchpad), login por `POST /api/auth/login`, chaves `gesso.token`/`gesso.usuario`
 **Requirement**: RSP-01, RSP-02, RSP-03, RSP-04, RSP-06, RSP-07, RSP-08, RSP-10 (medição)
@@ -127,12 +129,21 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Percorre `/login`, `/dashboard`, `/obras` (+ "Nova obra", + `details` abertos), `/gesseiros` (+ extrato, + "Novo gesseiro"), `/estoque` (+ "Registrar entrada/saida", + "Novo material") em 320, 360, 390, 768, 1024 e 1366px, com `isMobile`/`hasTouch` nas larguras ≤ 768
-- [ ] Mede: `scrollWidth == innerWidth`; `.tabela-wrap` rolando por dentro; `.nav` fixa com 4 links e topo ≤ 64px (≤ 900px); último filho de `.conteudo` acima da `.nav` no fim da rolagem; `font-size` ≥ 16 em `input/select/textarea` (≤ 900px); alvos do RSP-08 ≥ 44×44; extrato no topo da viewport depois de selecionar um gesseiro em 360px
-- [ ] Imprime um relatório por tela × largura e sai com código 1 se qualquer medida falhar
-- [ ] Rodado contra o código atual, **falha** e aponta os mesmos problemas da auditoria de 2026-11-09 (transbordo em 320–390px, topo esticado em 768px, inputs de 14px, alvos pequenos). Esse é o "vermelho" do ciclo
-- [ ] Screenshots em `apps/web/.audit/`, ignorado pelo git
-- [ ] `CHROME_PATH` configurável, com padrão do Chrome do Windows
+- [x] Percorre `/login`, `/dashboard` (+ painel "Silenciados" aberto, + justificativa de um alerta aberta pelo "+"), `/obras` (+ "Nova obra", + `details` abertos), `/gesseiros` (+ extrato, + "Novo gesseiro"), `/estoque` (+ "Registrar entrada/saida", + "Novo material", + vindo do "Resolver" de um alerta com `?alerta=&material=&quantidade=`), ou seja, 14 estados, em 320, 360, 390, 768, 1024 e 1366px, com `isMobile`/`hasTouch` nas larguras ≤ 768
+- [x] **Fixture** (`apps/api/scripts/fixture-auditoria.mjs`, Prisma Client do container, rodado pela auditoria com `docker exec gesso_api node scripts/fixture-auditoria.mjs preparar|limpar`):
+  - `preparar` primeiro apaga qualquer resto `[audit]`. Depois cria dois materiais `[audit] Alerta ativo` (saldo 0, mínimo 10) e `[audit] Silenciado`, uma `AnaliseEstoque` `MANUAL`/`SUCESSO` com `iniciadoEm` em 2000-01-01, um `AlertaEstoque` `ATIVO` `REPOSICAO` com justificativa no primeiro material e um `AlertaEstoque` `DISPENSADO` com `dispensadoEm` = agora no segundo. Imprime em JSON `{ alertaId, materialId, quantidade }`
+  - A análise com data de 2000 nunca vira a "última análise" (as consultas ordenam por `iniciadoEm desc`), então não muda o aviso do dashboard nem o catch-up do agendador (`agendador-agente.service.ts:54-58`). O agente LLM não é chamado
+  - `limpar` apaga alertas, análise e materiais `[audit]`. A auditoria chama `limpar` num `finally`, inclusive quando falha ou é interrompida (`SIGINT`); ao terminar, nenhum `[audit]` sobra no banco (conferido pela própria auditoria)
+  - Mesmo aviso do e2e no Handoff: não rodar durante uma análise real nem perto de uma demonstração do agente
+- [x] **Estado não montado é falha, nunca "pulado"**: para cada um dos 14 estados, a auditoria confere que o estado foi de fato montado antes de medir. Exemplos: o painel `#painel-silenciados` visível com o material `[audit] Silenciado`; a `.justificativa` do alerta `[audit]` visível; `[data-testid="aviso-alerta"]` visível no `/estoque` do "Resolver"; o formulário e o extrato abertos. Se algum não montar (fixture falhou, elemento não apareceu em 5 s), o estado sai como `NAO_MONTADO` no relatório e a auditoria **termina com código 1**, mesmo que as outras medidas tenham passado. Não existe status "pulado"
+- [x] **Ajuste da revisão do L1**: a auditoria trata `SIGINT` e `SIGTERM` (limpa a fixture e sai com 130) e, no início de cada execução, conta e apaga restos `[audit]` antes do `preparar`. Prova: um `preparar` solto deixou 5 restos; a execução seguinte registrou "5 resto(s) [audit] de uma execução anterior: limpando" e terminou com `{"restos":0}`. Ctrl+C real não é disparável por automação no Windows; a limpeza do início cobre esse caso
+- [x] **Trava de banco**: `fixture-auditoria.mjs` recusa (exit 3, sem abrir conexão, em `preparar`, `limpar` e `contar`) qualquer `DATABASE_URL` cujo host não seja `localhost`, `127.0.0.1`, `::1` ou `db`. Testado com host do Render, IP de rede, URL vazia e URL inválida (todos recusados) e com `db`/`localhost` (aceitos)
+- [x] A auditoria nunca envia formulários: o `/estoque` do "Resolver" é só aberto, nunca salvo, para o alerta `[audit]` não ser resolvido
+- [x] Mede: `scrollWidth == innerWidth`; `.tabela-wrap` rolando por dentro; `.nav` fixa com 4 links e topo ≤ 64px (≤ 900px); último filho de `.conteudo` acima da `.nav` no fim da rolagem; `font-size` ≥ 16 em `input/select/textarea` (≤ 900px); alvos do RSP-08 ≥ 44×44; extrato no topo da viewport depois de selecionar um gesseiro em 360px
+- [x] Imprime um relatório por tela × largura (84 combinações) e sai com código 1 se qualquer medida falhar ou qualquer estado ficar `NAO_MONTADO`. A última linha resume `medidos: N/84, nao montados: M, falhas: F`; o gate só é verde com `84/84, 0, 0`
+- [x] Rodado contra o código atual, **falha** e aponta os mesmos problemas da auditoria de 2026-11-09 (transbordo em 320–390px, topo esticado em 768px, inputs de 14px, alvos pequenos). Esse é o "vermelho" do ciclo
+- [x] Screenshots em `apps/web/.audit/`, ignorado pelo git
+- [x] `CHROME_PATH` configurável, com padrão do Chrome do Windows
 
 **Tests**: browser (o próprio script é o teste)
 **Gate**: browser (esperado vermelho nesta task; verde a partir do fim da fase)
@@ -142,6 +153,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T2: Grid sem transbordo e grades fluidas
+
+**Status**: ✅ Concluída (L1)
 
 **What**: Corrigir a causa do transbordo e deixar as grades e textos encolherem até 320px.
 **Where**: `apps/web/src/index.css`
@@ -156,13 +169,13 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `.app` com `minmax(0, 1fr)` no desktop e no mobile
-- [ ] `minmax(min(Npx, 100%), 1fr)` em `.grade`, `.lista-alertas`, `.grade-resumo`, `.formulario` e `.formulario fieldset`
-- [ ] `overflow-wrap: anywhere` em `.tabela td`, `.card h2`, `.card h4`, `.cliente` e `.pessoa`
-- [ ] `.app` e `.login` com `min-height: 100vh` seguido de `min-height: 100dvh`
-- [ ] Hover com `translateY` só em `@media (hover: hover)`
-- [ ] A auditoria passa nas medidas RSP-01 e RSP-02 em todas as telas e larguras (as outras medidas ainda podem falhar)
-- [ ] Gate quick do web: 147 testes passando
+- [x] `.app` com `minmax(0, 1fr)` no desktop e no mobile
+- [x] `minmax(min(Npx, 100%), 1fr)` em `.grade`, `.lista-alertas`, `.grade-resumo`, `.formulario` e `.formulario fieldset`
+- [x] `overflow-wrap: anywhere` em `.card h2`, `.card h4`, `.cliente` e `.pessoa`; `overflow-wrap: break-word` em `.tabela td` (ajuste da revisão do L1: a tabela rola por dentro, então só quebra palavra maior que a coluna, sem "Regulado/res")
+- [x] `.app` e `.login` com `min-height: 100vh` seguido de `min-height: 100dvh`
+- [x] Hover com `translateY` só em `@media (hover: hover)`
+- [x] A auditoria passa nas medidas RSP-01 e RSP-02 em todas as telas e larguras (as outras medidas ainda podem falhar). _Nota L1: RSP-02 verde em 84/84. No RSP-01 o conteúdo deixou de transbordar (com o topo escondido, 0 falhas de RSP-01/02 em 84/84), mas o topo atual (logo + 4 ícones + avatar + Sair, ~417px) ainda transborda em 320–390px. É a causa nº 2 do Problem Statement e o escopo da T3, que fecha o RSP-01._
+- [x] Gate quick do web: 147 testes passando
 
 **Tests**: browser
 **Gate**: browser + quick (web)
@@ -172,6 +185,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T3: Barra de navegação inferior e topo compacto
+
+**Status**: ✅ Concluída (L1)
 
 **What**: No ≤ 900px, o mesmo `<nav>` vira barra inferior fixa com rótulos curtos, e o topo fica com até 64px e respeita a safe area. No desktop nada muda.
 **Where**: `apps/web/src/components/Layout.tsx`, `apps/web/src/index.css`, `apps/web/index.html` (`viewport-fit=cover`), `apps/web/src/components/Layout.test.tsx` (novo)
@@ -186,12 +201,12 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `abas` com `rotuloCurto` ("Geral", "Obras", "Equipe", "Estoque"); cada link com `.rotulo` e `.rotulo-curto`
-- [ ] CSS ≤ 900px: `.nav` fixa embaixo em grade de 4 colunas, padding com `env(safe-area-inset-bottom)`; `.app` com `grid-template-rows: auto 1fr`; topo com `56px + env(safe-area-inset-top)`; `.marca-texto` escondido; `.conteudo` com padding inferior de `--altura-nav + safe-area-inset-bottom + 16px`
-- [ ] `index.html` com `viewport-fit=cover`
-- [ ] `Layout.test.tsx`: 4 links com rótulo longo e curto, aba da rota atual com `ativo`, "Sair" presente
-- [ ] A auditoria passa em RSP-01..06 em todas as telas e larguras; em 1024 e 1366px a sidebar continua lateral com os rótulos atuais
-- [ ] Gate quick do web: ≥ 147 + novos testes passando
+- [x] `abas` com `rotuloCurto` ("Geral", "Obras", "Equipe", "Estoque"); cada link com `.rotulo` e `.rotulo-curto`
+- [x] CSS ≤ 900px: `.nav` fixa embaixo em grade de 4 colunas, padding com `env(safe-area-inset-bottom)`; `.app` com `grid-template-rows: auto 1fr`; topo com `56px + env(safe-area-inset-top)`; `.marca-texto` escondido; `.conteudo` com padding inferior de `--altura-nav + safe-area-inset-bottom + 16px`
+- [x] `index.html` com `viewport-fit=cover`
+- [x] `Layout.test.tsx`: 4 links com rótulo longo e curto, aba da rota atual com `ativo`, "Sair" presente
+- [x] A auditoria passa em RSP-01..06 em todas as telas e larguras; em 1024 e 1366px a sidebar continua lateral com os rótulos atuais
+- [x] Gate quick do web: ≥ 147 + novos testes passando
 
 **Tests**: unit + browser
 **Gate**: browser + quick (web)
@@ -202,10 +217,12 @@ T28 → T29 → T30 → T31
 
 ### T4: Alvos de toque e campos de 16px
 
+**Status**: ✅ Concluída (L1)
+
 **What**: Áreas de toque de 44×44 e fonte de 16px nos campos no mobile ou em tela de toque.
 **Where**: `apps/web/src/index.css`
 **Depends on**: T3
-**Reuses**: classes existentes `.nav-link`, `.btn-sair`, `.chip`, `.btn-detalhes`, `.card-obra summary`, `.linha-form .btn-texto`
+**Reuses**: classes existentes `.nav-link`, `.btn-sair`, `.chip`, `.btn-detalhes`, `.btn-icone` ("Ver silenciados"), `.card-obra summary`, `.linha-form .btn-texto`
 **Requirement**: RSP-07, RSP-08
 
 **Tools**:
@@ -215,10 +232,10 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `@media (max-width: 900px), (pointer: coarse)`: `input, select, textarea { font-size: 16px }`
-- [ ] ≤ 900px: `min-height/min-width: 44px` nos alvos do RSP-08, mais a regra para `.btn-instalar` (o botão chega na T25)
-- [ ] A auditoria passa por inteiro, exceto a medida do RSP-10 (fica para a T5)
-- [ ] Gate quick do web passando
+- [x] `@media (max-width: 900px), (pointer: coarse)`: `input, select, textarea { font-size: 16px }`
+- [x] ≤ 900px: `min-height/min-width: 44px` nos alvos do RSP-08, mais a regra para `.btn-instalar` (o botão chega na T25)
+- [x] A auditoria passa por inteiro, exceto a medida do RSP-10 (fica para a T5). _Nota L1: os campos de 16px alargavam o `/login` em 320px (337px e depois 321px), porque `.login` e `.login-area` usavam faixa `1fr`/`auto` (mínimo = min-content). Os dois passaram a `minmax(0, 1fr)` no bloco `max-width: 860px`, a mesma correção que a T2 fez no `.app`._
+- [x] Gate quick do web passando
 
 **Tests**: browser
 **Gate**: browser + quick (web)
@@ -228,6 +245,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T5: Linha do gesseiro clicável e rolagem até o extrato
+
+**Status**: ✅ Concluída (L1)
 
 **What**: A linha inteira abre o extrato; no ≤ 760px a página rola até o card do extrato.
 **Where**: `apps/web/src/pages/Gesseiros.tsx`, `apps/web/src/pages/Gesseiros.test.tsx`
@@ -242,11 +261,11 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `onClick` no `li`; o botão do nome continua (teclado/leitor de tela), sem abrir o extrato duas vezes
-- [ ] Depois de carregar o extrato, `matchMedia('(max-width: 760px)')` verdadeiro chama `scrollIntoView({ block: 'start', behavior: 'smooth' })` no card; falso não chama
-- [ ] Testes: clicar no telefone (fora do nome) abre o extrato; `scrollIntoView` chamado com `matchMedia` verdadeiro e não chamado com falso; um clique no nome = uma chamada a `/gesseiros/:id/extrato`
-- [ ] A auditoria passa por inteiro em todas as telas e larguras (fim da fase 1)
-- [ ] Gate quick do web passando
+- [x] `onClick` no `li`; o botão do nome continua (teclado/leitor de tela), sem abrir o extrato duas vezes
+- [x] Depois de carregar o extrato, `matchMedia('(max-width: 760px)')` verdadeiro chama `scrollIntoView({ block: 'start', behavior: 'smooth' })` no card; falso não chama
+- [x] Testes: clicar no telefone (fora do nome) abre o extrato; `scrollIntoView` chamado com `matchMedia` verdadeiro e não chamado com falso; um clique no nome = uma chamada a `/gesseiros/:id/extrato`
+- [x] A auditoria passa por inteiro em todas as telas e larguras (fim da fase 1). _Nota L1: o `scroll-margin-top` do card do extrato (previsto no design de `Gesseiros`) ficou em `apps/web/src/index.css`, no bloco `max-width: 760px`, que está fora do `Where` da T5. Sem ele, o card parava atrás do topo fixo._
+- [x] Gate quick do web passando
 
 **Tests**: unit + browser
 **Gate**: browser + quick (web)

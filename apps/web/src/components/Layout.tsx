@@ -4,11 +4,12 @@ import { auth } from '../lib/api';
 import { iniciais } from '../lib/formato';
 import Icone, { type NomeIcone } from './Icone';
 
-const abas: Array<{ para: string; rotulo: string; icone: NomeIcone }> = [
-  { para: '/dashboard', rotulo: 'Visao geral', icone: 'painel' },
-  { para: '/obras', rotulo: 'Obras', icone: 'obras' },
-  { para: '/gesseiros', rotulo: 'Gesseiros', icone: 'gesseiros' },
-  { para: '/estoque', rotulo: 'Estoque', icone: 'estoque' },
+/** rotulo: sidebar do desktop; rotuloCurto: barra inferior do celular (<= 900px), via CSS. */
+const abas: Array<{ para: string; rotulo: string; rotuloCurto: string; icone: NomeIcone }> = [
+  { para: '/dashboard', rotulo: 'Visao geral', rotuloCurto: 'Geral', icone: 'painel' },
+  { para: '/obras', rotulo: 'Obras', rotuloCurto: 'Obras', icone: 'obras' },
+  { para: '/gesseiros', rotulo: 'Gesseiros', rotuloCurto: 'Equipe', icone: 'gesseiros' },
+  { para: '/estoque', rotulo: 'Estoque', rotuloCurto: 'Estoque', icone: 'estoque' },
 ];
 
 export default function Layout() {
@@ -40,9 +41,11 @@ export default function Layout() {
               key={aba.para}
               to={aba.para}
               className={({ isActive }) => (isActive ? 'nav-link ativo' : 'nav-link')}
+              aria-label={aba.rotulo}
             >
               <Icone nome={aba.icone} />
-              <span>{aba.rotulo}</span>
+              <span className="rotulo">{aba.rotulo}</span>
+              <span className="rotulo-curto">{aba.rotuloCurto}</span>
             </NavLink>
           ))}
         </nav>

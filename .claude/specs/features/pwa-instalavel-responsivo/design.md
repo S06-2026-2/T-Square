@@ -176,12 +176,12 @@ Por que funciona:
 
 | Req | Regra |
 | --- | --- |
-| RSP-01/02 | `.app { grid-template-columns: 240px minmax(0, 1fr) }` e, no mobile, `minmax(0, 1fr)`. `.grade`, `.lista-alertas`: `minmax(min(300px, 100%), 1fr)`; `.grade-resumo`, `.formulario`, `fieldset`: o mesmo com 200/220px. `overflow-wrap: anywhere` em `.tabela td`, `.card h2/h4`, `.cliente`, `.pessoa` (nomes de 120 caracteres) |
+| RSP-01/02 | `.app { grid-template-columns: 240px minmax(0, 1fr) }` e, no mobile, `minmax(0, 1fr)`. `.grade`, `.lista-alertas`: `minmax(min(300px, 100%), 1fr)`; `.grade-resumo`, `.formulario`, `fieldset`: o mesmo com 200/220px. `overflow-wrap: anywhere` em `.card h2/h4`, `.cliente`, `.pessoa` (nomes de 120 caracteres); `overflow-wrap: break-word` em `.tabela td`, que já rola por dentro e não deve partir palavras no meio |
 | RSP-03 | ≤ 900px: `.nav { position: fixed; inset: auto 0 0 0; display: grid; grid-template-columns: repeat(4, 1fr) }`, `.nav-link` em coluna (ícone sobre rótulo), `.rotulo { display: none }`, `.rotulo-curto { display: inline }` |
 | RSP-04 | ≤ 900px: `.app { grid-template-rows: auto 1fr }` (o topo para de esticar); `.sidebar { height: calc(56px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top) }`; `.marca-texto { display: none }`; `.usuario` à direita (`margin-left: auto`) |
 | RSP-06 | `--altura-nav: 64px`; `.conteudo { padding-bottom: calc(var(--altura-nav) + env(safe-area-inset-bottom) + 16px) }` ≤ 900px; `.nav { padding-bottom: env(safe-area-inset-bottom) }` |
 | RSP-07 | `@media (max-width: 900px), (pointer: coarse) { input, select, textarea { font-size: 16px } }` |
-| RSP-08 | ≤ 900px: `min-height: 44px; min-width: 44px` em `.nav-link`, `.btn-sair`, `.btn-instalar`, `.chip`, `.btn-detalhes`, `.card-obra summary` (com `display: flex; align-items: center`) e `.linha-form .btn-texto` |
+| RSP-08 | ≤ 900px: `min-height: 44px; min-width: 44px` em `.nav-link`, `.btn-sair`, `.btn-instalar`, `.chip`, `.btn-detalhes`, `.btn-icone` ("Ver silenciados", 38×38 na auditoria), `.card-obra summary` (com `display: flex; align-items: center`) e `.linha-form .btn-texto` |
 | RSP-09 | `.lista-pessoas li { cursor: pointer }`; o `onClick` sobe do botão para o `li` (o botão continua lá para teclado e leitor de tela) |
 | RSP-11 | `.app, .login { min-height: 100vh; min-height: 100dvh }` (a segunda linha sobrepõe onde houver suporte) |
 | RSP-12 | `index.html`: `viewport-fit=cover` no `<meta name="viewport">`; os `env(safe-area-inset-*)` acima |
@@ -362,7 +362,18 @@ VitePWA({
 #### Auditoria, `apps/web/scripts/audit-responsive.mjs` (novo)
 
 - Evolução do script de 2026-11-09. Pré-requisitos: `vite preview` (porta 4173) e a API rodando.
-  Faz login pela API, percorre as 11 telas/estados × 6 larguras e mede:
+  Faz login pela API, percorre as 14 telas/estados × 6 larguras e mede. São as 11 da auditoria de
+  2026-11-09, mais três estados do agente de estoque: o painel "Silenciados" aberto e a justificativa
+  de um alerta aberta (os dois no `/dashboard`), e o `/estoque` aberto pelo "Resolver" de um alerta
+  (`?alerta=&material=&quantidade=`, com aviso e movimentação preenchida).
+- **Dados montados, não supostos**: antes de medir, a auditoria roda
+  `docker exec gesso_api node scripts/fixture-auditoria.mjs preparar`
+  (`apps/api/scripts/fixture-auditoria.mjs`, Prisma Client do container), que cria um alerta
+  `ATIVO` e um `DISPENSADO` em materiais `[audit]`, ligados a uma `AnaliseEstoque` datada de
+  2000-01-01. Essa análise nunca vira a "última análise" nem afeta o catch-up, e o agente LLM não é
+  chamado. Ao fim, `limpar` roda num `finally`. Cada estado é conferido como montado antes da
+  medição. Um estado que não monta sai `NAO_MONTADO` e reprova a auditoria; não existe "pulado".
+- Medidas:
   - `scrollWidth == innerWidth` (RSP-01)
   - `.tabela-wrap` com `scrollWidth > clientWidth` e página sem transbordo (RSP-02)
   - altura do topo ≤ 64 (RSP-04) e `.nav` com `position: fixed` + 4 links (RSP-03)
@@ -574,6 +585,7 @@ por usuário.
 | `auth.logout()` é síncrono e chamado em vários lugares | `apps/web/src/lib/api.ts:19` | Um logout que não limpe o cache quebra o OFF-11 | Todo logout passa por `encerrarSessao()`; `grep auth.logout` no Tasks garante que só `sessao.ts` chama `auth.logout` |
 | Sem teste de componente do `Layout` hoje | `apps/web/src/components/Layout.tsx` | Troca de estrutura sem rede de segurança | Novo `Layout.test.tsx` (abas, rótulos, Sair limpa o cache, indicador, botão instalar) |
 | `index.css` com 1196 linhas e media queries espalhadas | `apps/web/src/index.css:204`, `:425`, `:881`, `:1076`, `:1192` | Regra mobile nova colidindo com uma antiga | Bloco mobile único no fim do arquivo para as regras desta feature; a auditoria pega regressão |
+| Feature paralela `obras-transicoes-status` (Tasks aprovadas, sem código) mexe nos mesmos arquivos | `apps/api/src/obras/obras.service.ts`, `obras.service.spec.ts`, `obras.controller.ts`, `apps/api/prisma/schema.prisma`, `apps/web/src/pages/Obras.tsx` | Conflito de merge e duas migrations criadas em paralelo | Ver "Revalidação contra a `main`" abaixo: as mudanças desta feature nesses arquivos são localizadas (T11: só `create()`; T14: só o `@Post()`; T6: só um model novo; T23: só uma linha em `Obras.tsx`). A feature que for mergeada depois faz rebase e regenera a própria migration por cima da outra |
 | CORS e o `Idempotency-Key` | `apps/api/src/main.ts:11-14` | Sem `Idempotency-Key` em `allowedHeaders`, o navegador bloqueia todos os POST de criação no preflight. O e2e atual (`test/app.e2e-spec.ts:20`) não monta CORS e não pegaria isso | `configurarCors()` compartilhado por `main.ts` e e2e, com a lista explícita, e teste de preflight (IDP-09) |
 | `CORS_ORIGIN` padrão só tem a porta 5173 | `docker-compose.yml:34`, `.env.example:13` | O `vite preview` (4173), onde o SW roda, é bloqueado pelo CORS; a auditoria e o teste offline falhariam | Padrão passa a `http://localhost:5173,http://localhost:4173`. Em produção, o `CORS_ORIGIN` do Render continua sendo a URL da Vercel |
 
@@ -597,3 +609,60 @@ por usuário.
 
 Decisões de projeto registradas em `.claude/specs/STATE.md`: **AD-009** (idempotência em POST de
 criação) e **AD-010** (sem rotas lazy + sessão limpa o cache).
+
+---
+
+## Revalidação contra a `main` (2026-11-09, antes do L1)
+
+**Base**: branch `feat/pwa-instalavel-responsivo` em `4fe273c`, a partir da `main` `8e99dc8` (= `origin/main`).
+
+- **Código**: `git diff aa52d2a 8e99dc8` é vazio. A `main` é o merge da PR #7, cujo único commit novo
+  é o `aa52d2a`, a base em que este design foi escrito. Agente de estoque, `SilenciadosEstoque`,
+  `index.css` (1196 linhas), `estoque.service.ts` e `materiais-previstos.service.ts` já estavam na
+  análise. Entre `aa52d2a` e `HEAD`, só mudaram os 4 arquivos de spec/STATE.
+- **Referências conferidas na `main`**, todas válidas:
+
+  | Referência | Encontrado |
+  | --- | --- |
+  | `estoque.service.ts:80` | `return this.prisma.$transaction(async (tx) => {` dentro de `movimentar()` |
+  | `materiais-previstos.service.ts:14`, `:25` | `type ClientePrisma = Pick<PrismaService, 'material'>` e `validarItens(itens, tx: ClientePrisma = this.prisma)` |
+  | `main.ts:11-14` | `enableCors({ origin, credentials })`, sem `allowedHeaders` |
+  | `index.css:51-54` | `.app { grid-template-columns: 240px 1fr; min-height: 100vh }`; media queries em `:204`, `:425`, `:881`, `:1076` e `:1192` |
+  | `docker-compose.yml:34`, `.env.example:13` | `CORS_ORIGIN` só com `http://localhost:5173` |
+  | `apps/api/package.json:35` | `@nestjs/schedule` `6.1.3` |
+
+  A estratégia da transação não muda. Nota: o `ClientePrisma` de `materiais-previstos.service.ts` é
+  local e mais estreito (`Pick<…, 'material'>`). O `ClientePrisma` novo de `idempotencia/tipos.ts`
+  (`Prisma.TransactionClient | PrismaService`) é compatível com ele, porque um `TransactionClient`
+  tem `material`. Não é preciso mexer no tipo local.
+- **ADs**: a `main` vai até a AD-008, e a AD-009 e a AD-010 só existem no commit `4fe273c`. Não há
+  colisão nem renumeração.
+- **Telas novas**: o `SilenciadosEstoque` (botão "Ver silenciados" + painel) e a justificativa do
+  `CardAlertaEstoque` só aparecem com interação, e a auditoria de 2026-11-09 não os abria. Eles
+  entraram no RSP-01 e na auditoria (14 estados), e o botão de 38×38 entrou no RSP-08. O `/estoque`
+  vindo do "Resolver" de um alerta também entrou. Não há outra tela ou componente fora da lista:
+  `components/` e `pages/` têm os mesmos 17 componentes já analisados.
+- **`obras-transicoes-status`** (Tasks aprovadas, nenhum código na `main`):
+  - **Idempotência (AD-009)**: aquela feature não cria POST de criação. As rotas novas são
+    `PATCH /obras/:id/fechar`, `/iniciar`, `/concluir` e `/cancelar` e
+    `DELETE /obras/:id/gesseiros/:gesseiro`. Elas já são seguras para reenvio pela AD-007: cada
+    transição é um update condicional ao status de origem, e repetir dá 400 de transição inválida,
+    sem efeito duplicado (sem crédito dobrado no `concluir`). Ficam fora do `Idempotency-Key`,
+    conforme a AD-009, que vale para POST de criação. O único POST que ela toca, `POST /obras`, é só
+    para tirar `status` do `CreateObraDto` (TRN-06), e isso não interfere no `executar()`, que recebe
+    o corpo já validado pelo DTO.
+  - **Arquivos em comum**:
+
+    | Arquivo | Esta feature | `obras-transicoes-status` |
+    | --- | --- | --- |
+    | `apps/api/prisma/schema.prisma` + migrations | T6: model novo `ChaveIdempotencia` | T2: campo de cancelamento em `Obra` |
+    | `apps/api/src/obras/obras.service.ts` (+ spec) | T11: só `create(dto, tx)` | T5–T9: métodos de transição |
+    | `apps/api/src/obras/obras.controller.ts` | T14: só o `@Post()` | T10: rotas `PATCH` novas, `@Patch(':id/concluir')` muda |
+    | `apps/web/src/pages/Obras.tsx` (+ test) | T23: uma linha `useAoReconectar(carregar)` | T15: botões de ação no card |
+    | `apps/web/src/index.css` | T2–T4: grid, barra inferior, alvos | Estilos de `AcoesStatusObra` (se houver) |
+
+    As mudanças desta feature nesses arquivos são localizadas e não tocam os métodos que a outra
+    altera. O conflito esperado é textual, resolvível no rebase. Regras para quem mergear depois:
+    (1) regenerar a própria migration por cima da outra (`prisma migrate dev`), nunca editar a
+    migration já mergeada; (2) incluir os estados novos daquela feature (`AcoesStatusObra`,
+    formulário de cancelamento) no `audit:responsive` e no RSP-08, conforme a nova assumption da spec.
