@@ -33,7 +33,12 @@ sair diretamente delas, não de suposição.
 6. **Rodar os testes**: `npm run test --workspace apps/api`. Todos precisam passar antes de dar a
    tarefa como concluída.
 
-7. **Atualizar a tabela "Requirement Traceability"** do `spec.md`: mudar o `Status` do(s)
+7. **Auditar os testes**: rodar o sub-agente `auditor-de-testes` no service e no `.spec.ts`
+   tocados. Para cada mutação em que ele responder "nenhum", escrever o teste que a pega (o
+   cenário vem na tabela dele) e voltar ao passo 6. Só seguir quando não sobrar mutação
+   relevante descoberta.
+
+8. **Atualizar a tabela "Requirement Traceability"** do `spec.md`: mudar o `Status` do(s)
    requirement ID(s) cobertos de `Pending` para `Verified` (só depois dos testes passarem).
 
-8. **Nunca commitar** — só implementar e testar; commit fica com o usuário.
+9. **Nunca commitar** — só implementar e testar; commit fica com o usuário.

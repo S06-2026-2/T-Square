@@ -56,3 +56,14 @@ implementá-la. Specs existentes: `gesseiros-crud-financeiro`, `estoque-materiai
 
 Todo service novo (ou TODO implementado) precisa de um `.spec.ts` cobrindo os cenários da spec
 correspondente, seguindo o estilo de `apps/api/src/obras/obras.service.spec.ts`.
+
+### Auditoria de testes
+
+Nenhum requisito de spec passa para `Verified` sem antes rodar o sub-agente `auditor-de-testes`
+(`.claude/agents/auditor-de-testes.md`) no service e no `.spec.ts` da feature. Vale também para o
+Verifier do fluxo `tlc-spec-driven`.
+
+- Mutação em que o auditor responde "nenhum" vira teste antes de marcar `Verified`, ou fica
+  registrada como aceita com o motivo.
+- O veredito e a tabela do auditor vão numa seção `## Auditoria de testes` do `validation.md` da
+  feature.
