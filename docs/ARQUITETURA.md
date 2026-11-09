@@ -84,7 +84,10 @@ do Render em produção.
 
 ## Deploy
 
-**API no Render:** Web Service apontando para `apps/api` com o `Dockerfile`.
+**API no Render:** Web Service com `Dockerfile Path` = `apps/api/Dockerfile` e o **contexto do
+build na raiz do repositório** (`Root Directory` vazio). O `package-lock.json` do monorepo mora na
+raiz e o `npm ci` do Dockerfile exige o lockfile; com o contexto em `apps/api` ele falha. Build
+local: `docker build -f apps/api/Dockerfile -t gesso-api .`
 Variáveis: `DATABASE_URL` (do Postgres do próprio Render), `JWT_SECRET`, `CORS_ORIGIN`
 (a URL da Vercel). O container roda `prisma migrate deploy` antes de subir.
 
