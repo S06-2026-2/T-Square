@@ -1,6 +1,15 @@
 import type { LoginResponse } from '../types';
 import { auth } from './api';
-import { encerrarSessao, iniciarSessao, limparCacheApi, NOME_CACHE_API } from './sessao';
+import { renderHook, act } from '@testing-library/react';
+
+import {
+  encerrarSessao,
+  iniciarSessao,
+  limparCacheApi,
+  motivoFimSessao,
+  NOME_CACHE_API,
+  useSessaoAtiva,
+} from './sessao';
 
 jest.mock('./config', () => ({ BASE_URL: 'http://api.teste' }));
 
@@ -99,6 +108,43 @@ describe('sessao', () => {
       terminar(true);
       await envio;
       expect(resolveu).toBe(true);
+    });
+  });
+
+  describe('sessão observável (OFF-11)', () => {
+    it('a tela fica sabendo do fim só depois de o cache ser apagado, com o motivo', async () => {
+      let terminar!: (valor: boolean) => void;
+      instalarCaches(jest.fn(() => new Promise<boolean>((resolve) => (terminar = resolve))));
+      logarComo('token-velho');
+      const { result } = renderHook(() => useSessaoAtiva());
+      expect(result.current).toBe(true);
+
+      let fim!: Promise<void>;
+      act(() => {
+        fim = encerrarSessao('expirada');
+      });
+      // Token removido, mas sem aviso ainda: quem observa continua na tela até o cache sair.
+      expect(result.current).toBe(true);
+
+      await act(async () => {
+        terminar(true);
+        await fim;
+      });
+      expect(result.current).toBe(false);
+      expect(motivoFimSessao()).toBe('expirada');
+    });
+
+    it('sem motivo é "saida"; login zera o motivo e avisa', async () => {
+      logarComo('token-velho');
+      const { result } = renderHook(() => useSessaoAtiva());
+
+      await act(() => encerrarSessao());
+      expect(motivoFimSessao()).toBe('saida');
+      expect(result.current).toBe(false);
+
+      await act(() => iniciarSessao(resposta));
+      expect(motivoFimSessao()).toBeNull();
+      expect(result.current).toBe(true);
     });
   });
 

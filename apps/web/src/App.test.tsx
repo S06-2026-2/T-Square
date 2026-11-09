@@ -1,9 +1,11 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import App from './App';
+import { encerrarSessao } from './lib/sessao';
 
 jest.mock('./lib/api', () => ({
+  SESSAO_EXPIRADA: 'Sessao expirada. Faca login novamente.',
   api: { get: jest.fn(async () => []) },
   auth: {
     estaLogado: jest.fn(() => true),
@@ -73,5 +75,63 @@ describe('App: rota privada sem token (AD-010)', () => {
 
     await screen.findByRole('heading', { level: 1, name: 'Obras' });
     expect(deletar).not.toHaveBeenCalled();
+  });
+});
+
+describe('App: fim de sessão com a tela aberta (OFF-11)', () => {
+  const { auth: authMock } = jest.requireMock('./lib/api');
+  let terminarDelete: (valor: boolean) => void;
+  let deletar: jest.Mock;
+
+  beforeEach(() => {
+    deletar = jest.fn(() => new Promise<boolean>((resolve) => (terminarDelete = resolve)));
+    Object.defineProperty(globalThis, 'caches', {
+      value: { delete: deletar },
+      configurable: true,
+      writable: true,
+    });
+    authMock.logout.mockImplementation(() => authMock.estaLogado.mockReturnValue(false));
+  });
+
+  afterEach(() => {
+    authMock.estaLogado.mockReturnValue(true);
+    authMock.logout.mockReset();
+    delete (globalThis as { caches?: unknown }).caches;
+  });
+
+  it('401: vai para /login sem recarregar, só depois de apagar o cache, e mostra o motivo', async () => {
+    renderEm('/obras');
+    await screen.findByRole('heading', { level: 1, name: 'Obras' });
+
+    let fim!: Promise<void>;
+    act(() => {
+      fim = encerrarSessao('expirada');
+    });
+    // Token já saiu, mas o cache ainda está sendo apagado: a tela não troca antes disso.
+    expect(deletar).toHaveBeenCalledWith('api-dados');
+    expect(screen.queryByRole('button', { name: 'Entrar' })).not.toBeInTheDocument();
+
+    await act(async () => {
+      terminarDelete(true);
+      await fim;
+    });
+
+    expect(await screen.findByRole('button', { name: 'Entrar' })).toBeInTheDocument();
+    expect(screen.getByText('Sessao expirada. Faca login novamente.')).toHaveClass('erro');
+    expect(screen.queryByRole('heading', { level: 1, name: 'Obras' })).not.toBeInTheDocument();
+  });
+
+  it('Sair: vai para /login sem a mensagem de sessão expirada', async () => {
+    renderEm('/estoque');
+    await screen.findByRole('heading', { level: 1, name: 'Estoque' });
+
+    await act(async () => {
+      const fim = encerrarSessao('saida');
+      terminarDelete(true);
+      await fim;
+    });
+
+    expect(await screen.findByRole('button', { name: 'Entrar' })).toBeInTheDocument();
+    expect(screen.queryByText('Sessao expirada. Faca login novamente.')).not.toBeInTheDocument();
   });
 });
