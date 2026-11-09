@@ -31,7 +31,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-troque-esse-segredo-em-producao}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       PORT: 3000
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173,http://localhost:4173}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-5-5}
       AGENTE_AUTOMATICO: ${AGENTE_AUTOMATICO:-false}

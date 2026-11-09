@@ -174,7 +174,7 @@ lançar o mesmo vale ou movimentação duas vezes.
 
 **Acceptance Criteria**:
 
-1. WHEN o front envia um POST de criação (vale, movimentação de estoque, obra, gesseiro, material) THEN the system SHALL incluir o cabeçalho `Idempotency-Key` com um UUID (`crypto.randomUUID()`) gerado ao abrir o formulário e mantido até o envio ter sucesso ou receber 422 (IDP-07); depois disso, o formulário gera uma chave nova. <!-- IDP-01 -->
+1. WHEN o front envia um POST de criação (vale, movimentação de estoque, obra, gesseiro, material) THEN the system SHALL incluir o cabeçalho `Idempotency-Key` com um UUID (`crypto.randomUUID()`) gerado ao abrir o formulário e mantido até o envio ter sucesso ou receber 422 (IDP-07); depois disso, o formulário gera uma chave nova. O formulário também gera uma chave nova quando passa a apontar para outro recurso sem ser fechado (outro gesseiro no extrato, outro material pré-preenchido pelo "Resolver"), para um envio a um recurso nunca reusar a chave de outro. <!-- IDP-01 -->
 2. WHEN o backend recebe um POST com uma `Idempotency-Key` já processada pelo mesmo usuário na mesma rota THEN the system SHALL devolver o mesmo status e corpo da primeira resposta, sem gravar de novo. <!-- IDP-02 -->
 3. IF chegar a mesma chave com corpo diferente do original THEN the system SHALL responder 422 e não gravar. <!-- IDP-03 -->
 4. IF chegar a mesma chave enquanto o primeiro pedido ainda está em processamento THEN the system SHALL responder 409 e não gravar. <!-- IDP-04 -->
@@ -294,14 +294,14 @@ instrução. No app já adicionado à tela de início, o botão não aparece.
 | OFF-14 | P1: Consultar sem internet | - | Pending |
 | OFF-15 | P1: Consultar sem internet | - | Pending |
 | IDP-01 | P1: Reenviar sem duplicar | - | Pending |
-| IDP-02 | P1: Reenviar sem duplicar | - | Pending |
-| IDP-03 | P1: Reenviar sem duplicar | - | Pending |
-| IDP-04 | P1: Reenviar sem duplicar | - | Pending |
-| IDP-05 | P1: Reenviar sem duplicar | - | Pending |
-| IDP-06 | P1: Reenviar sem duplicar | - | Pending |
+| IDP-02 | P1: Reenviar sem duplicar | T6, T8, T9, T10, T11, T12, T14 | Implementing |
+| IDP-03 | P1: Reenviar sem duplicar | T7, T9, T14 | Implementing |
+| IDP-04 | P1: Reenviar sem duplicar | T9, T14 | Implementing |
+| IDP-05 | P1: Reenviar sem duplicar | T6, T9 | Implementing |
+| IDP-06 | P1: Reenviar sem duplicar | T8, T9, T14 | Implementing |
 | IDP-07 | P1: Reenviar sem duplicar | - | Pending |
 | IDP-08 | P1: Reenviar sem duplicar | - | Pending |
-| IDP-09 | P1: Reenviar sem duplicar | - | Pending |
+| IDP-09 | P1: Reenviar sem duplicar | T13 | Implementing |
 | UPD-01 | P2: Versões novas | - | Pending |
 | UPD-02 | P2: Versões novas | - | Pending |
 | UPD-03 | P2: Versões novas | - | Pending |

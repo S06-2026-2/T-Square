@@ -1,6 +1,9 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
+import { ApiIdempotencia } from '../idempotencia/api-idempotencia.decorator';
+import { ContextoIdempotencia } from '../idempotencia/contexto-idempotencia.decorator';
+import { IdempotenciaService } from '../idempotencia/idempotencia.service';
 import { CreateGesseiroDto } from './dto/create-gesseiro.dto';
 import { CreateLancamentoDto } from './dto/create-lancamento.dto';
 import { UpdateGesseiroDto } from './dto/update-gesseiro.dto';
@@ -10,7 +13,10 @@ import { GesseirosService } from './gesseiros.service';
 @ApiBearerAuth()
 @Controller('gesseiros')
 export class GesseirosController {
-  constructor(private readonly gesseirosService: GesseirosService) {}
+  constructor(
+    private readonly gesseirosService: GesseirosService,
+    private readonly idempotencia: IdempotenciaService,
+  ) {}
 
   @Get()
   findAll() {
@@ -29,8 +35,9 @@ export class GesseirosController {
   }
 
   @Post()
-  create(@Body() dto: CreateGesseiroDto) {
-    return this.gesseirosService.create(dto);
+  @ApiIdempotencia()
+  create(@Body() dto: CreateGesseiroDto, @ContextoIdempotencia() ctx: ContextoIdempotencia) {
+    return this.idempotencia.executar(ctx, (tx) => this.gesseirosService.create(dto, tx));
   }
 
   @Patch(':id')
@@ -45,7 +52,14 @@ export class GesseirosController {
 
   @Post(':id/lancamentos')
   @ApiOperation({ summary: 'Registra um vale ou um pagamento para o gesseiro' })
-  registrarLancamento(@Param('id') id: string, @Body() dto: CreateLancamentoDto) {
-    return this.gesseirosService.registrarLancamento(id, dto);
+  @ApiIdempotencia()
+  registrarLancamento(
+    @Param('id') id: string,
+    @Body() dto: CreateLancamentoDto,
+    @ContextoIdempotencia() ctx: ContextoIdempotencia,
+  ) {
+    return this.idempotencia.executar(ctx, (tx) =>
+      this.gesseirosService.registrarLancamento(id, dto, tx),
+    );
   }
 }

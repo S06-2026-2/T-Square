@@ -1,6 +1,9 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
+import { ApiIdempotencia } from '../idempotencia/api-idempotencia.decorator';
+import { ContextoIdempotencia } from '../idempotencia/contexto-idempotencia.decorator';
+import { IdempotenciaService } from '../idempotencia/idempotencia.service';
 import { CreateMaterialDto } from './dto/create-material.dto';
 import { CreateMovimentacaoDto } from './dto/create-movimentacao.dto';
 import { EstoqueService } from './estoque.service';
@@ -9,7 +12,10 @@ import { EstoqueService } from './estoque.service';
 @ApiBearerAuth()
 @Controller('estoque')
 export class EstoqueController {
-  constructor(private readonly estoqueService: EstoqueService) {}
+  constructor(
+    private readonly estoqueService: EstoqueService,
+    private readonly idempotencia: IdempotenciaService,
+  ) {}
 
   @Get('materiais')
   listarMateriais() {
@@ -17,8 +23,9 @@ export class EstoqueController {
   }
 
   @Post('materiais')
-  criarMaterial(@Body() dto: CreateMaterialDto) {
-    return this.estoqueService.criarMaterial(dto);
+  @ApiIdempotencia()
+  criarMaterial(@Body() dto: CreateMaterialDto, @ContextoIdempotencia() ctx: ContextoIdempotencia) {
+    return this.idempotencia.executar(ctx, (tx) => this.estoqueService.criarMaterial(dto, tx));
   }
 
   @Get('movimentacoes')
@@ -28,8 +35,9 @@ export class EstoqueController {
 
   @Post('movimentacoes')
   @ApiOperation({ summary: 'Registra entrada ou saida de material e atualiza o saldo' })
-  movimentar(@Body() dto: CreateMovimentacaoDto) {
-    return this.estoqueService.movimentar(dto);
+  @ApiIdempotencia()
+  movimentar(@Body() dto: CreateMovimentacaoDto, @ContextoIdempotencia() ctx: ContextoIdempotencia) {
+    return this.idempotencia.executar(ctx, (tx) => this.estoqueService.movimentar(dto, tx));
   }
 
   @Get('alertas')

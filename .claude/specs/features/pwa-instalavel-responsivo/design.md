@@ -241,9 +241,14 @@ do cache, e apaga quando chega a primeira resposta GET da rede.
 
 #### `useEnvio` (alterado)
 
-- **Interfaces**: `useEnvio()` retorna `{ enviando, erro, enviar, chave }`.
+- **Interfaces**: `useEnvio(recurso?: string)` retorna `{ enviando, erro, enviar, chave }`.
   - `chave`: `useState(() => gerarUuid())`. É criada quando o formulário monta, ou seja, quando
     abre (todos são montados condicionalmente; o `LancamentoForm` tem `key={gesseiro.id}`).
+  - `recurso`: identifica para onde o formulário envia. Quando muda sem o formulário desmontar, a
+    chave é trocada, sem depender do `key` de quem chama. O `LancamentoForm` passa `gesseiroId`. O
+    `MovimentacaoForm` passa o `materialId` do `inicial`, porque o "Resolver" de outro alerta troca
+    o pré-preenchimento com o formulário já aberto (`Estoque.tsx:100` não tem `key`). Os outros 3
+    não apontam para um recurso e não passam nada. Na montagem, o hook não troca a chave.
   - `enviar(fn: (chave: string) => Promise<void>)`. No sucesso, troca a chave (IDP-01). Com
     `status 422`: mensagem do IDP-07 e troca a chave. Com `status 409`: mensagem do IDP-08 e mantém
     a chave. Com `status 0`: mensagem do `api.ts` (OFF-08) e mantém a chave. Os campos nunca são
