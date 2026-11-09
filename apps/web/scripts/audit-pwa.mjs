@@ -1,5 +1,5 @@
 // Auditoria do PWA no navegador (spec pwa-instalavel-responsivo: PWA-01/03, OFF-01..07/09/11,
-// Edge Case do 401). Roda contra o build de produção, num Chrome headless de verdade, com o
+// Edge Cases do 401 e do armazenamento cheio). Roda contra o build de produção, num Chrome headless de verdade, com o
 // service worker ativo. Sai com código 1 se qualquer conferência falhar ou se sobrar dado
 // "[audit]" no banco ou cache/SW no navegador.
 //
@@ -301,12 +301,45 @@ async function roteiro(browser, contexto) {
     `dados do cache na tela em ${decorrido} ms (esperado entre 4,5 s e 6 s); ícone: ${lentaIcone}`,
   );
 
-  // 9. 401 com rede não é trocado pelo cache (Edge Case). /api/obras está em cache.
+  // 8b. Armazenamento cheio (Edge Case): com a cota da origem travada no uso atual, a gravação no
+  // cache falha e a tela recebe a resposta da API normalmente. O cache sem a entrada prova que a
+  // gravação de fato falhou (senão a conferência não provaria nada).
+  const cdpPagina = await page.createCDPSession();
+  await page.evaluate((nome) => caches.delete(nome), CACHE);
+  const uso = await page.evaluate(async () => (await navigator.storage.estimate()).usage ?? 0);
+  await cdpPagina.send('Storage.overrideQuotaForOrigin', { origin: BASE, quotaSize: uso });
+  let cheio;
+  try {
+    await page.goto(`${BASE}/estoque`, { waitUntil: 'networkidle0' });
+    const dadosNaTela = await esperar(page, textoVisivel, MATERIAL_FIXTURE);
+    const semIcone = await page.evaluate((s) => document.querySelector(s) === null, INDICADOR);
+    await pausa(1000); // a gravação no cache roda depois da resposta (waitUntil do SW)
+    const gravadas = ((await page.evaluate(lerCacheDados, CACHE)) ?? []).filter((e) =>
+      e.url.startsWith(`${API}/api/estoque/materiais`),
+    ).length;
+    cheio = { dadosNaTela, semIcone, gravadas };
+  } finally {
+    await cdpPagina.send('Storage.overrideQuotaForOrigin', { origin: BASE });
+  }
+  await foto(page, 'armazenamento-cheio');
+  conferir(
+    'Edge Case armazenamento cheio',
+    cheio.dadosNaTela && cheio.semIcone && cheio.gravadas === 0,
+    `cota travada em ${uso} bytes; dados da API na tela: ${cheio.dadosNaTela}; ícone apagado: ${cheio.semIcone}; ` +
+      `entradas de /api/estoque/materiais gravadas: ${cheio.gravadas} (0 = a gravação falhou)`,
+  );
+
+  // 9. 401 com rede não é trocado pelo cache (Edge Case). Antes, /api/obras volta ao cache (o 8b
+  // apagou o api-dados), senão não haveria o que trocar.
+  await page.goto(`${BASE}/obras`, { waitUntil: 'networkidle0' });
+  const obrasEmCache = ((await page.evaluate(lerCacheDados, CACHE)) ?? []).some((e) =>
+    e.url.startsWith(`${API}/api/obras`),
+  );
   const com401 = await page.evaluate(buscarNaPagina, `${API}/api/obras`, 'token-invalido-da-auditoria');
   conferir(
     'Edge Case 401 com rede chega como 401',
-    com401.status === 401 && com401.doCache === null,
-    `GET /api/obras com token inválido: status ${com401.status}, X-From-Cache ${com401.doCache}`,
+    obrasEmCache && com401.status === 401 && com401.doCache === null,
+    `/api/obras em cache antes: ${obrasEmCache}; GET com token inválido: status ${com401.status}, X-From-Cache ${com401.doCache}`,
   );
 
   // 10. Sair apaga o cache de dados (OFF-11).
@@ -323,30 +356,30 @@ async function roteiro(browser, contexto) {
     `entradas antes: ${antesSair}; depois: ${depoisSair === null ? 'cache ausente' : depoisSair.length}`,
   );
 
-  // 11. 401 de verdade pela tela: logout automático também apaga o cache (OFF-11). Como na main,
-  // a tela mostra "Sessao expirada" e fica na rota; a RotaPrivada só confere o token ao montar,
-  // então quem leva a /login é a próxima abertura/recarga (pendência registrada no STATE.md).
+  // 11. 401 de verdade pela tela, sem recarregar (OFF-11): com a sessão vencida, a troca de aba faz
+  // um GET que volta 401; o app apaga o cache e vai sozinho para /login com "Sessao expirada".
   await entrar(page);
   await page.goto(`${BASE}/obras`, { waitUntil: 'networkidle0' });
   const antes401 = ((await page.evaluate(lerCacheDados, CACHE)) ?? []).length;
-  await page.evaluate(() => localStorage.setItem('gesso.token', 'token-invalido-da-auditoria'));
-  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.evaluate(() => {
+    window.__semRecarga = true;
+    localStorage.setItem('gesso.token', 'token-invalido-da-auditoria');
+  });
+  await page.click('nav a[href="/estoque"]');
+  const foiAoLogin = await esperar(page, () => location.pathname === '/login');
   const msg401 = await esperar(
     page,
-    (t) => [...document.querySelectorAll('.erro')].some((e) => e.textContent.includes(t)),
+    (t) => [...document.querySelectorAll('.login-card .erro')].some((e) => e.textContent.includes(t)),
     'Sessao expirada',
   );
-  await page.waitForNetworkIdle({ idleTime: 500 }).catch(() => {});
+  const semRecarga = await page.evaluate(() => window.__semRecarga === true);
   const depois401 = await page.evaluate(lerCacheDados, CACHE);
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  const foiAoLogin = await esperar(page, () => location.pathname === '/login');
-  const depoisNavegar = await page.evaluate(lerCacheDados, CACHE);
+  await foto(page, 'sessao-expirada');
   conferir(
-    'OFF-11 401 automático apaga api-dados',
-    antes401 > 0 && msg401 && (depois401 === null || depois401.length === 0) && foiAoLogin &&
-      (depoisNavegar === null || depoisNavegar.length === 0),
-    `entradas antes: ${antes401}; depois do 401: ${depois401 === null ? 'cache ausente' : depois401.length}; ` +
-      `"Sessao expirada" na tela: ${msg401}; recarga leva a /login: ${foiAoLogin}; cache depois: ${depoisNavegar === null ? 'ausente' : depoisNavegar.length}`,
+    'OFF-11 401 automático apaga api-dados e vai a /login',
+    antes401 > 0 && foiAoLogin && semRecarga && msg401 && (depois401 === null || depois401.length === 0),
+    `entradas antes: ${antes401}; em /login: ${foiAoLogin}; sem recarregar: ${semRecarga}; ` +
+      `"Sessao expirada" no login: ${msg401}; cache depois: ${depois401 === null ? 'ausente' : depois401.length}`,
   );
 
   // 12. Limpeza do navegador: todos os caches e o SW saem.
