@@ -67,15 +67,39 @@
 - **Status**: active
 
 ### AD-009
+<<<<<<< HEAD
 - **Decision**: Nenhum requisito de spec passa para `Verified` sem rodar o sub-agente `auditor-de-testes` (`.claude/agents/auditor-de-testes.md`) no service e no `.spec.ts` da feature. Mutação que o auditor aponta como não coberta vira teste, ou fica aceita com o motivo; o resultado vai numa seção `## Auditoria de testes` do `validation.md`.
 - **Reason**: O estoque foi dado como pronto com testes que não provavam a atomicidade: o mock de `$transaction` passava o próprio `prisma` como `tx`, então tirar uma escrita da transação não derrubava nenhum teste. O auditor existia desde outubro, mas nada o chamava.
 - **Trade-off**: Fechar uma spec fica mais lento (uma rodada de auditoria e, em geral, testes a mais). A regra vive no `CLAUDE.md` (seção "Auditoria de testes") e no passo 7 da skill `implementar-todo`: é instrução para o agente, não trava. Quem revisa o PR confere a seção no `validation.md`.
 - **Scope**: Todas as features, inclusive o Verifier do fluxo `tlc-spec-driven`. Primeira aplicação: `estoque-materiais-movimentacao` (2026-11-09).
+=======
+- **Decision**: Todo POST de criação (hoje: gesseiro, lançamento, obra, material, movimentação) aceita `Idempotency-Key` (UUID). O controller chama `IdempotenciaService.executar(ctx, (tx) => service.criar(dto, tx))` (`apps/api/src/idempotencia/`), e a chave é gravada em `chaves_idempotencia` **na mesma `$transaction`** que a entidade. O escopo é (usuário, método + path, chave), com vida de 24 h. Mesma chave e mesmo corpo devolvem a resposta original; outro corpo dá 422; pedido simultâneo dá 409 (por `pg_try_advisory_xact_lock`); erro desfaz entidade e chave juntas. O CORS lista `Idempotency-Key` em `allowedHeaders` (`src/cors.ts`). No front, a chave vem do `useEnvio`.
+- **Reason**: Com sinal ruim, a resposta se perde e o reenvio duplicaria lançamentos. Como o saldo é derivado de lançamentos, isso vira saldo errado. A gravação na mesma transação evita chave presa e lançamento sem chave se a API cair no meio (decisão do usuário).
+- **Trade-off**: Todo método de criação precisa aceitar `tx: ClientePrisma = this.prisma` e nunca abrir `this.prisma.$transaction` quando recebe um `tx` (o Prisma não aninha transações interativas). Os controllers das rotas de criação ganham uma linha de `executar()`.
+- **Scope**: `pwa-instalavel-responsivo`. Convenção para qualquer POST de criação novo.
+- **Date**: 2026-11-09
+- **Status**: active
+
+### AD-010
+- **Decision**: O front não usa rotas lazy (`React.lazy`/`import()`): o build sai num único chunk JS. Todo fim e início de sessão passa por `lib/sessao.ts`, que apaga o cache `api-dados` do service worker; nada além de `sessao.ts` chama `auth.logout()`.
+- **Reason**: Com `skipWaiting` + `clientsClaim`, uma página aberta da versão antiga pediria chunks que não existem mais (UPD-04). O cache de dados guarda informação financeira, e a chave do cache é só a URL.
+- **Trade-off**: O bundle inicial cresce com o app; revisar se o número de telas crescer muito.
+- **Scope**: `pwa-instalavel-responsivo` e qualquer tela ou fluxo de login/logout novo.
+- **Date**: 2026-11-09
+- **Status**: active
+
+### AD-011
+- **Decision**: O `Dockerfile` de produção da API (`apps/api/Dockerfile`) usa a **raiz do repositório** como contexto de build (`docker build -f apps/api/Dockerfile .`), copia só os manifestos e o código da API (mais o `package.json` do web, que o `npm ci` valida contra o lock) e instala com `npm ci --workspace apps/api`. Há um `.dockerignore` na raiz. O CI (`.github/workflows/ci.yml`, job `docker`) builda a imagem e a sobe contra um Postgres, checando `/api/health`. O job `api` do CI passou a rodar o seed e os testes e2e (`--runInBand`).
+- **Reason**: O Dockerfile antigo usava contexto `apps/api`, onde não existe `package-lock.json` (só o da raiz, por causa dos workspaces); `npm ci` falha com `EUSAGE` (reproduzido). O CI não cobria nem o Dockerfile nem os e2e, então nada avisava.
+- **Trade-off**: O Render precisa estar configurado com `Dockerfile Path = apps/api/Dockerfile` e `Root Directory` vazio (config fora do repositório, fácil de divergir). O contexto na raiz é maior, mitigado pelo `.dockerignore`.
+- **Scope**: Deploy da API e CI. Qualquer arquivo novo que o build da API precise tem que entrar num `COPY` explícito do Dockerfile.
+>>>>>>> dc3c04efbc61a59d20339503c9272ccf641709f4
 - **Date**: 2026-11-09
 - **Status**: active
 
 ## Handoff
 
+- **Feature ativa (2026-11-09)**: `pwa-instalavel-responsivo`. Spec (50 requisitos), Design e Tasks (31 tasks, 6 fases) aprovados em 2026-11-09. L1, L2 e L3 commitados no branch `feat/pwa-instalavel-responsivo` (T1–T21; mais o commit aditivo do `codigo: EM_PROCESSAMENTO` no 409). Contagens no fim do L3: API 283 unit + 14 e2e, web 246; `audit:responsive` 84/84. Execução com sub-agentes em 5 lotes sequenciais (L1 T1–T5; L2 T6–T14; L3 T15–T21; L4 T22–T25; L5 T26–T31). Ao fim de cada lote: suítes + gate, relatório (mudanças, requisitos cobertos, desvios) e parada para o usuário revisar e commitar; o próximo lote só com o OK dele. **Próximo passo**: L4 (T22–T25) com o OK do usuário. Antes do L5, o usuário precisa pôr `CORS_ORIGIN=http://localhost:5173,http://localhost:4173` no `.env` e rodar `docker compose up -d api`. `obras-transicoes-status` (abaixo) continua parada em Tasks.
 - **Feature**: `obras-transicoes-status` em Tasks (2026-10-29), branch `feat/obras-transicoes-status` criado a partir de `main` depois do merge da PR #6 (`estoque-agente-proativo`, verificada: 69/69 EAP `Verified`, `validation.md` PASS na rodada 2).
 - **Estoque fechado (2026-11-09)**: `estoque-materiais-movimentacao` com EST-01..09 `Verified` pela AD-009 (ver `validation.md`). Só testes mudaram: `estoque.service.spec.ts` (mock de transação com `tx` próprio) e duas specs de DTO novas; código de produção intacto. Não commitado.
 - **Phase / Task**: Spec, Design e Tasks aprovados (2026-10-29). Execute **adiado pelo usuário** — nenhum código escrito. Ao retomar, começar pela T1.
@@ -85,6 +109,7 @@
 - **Next step**: quando o usuário pedir: perguntar se executa direto ou com sub-agentes por fase (3 lotes: 4, 7 e 4 tasks) → Execute (tasks > 8: oferecer sub-agentes por lote de fases) → Verifier independente → `validation.md`.
 - **Regras do usuário**: sub-agentes em sequência; sem commit/push/`git add` pelo agente (o usuário commita; entregar pacote com `git add` por arquivo e mensagem em here-string do PowerShell); nenhuma dependência nova sem perguntar; `ANTHROPIC_API_KEY` só no `.env`; nunca mais de uma análise real do agente sem perguntar.
 - **Teste e2e no banco de dev (`obras-transicoes-status`)**: cria registros com prefixo `[e2e]` e os apaga num `afterAll`. **Não rodar perto de uma demonstração do agente de estoque**: se a limpeza falhar ou o teste rodar durante uma análise, as obras/gesseiros `[e2e]` entram no snapshot do agente. Depois de rodar, conferir que não sobrou nada com `[e2e]`.
+- **Pendência fora de `pwa-instalavel-responsivo` (registrada em 2026-11-09)**: login com credencial errada mostra "Sessao expirada. Faca login novamente." porque o `apps/web/src/lib/api.ts` trata todo 401 igual (já era assim antes da feature). Corrigir numa feature própria: o `POST /auth/login` com 401 deve mostrar a mensagem da API (credencial inválida) e não encerrar sessão.
 - **Blockers**: none.
 - **Uncommitted files**: conferir `git status`. Fora da feature, nunca commitar junto: `CLAUDE.md`, `migration_lock.toml` (só metadado).
 - **Dados de teste no banco local**: o usuário fez testes manuais do agente depois da análise `53f2bf02-…`; conferir o estado antes de uma demonstração. Seed (obras `3333…`, `4444…`, `5555…`, `7777…`) e a obra "Moldura - Bairro Centro" (`45fb510c-…`, do usuário).

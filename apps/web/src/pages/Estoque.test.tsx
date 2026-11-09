@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 
 import { api } from '../lib/api';
 import type { Material, Obra } from '../types';
@@ -140,6 +140,49 @@ describe('Estoque', () => {
 describe('Estoque: atalho do "Resolver" de um alerta de reposição (EAP-68)', () => {
   const atalho = '/estoque?alerta=al-1&material=m-placa&quantidade=28';
 
+  it('outro alerta com o formulário aberto troca os campos e a chave juntos (IDP-01)', async () => {
+    const fita: Material = { id: 'm-fita', nome: 'Fita', unidade: 'rolo', saldoAtual: 0, estoqueMinimo: 5 };
+    materiais = [placa, fita];
+    post
+      .mockRejectedValueOnce(Object.assign(new Error('Sem conexão'), { status: 0 }))
+      .mockResolvedValueOnce({ id: 'mv1' });
+    patch.mockResolvedValue({});
+
+    /** Navega para outro alerta sem sair de /estoque (o Estoque fica montado). */
+    function OutroAlerta() {
+      const navigate = useNavigate();
+      return (
+        <button type="button" onClick={() => navigate('/estoque?alerta=al-2&material=m-fita&quantidade=7')}>
+          outro alerta
+        </button>
+      );
+    }
+    render(
+      <MemoryRouter initialEntries={[atalho]}>
+        <OutroAlerta />
+        <Routes>
+          <Route path="/estoque" element={<Estoque />} />
+          <Route path="/dashboard" element={<p>Tela do dashboard</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await screen.findByRole('cell', { name: 'Placa de gesso' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar movimentacao' }));
+    await screen.findByText('Sem conexão');
+
+    fireEvent.click(screen.getByRole('button', { name: 'outro alerta' }));
+    await waitFor(() => expect(screen.getByLabelText('Material')).toHaveValue('m-fita'));
+    expect(screen.getByLabelText('Quantidade')).toHaveValue(7);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar movimentacao' }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+
+    expect(post.mock.calls[0][1]).toMatchObject({ materialId: 'm-placa', quantidade: 28 });
+    expect(post.mock.calls[1][1]).toMatchObject({ materialId: 'm-fita', quantidade: 7 });
+    expect(post.mock.calls[1][2].idempotencyKey).not.toBe(post.mock.calls[0][2].idempotencyKey);
+  });
+
   it('abre a ENTRADA já preenchida com o material e a quantidade do alerta', async () => {
     renderizar(atalho);
     await screen.findByRole('cell', { name: 'Placa de gesso' });
@@ -166,7 +209,7 @@ describe('Estoque: atalho do "Resolver" de um alerta de reposição (EAP-68)', (
       materialId: 'm-placa',
       tipo: 'ENTRADA',
       quantidade: 30,
-    });
+    }, { idempotencyKey: expect.any(String) });
     expect(patch).toHaveBeenCalledWith('/estoque/agente/alertas/al-1/resolver');
     expect(post.mock.invocationCallOrder[0]).toBeLessThan(patch.mock.invocationCallOrder[0]);
   });

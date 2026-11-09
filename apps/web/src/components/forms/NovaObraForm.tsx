@@ -144,8 +144,8 @@ export default function NovaObraForm({ gesseiros, onSalvo }: Props) {
 
   async function salvar(evento: FormEvent) {
     evento.preventDefault();
-    const ok = await enviar(async () => {
-      await api.post('/obras', montarCorpoObra(estado));
+    const ok = await enviar(async (chave) => {
+      await api.post('/obras', montarCorpoObra(estado), { idempotencyKey: chave });
     });
     if (ok) {
       setEstado(vazio);

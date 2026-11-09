@@ -199,4 +199,41 @@ describe('ObrasService', () => {
       await expect(service.concluir('nao-existe')).rejects.toBeInstanceOf(NotFoundException);
     });
   });
+
+  /**
+   * pwa-instalavel-responsivo (IDP-02, atomicidade): com o `tx` da transacao de idempotencia,
+   * a validacao dos previstos e a criacao da obra usam o `tx`, nunca o `prisma` do service.
+   */
+  describe('create com tx externo', () => {
+    it('passa o tx para validarItens e grava a obra pelo tx, sem tocar no prisma', async () => {
+      const tx = {
+        material: { findMany: jest.fn().mockResolvedValue([{ id: 'mat-cal' }]) },
+        obra: { create: jest.fn().mockResolvedValue({ id: 'obra-nova' }) },
+      };
+      const materiaisPrevistos = (
+        service as unknown as { materiaisPrevistos: MateriaisPrevistosService }
+      ).materiaisPrevistos;
+      const validarItens = jest.spyOn(materiaisPrevistos, 'validarItens');
+      const itens = [{ materialId: 'mat-cal', quantidade: 20 }];
+
+      const resultado = await service.create(
+        { titulo: 'Forro', clienteNome: 'Cliente', valorTotal: 1000, materiaisPrevistos: itens },
+        tx as never,
+      );
+
+      expect(validarItens).toHaveBeenCalledWith(itens, tx);
+      expect(tx.material.findMany).toHaveBeenCalledTimes(1);
+      expect(tx.obra.create).toHaveBeenCalledTimes(1);
+      expect(tx.obra.create.mock.calls[0][0].data).toEqual(
+        expect.objectContaining({
+          titulo: 'Forro',
+          materiaisPrevistos: { create: [{ materialId: 'mat-cal', quantidade: 20 }] },
+        }),
+      );
+      expect(resultado).toEqual({ id: 'obra-nova' });
+      expect(prisma.material.findMany).not.toHaveBeenCalled();
+      expect(prisma.obra.create).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+  });
 });

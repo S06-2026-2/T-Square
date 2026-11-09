@@ -2,6 +2,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 
 import { api } from '../../lib/api';
 import LancamentoForm from './LancamentoForm';
+import {
+  chaveDoEnvio,
+  erroApi,
+  MENSAGEM_REDE,
+  testarChaveDeIdempotencia,
+  UUID_V4,
+} from './chaveIdempotencia.testes';
 
 jest.mock('../../lib/api', () => ({ api: { post: jest.fn() } }));
 
@@ -52,7 +59,7 @@ describe('LancamentoForm', () => {
       tipo: 'PAGAMENTO',
       valor: 100,
       descricao: 'Acerto da semana',
-    });
+    }, { idempotencyKey: expect.any(String) });
     expect(screen.getByLabelText('Valor')).toHaveValue(null);
     expect(screen.getByLabelText('Descricao')).toHaveValue('');
   });
@@ -96,5 +103,39 @@ describe('LancamentoForm', () => {
     expect(screen.getByRole('button', { name: 'Registrar' })).toBeDisabled();
     terminar({ id: 'l1' });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Registrar' })).toBeEnabled());
+  });
+});
+
+describe('LancamentoForm: Idempotency-Key', () => {
+  testarChaveDeIdempotencia({
+    post,
+    botao: 'Registrar',
+    renderizar: () => render(<LancamentoForm gesseiroId="g1" onSalvo={jest.fn()} />),
+    preencher: () => {
+      preencher('Valor', '100');
+      preencher('Descricao', 'Acerto');
+    },
+    conferirCampos: () => {
+      expect(screen.getByLabelText('Valor')).toHaveValue(100);
+      expect(screen.getByLabelText('Descricao')).toHaveValue('Acerto');
+    },
+  });
+
+  it('trocar de gesseiro sem desmontar (sem key) gera outra chave, mesmo depois de falha de rede', async () => {
+    post.mockRejectedValueOnce(erroApi(MENSAGEM_REDE, 0)).mockResolvedValueOnce({ id: 'l1' });
+    const { rerender } = render(<LancamentoForm gesseiroId="g-ana" onSalvo={jest.fn()} />);
+
+    preencher('Valor', '100');
+    registrar();
+    expect(await screen.findByText(MENSAGEM_REDE)).toHaveClass('erro');
+
+    rerender(<LancamentoForm gesseiroId="g-beto" onSalvo={jest.fn()} />);
+    registrar();
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+
+    expect(post.mock.calls[0][0]).toBe('/gesseiros/g-ana/lancamentos');
+    expect(post.mock.calls[1][0]).toBe('/gesseiros/g-beto/lancamentos');
+    expect(chaveDoEnvio(post, 1)).toMatch(UUID_V4);
+    expect(chaveDoEnvio(post, 1)).not.toBe(chaveDoEnvio(post, 0));
   });
 });

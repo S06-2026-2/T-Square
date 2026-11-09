@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, StatusObra, TipoLancamento } from '@prisma/client';
 
+import { ClientePrisma } from '../idempotencia/tipos';
 import { PrismaService } from '../prisma/prisma.service';
 import { AlocacaoGesseiroDto, CreateObraDto } from './dto/create-obra.dto';
 import { QueryObraDto } from './dto/query-obra.dto';
@@ -23,16 +24,16 @@ export class ObrasService {
     gesseiros: { include: { gesseiro: true } },
   } satisfies Prisma.ObraInclude;
 
-  async create(dto: CreateObraDto) {
+  async create(dto: CreateObraDto, tx: ClientePrisma = this.prisma) {
     const { pagamento, gesseiros, materiaisPrevistos, ...dadosObra } = dto;
 
     // Material repetido (400) ou inexistente (404) recusa antes de criar a obra.
     if (materiaisPrevistos?.length) {
-      await this.materiaisPrevistos.validarItens(materiaisPrevistos);
+      await this.materiaisPrevistos.validarItens(materiaisPrevistos, tx);
     }
 
     // Escrita aninhada: obra e previstos entram na mesma operacao atomica do Prisma.
-    return this.prisma.obra.create({
+    return tx.obra.create({
       data: {
         ...dadosObra,
         pagamento: pagamento ? { create: pagamento } : undefined,

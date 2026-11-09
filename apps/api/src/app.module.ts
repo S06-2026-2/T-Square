@@ -10,6 +10,7 @@ import { ObrasModule } from './obras/obras.module';
 import { GesseirosModule } from './gesseiros/gesseiros.module';
 import { EstoqueModule } from './estoque/estoque.module';
 import { AgenteEstoqueModule } from './agente-estoque/agente-estoque.module';
+import { IdempotenciaModule } from './idempotencia/idempotencia.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -17,6 +18,7 @@ import { AppController } from './app.controller';
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     PrismaModule,
+    IdempotenciaModule,
     AuthModule,
     ObrasModule,
     GesseirosModule,

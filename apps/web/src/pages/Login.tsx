@@ -2,8 +2,11 @@ import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import Icone from '../components/Icone';
-import { api, auth } from '../lib/api';
+import { api } from '../lib/api';
+import { iniciarSessao } from '../lib/sessao';
 import type { LoginResponse } from '../types';
+
+const SEM_CONEXAO_LOGIN = 'Sem conexão. Conecte-se à internet para entrar.';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -19,10 +22,15 @@ export default function Login() {
 
     try {
       const resposta = await api.post<LoginResponse>('/auth/login', { email, senha });
-      auth.setToken(resposta.accessToken);
-      auth.setUsuario(resposta.usuario);
+      await iniciarSessao(resposta);
       navigate('/', { replace: true });
     } catch (e) {
+      // Status 0 = o fetch nem chegou à API (OFF-13). O e-mail fica; a senha não é guardada.
+      if ((e as { status?: unknown } | null)?.status === 0) {
+        setErro(SEM_CONEXAO_LOGIN);
+        setSenha('');
+        return;
+      }
       setErro(e instanceof Error ? e.message : 'Nao foi possivel entrar');
     } finally {
       setCarregando(false);

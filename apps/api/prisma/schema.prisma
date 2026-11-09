@@ -302,3 +302,25 @@ model AlertaEstoque {
   @@index([materialId, status])
   @@map("alertas_estoque")
 }
+
+// ---------------------------------------------------------------------------
+// Idempotencia
+// ---------------------------------------------------------------------------
+
+/// Reenvio seguro de POST de criacao (spec pwa-instalavel-responsivo, IDP-01..09).
+/// Gravada na MESMA transacao da entidade criada: so existe linha de envio concluido.
+/// Linhas vivem 24 h; o cron de hora em hora apaga as vencidas.
+model ChaveIdempotencia {
+  id         String   @id @default(uuid())
+  chave      String   @db.Uuid
+  usuarioId  String
+  rota       String
+  hashCorpo  String   @db.Char(64)
+  statusHttp Int
+  resposta   Json
+  criadoEm   DateTime @default(now())
+
+  @@unique([usuarioId, rota, chave])
+  @@index([criadoEm])
+  @@map("chaves_idempotencia")
+}

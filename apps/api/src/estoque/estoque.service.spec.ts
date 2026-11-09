@@ -378,4 +378,120 @@ describe('EstoqueService', () => {
       await expect(service.abaixoDoMinimo()).resolves.toEqual([]);
     });
   });
+
+  // ------------------------------------------- pwa-instalavel-responsivo (AD-009)
+  /**
+   * Com o `tx` da transacao de idempotencia, nada vai para o `prisma` do service e o
+   * `movimentar` nao abre uma segunda $transaction (o Prisma nao aninha transacoes).
+   */
+  describe('com tx externo', () => {
+    const material = { id: 'm-1', nome: 'Cal', saldoAtual: dec(10), estoqueMinimo: dec(5) };
+    let tx: {
+      material: { findUnique: jest.Mock; create: jest.Mock; update: jest.Mock; updateMany: jest.Mock };
+      obra: { findUnique: jest.Mock };
+      movimentacaoEstoque: { create: jest.Mock };
+    };
+
+    /** Nenhum metodo do `prisma` do service foi chamado, inclusive o $transaction. */
+    const prismaIntocado = () => {
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      for (const [nome, delegate] of Object.entries(prisma)) {
+        if (nome === '$transaction') continue;
+        for (const metodo of Object.values(delegate as Record<string, jest.Mock>)) {
+          expect(metodo).not.toHaveBeenCalled();
+        }
+      }
+    };
+
+    beforeEach(() => {
+      tx = {
+        material: {
+          findUnique: jest.fn().mockResolvedValue(material),
+          create: jest.fn(),
+          update: jest.fn(),
+          updateMany: jest.fn(),
+        },
+        obra: { findUnique: jest.fn() },
+        movimentacaoEstoque: { create: jest.fn().mockResolvedValue({ id: 'mov-1' }) },
+      };
+    });
+
+    it('movimentar(dto, tx) ENTRADA roda no tx e nao abre $transaction', async () => {
+      const resultado = await service.movimentar(
+        { materialId: 'm-1', tipo: TipoMovimentacao.ENTRADA, quantidade: 5 },
+        tx as never,
+      );
+
+      expect(tx.material.findUnique).toHaveBeenCalledWith({ where: { id: 'm-1' } });
+      expect(tx.material.update).toHaveBeenCalledWith({
+        where: { id: 'm-1' },
+        data: { saldoAtual: { increment: 5 } },
+      });
+      expect(tx.movimentacaoEstoque.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ materialId: 'm-1', tipo: TipoMovimentacao.ENTRADA, quantidade: 5 }),
+        }),
+      );
+      expect(resultado).toEqual({ id: 'mov-1' });
+      prismaIntocado();
+    });
+
+    it('movimentar(dto, tx) SAIDA com obra valida a obra e aplica a guarda de saldo no tx', async () => {
+      tx.obra.findUnique.mockResolvedValue({ id: 'o-1', status: 'ANDAMENTO' });
+      tx.material.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.movimentar(
+        { materialId: 'm-1', tipo: TipoMovimentacao.SAIDA, quantidade: 4, obraId: 'o-1' },
+        tx as never,
+      );
+
+      expect(tx.obra.findUnique).toHaveBeenCalledWith({ where: { id: 'o-1' } });
+      expect(tx.material.updateMany).toHaveBeenCalledWith({
+        where: { id: 'm-1', saldoAtual: { gte: 4 } },
+        data: { saldoAtual: { decrement: 4 } },
+      });
+      expect(tx.movimentacaoEstoque.create).toHaveBeenCalledTimes(1);
+      prismaIntocado();
+    });
+
+    it('movimentar(dto, tx) SAIDA na corrida (count === 0) recusa e nao grava a movimentacao', async () => {
+      tx.material.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.movimentar(
+          { materialId: 'm-1', tipo: TipoMovimentacao.SAIDA, quantidade: 8 },
+          tx as never,
+        ),
+      ).rejects.toThrow('Saldo insuficiente de "Cal": disponivel 10, solicitado 8');
+
+      expect(tx.movimentacaoEstoque.create).not.toHaveBeenCalled();
+      prismaIntocado();
+    });
+
+    it('criarMaterial com tx grava pelo tx', async () => {
+      tx.material.create.mockResolvedValue({ id: 'm-2' });
+
+      const resultado = await service.criarMaterial({ nome: 'Cal', unidade: 'saco' }, tx as never);
+
+      expect(tx.material.create).toHaveBeenCalledWith({
+        data: { nome: 'Cal', unidade: 'saco', estoqueMinimo: 0 },
+      });
+      expect(resultado).toEqual({ id: 'm-2' });
+      prismaIntocado();
+    });
+
+    it('criarMaterial com tx: P2002 continua virando o mesmo 409', async () => {
+      tx.material.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+
+      const promessa = service.criarMaterial({ nome: 'Cal', unidade: 'saco' }, tx as never);
+
+      await expect(promessa).rejects.toBeInstanceOf(ConflictException);
+      await expect(promessa).rejects.toThrow('Ja existe um material chamado "Cal"');
+    });
+  });
 });

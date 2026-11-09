@@ -4,8 +4,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, StatusObra, TipoMovimentacao } from '@prisma/client';
+import { Material, Prisma, StatusObra, TipoMovimentacao } from '@prisma/client';
 
+import { ClientePrisma } from '../idempotencia/tipos';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMaterialDto } from './dto/create-material.dto';
 import { CreateMovimentacaoDto } from './dto/create-movimentacao.dto';
@@ -34,9 +35,9 @@ export class EstoqueService {
   }
 
   // EST-01 / EST-02: cadastro de material
-  async criarMaterial(dto: CreateMaterialDto) {
+  async criarMaterial(dto: CreateMaterialDto, tx: ClientePrisma = this.prisma) {
     try {
-      return await this.prisma.material.create({
+      return await tx.material.create({
         data: {
           nome: dto.nome,
           unidade: dto.unidade,
@@ -51,15 +52,19 @@ export class EstoqueService {
     }
   }
 
-  // EST-03 a EST-07: movimentacao de estoque
-  async movimentar(dto: CreateMovimentacaoDto) {
-    const material = await this.prisma.material.findUnique({ where: { id: dto.materialId } });
+  // EST-03 a EST-07: movimentacao de estoque.
+  // Com `tx` (transacao de idempotencia, AD-009) tudo roda nele e NAO se abre outra
+  // $transaction: o Prisma nao aninha transacoes interativas.
+  async movimentar(dto: CreateMovimentacaoDto, tx?: ClientePrisma) {
+    const cliente = tx ?? this.prisma;
+
+    const material = await cliente.material.findUnique({ where: { id: dto.materialId } });
     if (!material) {
       throw new NotFoundException(`Material ${dto.materialId} nao encontrado`);
     }
 
     if (dto.obraId) {
-      const obra = await this.prisma.obra.findUnique({ where: { id: dto.obraId } });
+      const obra = await cliente.obra.findUnique({ where: { id: dto.obraId } });
       if (!obra) {
         throw new NotFoundException(`Obra ${dto.obraId} nao encontrada`);
       }
@@ -77,35 +82,45 @@ export class EstoqueService {
       throw this.saldoInsuficiente(material.nome, Number(material.saldoAtual), dto.quantidade);
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      if (dto.tipo === TipoMovimentacao.ENTRADA) {
-        await tx.material.update({
-          where: { id: dto.materialId },
-          data: { saldoAtual: { increment: dto.quantidade } },
-        });
-      } else {
-        // Guarda atomica: so decrementa se ainda houver saldo suficiente.
-        const { count } = await tx.material.updateMany({
-          where: { id: dto.materialId, saldoAtual: { gte: dto.quantidade } },
-          data: { saldoAtual: { decrement: dto.quantidade } },
-        });
+    if (tx) {
+      return this.movimentarCom(tx, dto, material);
+    }
+    return this.prisma.$transaction((t) => this.movimentarCom(t, dto, material));
+  }
 
-        if (count === 0) {
-          // Outra saida consumiu o saldo entre a leitura e a transacao.
-          throw this.saldoInsuficiente(material.nome, Number(material.saldoAtual), dto.quantidade);
-        }
-      }
-
-      return tx.movimentacaoEstoque.create({
-        data: {
-          materialId: dto.materialId,
-          obraId: dto.obraId,
-          tipo: dto.tipo,
-          quantidade: dto.quantidade,
-          observacao: dto.observacao,
-        },
-        include: { material: true },
+  /**
+   * Saldo + movimentacao, sempre dentro de uma transacao que o chamador abriu.
+   * SPEC_DEVIATION: o design diz `movimentarCom(tx, dto)`; recebe tambem o `material`
+   * Reason: a mensagem de saldo insuficiente da corrida (count === 0) usa nome e saldo lidos antes.
+   */
+  private async movimentarCom(tx: ClientePrisma, dto: CreateMovimentacaoDto, material: Material) {
+    if (dto.tipo === TipoMovimentacao.ENTRADA) {
+      await tx.material.update({
+        where: { id: dto.materialId },
+        data: { saldoAtual: { increment: dto.quantidade } },
       });
+    } else {
+      // Guarda atomica: so decrementa se ainda houver saldo suficiente.
+      const { count } = await tx.material.updateMany({
+        where: { id: dto.materialId, saldoAtual: { gte: dto.quantidade } },
+        data: { saldoAtual: { decrement: dto.quantidade } },
+      });
+
+      if (count === 0) {
+        // Outra saida consumiu o saldo entre a leitura e a transacao.
+        throw this.saldoInsuficiente(material.nome, Number(material.saldoAtual), dto.quantidade);
+      }
+    }
+
+    return tx.movimentacaoEstoque.create({
+      data: {
+        materialId: dto.materialId,
+        obraId: dto.obraId,
+        tipo: dto.tipo,
+        quantidade: dto.quantidade,
+        observacao: dto.observacao,
+      },
+      include: { material: true },
     });
   }
 

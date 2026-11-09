@@ -17,7 +17,7 @@ export default function NovoMaterialForm({ onSalvo }: Props) {
 
   async function salvar(evento: FormEvent) {
     evento.preventDefault();
-    const ok = await enviar(async () => {
+    const ok = await enviar(async (chave) => {
       await api.post(
         '/estoque/materiais',
         semVazios({
@@ -25,6 +25,7 @@ export default function NovoMaterialForm({ onSalvo }: Props) {
           unidade: unidade.trim(),
           estoqueMinimo: numeroOpcional(estoqueMinimo),
         }),
+        { idempotencyKey: chave },
       );
     });
     if (ok) {

@@ -1,15 +1,26 @@
 name: CI
 
+# PRs e pushes na main. (A branch `develop` do README nao existe no repositorio; se for criada,
+# adicione-a aqui, senao o CI nao roda nela.)
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Um push novo no mesmo PR cancela a execucao anterior. Na main nunca cancela.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   api:
-    name: API (lint, test, build)
+    name: API (testes, e2e, build)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -27,11 +38,15 @@ jobs:
           --health-retries 10
 
     env:
+      # O host tem que ser local: test/trava-banco-local.ts recusa os e2e em qualquer outro banco.
       DATABASE_URL: postgresql://gesso:gesso@localhost:5432/gesso?schema=public
       JWT_SECRET: ci-test-secret
       JWT_EXPIRES_IN: 7d
       PORT: 3000
       CORS_ORIGIN: http://localhost:5173
+      # O CI nunca chama a Claude API nem liga o cron do agente de estoque.
+      ANTHROPIC_API_KEY: ''
+      AGENTE_AUTOMATICO: 'false'
 
     steps:
       - name: Checkout do código
@@ -52,18 +67,27 @@ jobs:
       - name: Aplicar migrations (prisma migrate deploy)
         run: npm run db:deploy --workspace apps/api
 
-      - name: Lint
-        run: npm run lint --workspace apps/api --if-present
+      # Os e2e fazem login com o admin do seed (admin@gesso.com).
+      - name: Popular o banco (seed)
+        run: npm run db:seed --workspace apps/api
 
-      - name: Testes
-        run: npm run test --workspace apps/api --if-present
+      # TODO(lint): nenhum workspace tem script `lint` nem config de ESLint, entao o antigo
+      # `npm run lint --if-present` passava sem executar nada. Reativar aqui quando existir.
+
+      - name: Testes unitários
+        run: npm run test --workspace apps/api
+
+      # --runInBand: os e2e dividem o mesmo banco; em paralelo um poderia ver dado do outro.
+      - name: Testes e2e
+        run: npm run test:e2e --workspace apps/api -- --runInBand
 
       - name: Build
-        run: npm run build --workspace apps/api --if-present
+        run: npm run build --workspace apps/api
 
   web:
-    name: Web (lint, test, build)
+    name: Web (testes, build)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout do código
@@ -78,11 +102,61 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      - name: Lint
-        run: npm run lint --workspace apps/web --if-present
+      # TODO(lint): igual ao job da API, ainda nao ha script `lint` no web.
 
       - name: Testes
-        run: npm run test --workspace apps/web --if-present
+        run: npm run test --workspace apps/web
 
+      # O build do web roda `tsc --noEmit` antes do Vite, entao tambem checa os tipos.
       - name: Build
-        run: npm run build --workspace apps/web --if-present
+        run: npm run build --workspace apps/web
+
+  # Garante que o Dockerfile de producao (o que o Render usa) builda e SOBE. Sem isso, um erro no
+  # Dockerfile so apareceria no deploy.
+  docker:
+    name: API (imagem de produção)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gesso
+          POSTGRES_PASSWORD: gesso
+          POSTGRES_DB: gesso
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gesso -d gesso"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      # O contexto é a raiz do repo: o package-lock.json do monorepo mora lá.
+      - name: Build da imagem
+        run: docker build -f apps/api/Dockerfile -t gesso-api:ci .
+
+      # O CMD da imagem roda `prisma migrate deploy` e depois `node dist/main`.
+      - name: Subir a imagem e checar o health
+        run: |
+          docker run -d --name gesso-api --network host \
+            -e DATABASE_URL='postgresql://gesso:gesso@localhost:5432/gesso?schema=public' \
+            -e JWT_SECRET=ci-test-secret \
+            -e PORT=3000 \
+            -e AGENTE_AUTOMATICO=false \
+            gesso-api:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/api/health; then
+              echo
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "A API não respondeu em /api/health em 60 s. Logs do container:"
+          docker logs gesso-api
+          exit 1

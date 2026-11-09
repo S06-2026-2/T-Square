@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { api } from '../../lib/api';
 import type { Gesseiro, Material } from '../../types';
 import NovaObraForm from './NovaObraForm';
+import { testarChaveDeIdempotencia } from './chaveIdempotencia.testes';
 
 jest.mock('../../lib/api', () => ({ api: { post: jest.fn(), get: jest.fn() } }));
 
@@ -71,7 +72,7 @@ describe('NovaObraForm', () => {
       titulo: 'Forro sala',
       clienteNome: 'Maria Silva',
       valorTotal: 8500,
-    });
+    }, { idempotencyKey: expect.any(String) });
     expect(screen.getByLabelText('Titulo')).toHaveValue('');
     expect(screen.getByLabelText('Cliente')).toHaveValue('');
     expect(screen.getByLabelText('Valor total')).toHaveValue(null);
@@ -112,7 +113,7 @@ describe('NovaObraForm', () => {
       endereco: 'Rua A, 10',
       plantaBaixaUrl: 'https://drive.example.com/planta.pdf',
       pagamento: { forma: 'CARTAO_CREDITO', parcelas: 3, valorEntrada: 1000 },
-    });
+    }, { idempotencyKey: expect.any(String) });
   });
 
   it('omite parcelas e entrada vazias do pagamento', async () => {
@@ -245,7 +246,7 @@ describe('NovaObraForm', () => {
           { materialId: 'm-cal', quantidade: 20 },
           { materialId: 'm-gesso', quantidade: 7.5 },
         ],
-      });
+      }, { idempotencyKey: expect.any(String) });
       // O formulário volta vazio, inclusive a seção de materiais.
       expect(screen.queryByLabelText('Material')).not.toBeInTheDocument();
     });
@@ -275,5 +276,19 @@ describe('NovaObraForm', () => {
       salvar();
       await waitFor(() => expect(onSalvo).toHaveBeenCalled());
     });
+  });
+});
+
+describe('NovaObraForm: Idempotency-Key', () => {
+  testarChaveDeIdempotencia({
+    post,
+    botao: 'Salvar obra',
+    renderizar: () => render(<NovaObraForm gesseiros={gesseiros} onSalvo={jest.fn()} />),
+    preencher: preencherObrigatorios,
+    conferirCampos: () => {
+      expect(screen.getByLabelText('Titulo')).toHaveValue('Forro sala');
+      expect(screen.getByLabelText('Cliente')).toHaveValue('Maria Silva');
+      expect(screen.getByLabelText('Valor total')).toHaveValue(8500);
+    },
   });
 });
