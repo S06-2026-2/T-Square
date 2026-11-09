@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { StatusObra, TipoLancamento } from '@prisma/client';
 
+import { ClientePrisma } from '../idempotencia/tipos';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateGesseiroDto } from './dto/create-gesseiro.dto';
 import { CreateLancamentoDto } from './dto/create-lancamento.dto';
@@ -32,8 +33,8 @@ export class GesseirosService {
     return this.prisma.gesseiro.findMany({ orderBy: { nome: 'asc' } });
   }
 
-  async findOne(id: string) {
-    const gesseiro = await this.prisma.gesseiro.findUnique({
+  async findOne(id: string, tx: ClientePrisma = this.prisma) {
+    const gesseiro = await tx.gesseiro.findUnique({
       where: { id },
       include: {
         alocacoes: { include: { obra: true } },
@@ -78,8 +79,8 @@ export class GesseirosService {
     };
   }
 
-  async create(dto: CreateGesseiroDto) {
-    return this.prisma.gesseiro.create({ data: dto });
+  async create(dto: CreateGesseiroDto, tx: ClientePrisma = this.prisma) {
+    return tx.gesseiro.create({ data: dto });
   }
 
   /**
@@ -87,7 +88,11 @@ export class GesseirosService {
    * CREDITO nunca pode ser criado por aqui — so nasce automaticamente em
    * ObrasService.concluir(), quando a obra e finalizada.
    */
-  async registrarLancamento(gesseiroId: string, dto: CreateLancamentoDto) {
+  async registrarLancamento(
+    gesseiroId: string,
+    dto: CreateLancamentoDto,
+    tx: ClientePrisma = this.prisma,
+  ) {
     if (dto.tipo === TipoLancamento.CREDITO) {
       throw new BadRequestException(
         'CREDITO e gerado automaticamente pela conclusao da obra, nao pode ser criado manualmente',
@@ -98,16 +103,16 @@ export class GesseirosService {
       throw new BadRequestException('valor deve ser maior que zero');
     }
 
-    await this.findOne(gesseiroId);
+    await this.findOne(gesseiroId, tx);
 
     if (dto.obraId) {
-      const obra = await this.prisma.obra.findUnique({ where: { id: dto.obraId } });
+      const obra = await tx.obra.findUnique({ where: { id: dto.obraId } });
       if (!obra) {
         throw new NotFoundException(`Obra ${dto.obraId} nao encontrada`);
       }
     }
 
-    return this.prisma.lancamento.create({ data: { gesseiroId, ...dto } });
+    return tx.lancamento.create({ data: { gesseiroId, ...dto } });
   }
 
   // --------------------------------------------------------------------- TODO

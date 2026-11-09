@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 import Layout from './Layout';
@@ -60,5 +60,51 @@ describe('Layout', () => {
     renderEm('/obras');
 
     expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument();
+  });
+});
+
+describe('Layout: Sair (OFF-11)', () => {
+  afterEach(() => {
+    delete (globalThis as { caches?: unknown }).caches;
+  });
+
+  it('espera o logout e a limpeza do cache api-dados e só então vai para /login', async () => {
+    const { auth: authMock } = jest.requireMock('../lib/api');
+    authMock.logout.mockClear();
+    let terminar!: (valor: boolean) => void;
+    const deletar = jest.fn(() => new Promise<boolean>((resolve) => (terminar = resolve)));
+    Object.defineProperty(globalThis, 'caches', {
+      value: { delete: deletar },
+      configurable: true,
+      writable: true,
+    });
+    render(
+      <MemoryRouter
+        initialEntries={['/obras']}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
+          <Route path="/login" element={<p>tela de login</p>} />
+          <Route element={<Layout />}>
+            <Route path="*" element={<p>tela</p>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sair' }));
+
+    expect(authMock.logout).toHaveBeenCalledTimes(1);
+    expect(deletar).toHaveBeenCalledWith('api-dados');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByText('tela de login')).not.toBeInTheDocument();
+    expect(screen.getByText('tela')).toBeInTheDocument();
+
+    await act(async () => {
+      terminar(true);
+    });
+    expect(await screen.findByText('tela de login')).toBeInTheDocument();
   });
 });

@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 
 import { auth } from '../lib/api';
 import { iniciais } from '../lib/formato';
+import { encerrarSessao } from '../lib/sessao';
 import Icone, { type NomeIcone } from './Icone';
 
 /** rotulo: sidebar do desktop; rotuloCurto: barra inferior do celular (<= 900px), via CSS. */
@@ -17,8 +18,8 @@ export default function Layout() {
   const usuario = auth.getUsuario();
   const nome: string = usuario?.nome ?? '';
 
-  function sair() {
-    auth.logout();
+  async function sair() {
+    await encerrarSessao();
     navigate('/login', { replace: true });
   }
 

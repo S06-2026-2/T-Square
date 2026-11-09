@@ -3,6 +3,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { api } from '../../lib/api';
 import type { Material, Obra } from '../../types';
 import MovimentacaoForm from './MovimentacaoForm';
+import {
+  chaveDoEnvio,
+  erroApi,
+  MENSAGEM_REDE,
+  testarChaveDeIdempotencia,
+  UUID_V4,
+} from './chaveIdempotencia.testes';
 
 jest.mock('../../lib/api', () => ({ api: { post: jest.fn() } }));
 
@@ -64,7 +71,7 @@ describe('MovimentacaoForm', () => {
       tipo: 'ENTRADA',
       quantidade: 20,
       observacao: 'Compra da semana',
-    });
+    }, { idempotencyKey: expect.any(String) });
   });
 
   it('so oferece a obra na SAIDA e envia o obraId escolhido (FRM-09 AC2)', async () => {
@@ -148,5 +155,50 @@ describe('MovimentacaoForm', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Registrar movimentacao' })).toBeEnabled(),
     );
+  });
+});
+
+describe('MovimentacaoForm: Idempotency-Key', () => {
+  testarChaveDeIdempotencia({
+    post,
+    botao: 'Registrar movimentacao',
+    renderizar: () => renderForm(),
+    preencher: () => {
+      preencher('Material', 'm-placa');
+      preencher('Quantidade', '5');
+    },
+    conferirCampos: () => {
+      expect(screen.getByLabelText('Material')).toHaveValue('m-placa');
+      expect(screen.getByLabelText('Quantidade')).toHaveValue(5);
+    },
+  });
+
+  it('outro inicial com o formulário aberto ("Resolver" de outro alerta) gera outra chave', async () => {
+    post.mockRejectedValueOnce(erroApi(MENSAGEM_REDE, 0)).mockResolvedValueOnce({ id: 'mv1' });
+    const { rerender } = render(
+      <MovimentacaoForm
+        materiais={materiais}
+        obras={obras}
+        onSalvo={jest.fn()}
+        inicial={{ materialId: 'm-placa', quantidade: '30' }}
+      />,
+    );
+
+    registrar();
+    expect(await screen.findByText(MENSAGEM_REDE)).toHaveClass('erro');
+
+    rerender(
+      <MovimentacaoForm
+        materiais={materiais}
+        obras={obras}
+        onSalvo={jest.fn()}
+        inicial={{ materialId: 'm-cal', quantidade: '10' }}
+      />,
+    );
+    registrar();
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+
+    expect(chaveDoEnvio(post, 1)).toMatch(UUID_V4);
+    expect(chaveDoEnvio(post, 1)).not.toBe(chaveDoEnvio(post, 0));
   });
 });

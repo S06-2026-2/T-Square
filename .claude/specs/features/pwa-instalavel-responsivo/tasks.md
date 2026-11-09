@@ -276,6 +276,8 @@ T28 → T29 → T30 → T31
 
 ### T6: Tabela `chaves_idempotencia`
 
+**Status**: ✅ Concluída (L2)
+
 **What**: Model `ChaveIdempotencia` e a migration.
 **Where**: `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/<timestamp>_chaves_idempotencia/` (gerada)
 **Depends on**: None
@@ -289,9 +291,9 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Model igual ao design: `chave @db.Uuid`, `usuarioId`, `rota`, `hashCorpo @db.Char(64)`, `statusHttp Int`, `resposta Json`, `criadoEm`; `@@unique([usuarioId, rota, chave])`, `@@index([criadoEm])`, `@@map("chaves_idempotencia")`; sem enum de status
-- [ ] `docker exec gesso_api npx prisma migrate dev --name chaves_idempotencia` aplicada; Prisma Client regenerado
-- [ ] Gate build passando (API 251, web ≥ 147)
+- [x] Model igual ao design: `chave @db.Uuid`, `usuarioId`, `rota`, `hashCorpo @db.Char(64)`, `statusHttp Int`, `resposta Json`, `criadoEm`; `@@unique([usuarioId, rota, chave])`, `@@index([criadoEm])`, `@@map("chaves_idempotencia")`; sem enum de status
+- [x] `docker exec gesso_api npx prisma migrate dev --name chaves_idempotencia` aplicada; Prisma Client regenerado
+- [x] Gate build passando (API 251, web ≥ 147)
 
 **Tests**: none
 **Gate**: build
@@ -301,6 +303,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T7: Hash canônico do corpo
+
+**Status**: ✅ Concluída (L2)
 
 **What**: `hashCorpo(body)`, SHA-256 hex de um JSON com as chaves ordenadas em qualquer profundidade.
 **Where**: `apps/api/src/idempotencia/hash-corpo.ts`, `hash-corpo.spec.ts`
@@ -315,10 +319,10 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Mesmo conteúdo com ordem de chaves diferente (inclusive aninhada e em arrays de objetos) dá o mesmo hash
-- [ ] Valor diferente, chave a mais ou ordem diferente num array dá hash diferente
-- [ ] Corpo `undefined`/vazio tem hash estável; o hash tem 64 caracteres hex
-- [ ] Gate quick da API: 251 + novos testes passando
+- [x] Mesmo conteúdo com ordem de chaves diferente (inclusive aninhada e em arrays de objetos) dá o mesmo hash
+- [x] Valor diferente, chave a mais ou ordem diferente num array dá hash diferente
+- [x] Corpo `undefined`/vazio tem hash estável; o hash tem 64 caracteres hex
+- [x] Gate quick da API: 251 + novos testes passando
 
 **Tests**: unit
 **Gate**: quick (api)
@@ -328,6 +332,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T8: Decorators `@ContextoIdempotencia()` e `@ApiIdempotencia()`
+
+**Status**: ✅ Concluída (L2)
 
 **What**: O param decorator monta `{ chave, usuarioId, rota, hashCorpo }` ou `null`; o decorator do Swagger documenta o cabeçalho. Também os tipos `ContextoIdempotencia` e `ClientePrisma`.
 **Where**: `apps/api/src/idempotencia/contexto-idempotencia.decorator.ts` (+ `.spec.ts`), `api-idempotencia.decorator.ts`, `tipos.ts`
@@ -342,11 +348,11 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Sem `Idempotency-Key`: `null`
-- [ ] Cabeçalho que não é UUID: `BadRequestException` com a mensagem exata "Idempotency-Key deve ser um UUID."
-- [ ] `rota` = `` `${method} ${req.path}` `` (path real, sem query string); `usuarioId` = `req.user.id`; `hashCorpo` = `hashCorpo(req.body)`
-- [ ] Testes por ramo, com a fábrica do decorator extraída (`extrairContexto(ctx)`) para testar sem HTTP
-- [ ] Gate quick da API passando
+- [x] Sem `Idempotency-Key`: `null`
+- [x] Cabeçalho que não é UUID: `BadRequestException` com a mensagem exata "Idempotency-Key deve ser um UUID."
+- [x] `rota` = `` `${method} ${req.path}` `` (path real, sem query string); `usuarioId` = `req.user.id`; `hashCorpo` = `hashCorpo(req.body)`
+- [x] Testes por ramo, com a fábrica do decorator extraída (`extrairContexto(ctx)`) para testar sem HTTP
+- [x] Gate quick da API passando
 
 **Tests**: unit
 **Gate**: quick (api)
@@ -356,6 +362,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T9: `IdempotenciaService` e módulo global
+
+**Status**: ✅ Concluída (L2)
 
 **What**: `executar(ctx, criar)` com transação única, trava consultiva, replay, 422, 409 e limpeza por cron; `IdempotenciaModule` `@Global()` registrado no `AppModule`.
 **Where**: `apps/api/src/idempotencia/idempotencia.service.ts` (+ `.spec.ts`), `idempotencia.module.ts`, `apps/api/src/app.module.ts`
@@ -370,17 +378,17 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `ctx === null`: chama `criar(this.prisma)` e **não** abre `$transaction` (IDP-06)
-- [ ] Com `ctx`: tudo dentro de um único `$transaction(fn, { timeout: 15_000 })`. A ordem é a do design: trava, `findUnique`, `criar(tx)`, `create` da chave
-- [ ] Trava negada: `ConflictException('Este envio ainda está sendo processado.')`, sem chamar `criar` nem `create` (IDP-04)
-- [ ] Chave existente < 24 h com outro hash: `UnprocessableEntityException('Esta Idempotency-Key já foi usada com outros dados.')`, sem `criar` (IDP-03)
-- [ ] Chave existente < 24 h com o mesmo hash: devolve `resposta` guardada, sem `criar` nem `create` (IDP-02)
-- [ ] Chave existente com 24 h + 1 ms: `delete` e segue como nova (IDP-05); com 24 h − 1 ms: ainda vale
-- [ ] `criar` recebe o `tx` (não o `this.prisma`); a resposta gravada é `JSON.parse(JSON.stringify(resultado))` (teste com `Decimal`/`Date`) e `statusHttp: 201`
-- [ ] Erro em `criar`: sobe o mesmo erro e `create` da chave não é chamado
-- [ ] `P2002` no `create` da chave: `ConflictException`
-- [ ] `limparVencidas()` com `deleteMany({ where: { criadoEm: { lt: agora − 24 h } } })`, com relógio fixo no teste
-- [ ] Gate quick da API passando
+- [x] `ctx === null`: chama `criar(this.prisma)` e **não** abre `$transaction` (IDP-06)
+- [x] Com `ctx`: tudo dentro de um único `$transaction(fn, { timeout: 15_000 })`. A ordem é a do design: trava, `findUnique`, `criar(tx)`, `create` da chave
+- [x] Trava negada: `ConflictException('Este envio ainda está sendo processado.')`, sem chamar `criar` nem `create` (IDP-04)
+- [x] Chave existente < 24 h com outro hash: `UnprocessableEntityException('Esta Idempotency-Key já foi usada com outros dados.')`, sem `criar` (IDP-03)
+- [x] Chave existente < 24 h com o mesmo hash: devolve `resposta` guardada, sem `criar` nem `create` (IDP-02)
+- [x] Chave existente com 24 h + 1 ms: `delete` e segue como nova (IDP-05); com 24 h − 1 ms: ainda vale
+- [x] `criar` recebe o `tx` (não o `this.prisma`); a resposta gravada é `JSON.parse(JSON.stringify(resultado))` (teste com `Decimal`/`Date`) e `statusHttp: 201`
+- [x] Erro em `criar`: sobe o mesmo erro e `create` da chave não é chamado
+- [x] `P2002` no `create` da chave: `ConflictException`
+- [x] `limparVencidas()` com `deleteMany({ where: { criadoEm: { lt: agora − 24 h } } })`, com relógio fixo no teste
+- [x] Gate quick da API passando
 
 **Tests**: unit
 **Gate**: quick (api)
@@ -390,6 +398,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T10: Gesseiros aceitam `tx`
+
+**Status**: ✅ Concluída (L2)
 
 **What**: `create(dto, tx)`, `registrarLancamento(id, dto, tx)` e `findOne(id, tx)` com `tx: ClientePrisma = this.prisma`.
 **Where**: `apps/api/src/gesseiros/gesseiros.service.ts`, `gesseiros.service.spec.ts`
@@ -404,10 +414,10 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Toda leitura e escrita dos 3 métodos usa o `tx`
-- [ ] Testes novos: com um `tx` mock separado, nenhuma chamada vai para o `prisma` do service; sem `tx`, comportamento de hoje
-- [ ] Os testes antigos de gesseiros continuam passando sem alteração de asserção
-- [ ] Gate quick da API passando
+- [x] Toda leitura e escrita dos 3 métodos usa o `tx`
+- [x] Testes novos: com um `tx` mock separado, nenhuma chamada vai para o `prisma` do service; sem `tx`, comportamento de hoje
+- [x] Os testes antigos de gesseiros continuam passando sem alteração de asserção
+- [x] Gate quick da API passando
 
 **Tests**: unit
 **Gate**: quick (api)
@@ -417,6 +427,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T11: Obras aceitam `tx`
+
+**Status**: ✅ Concluída (L2)
 
 **What**: `ObrasService.create(dto, tx)` passa o `tx` para `validarItens` e `obra.create`.
 **Where**: `apps/api/src/obras/obras.service.ts`, `obras.service.spec.ts`
@@ -431,9 +443,9 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Com `tx`: `validarItens` recebe o `tx` e `tx.obra.create` é chamado; o `prisma` do service não é tocado
-- [ ] Sem `tx`: comportamento de hoje (testes antigos inalterados)
-- [ ] Gate quick da API passando
+- [x] Com `tx`: `validarItens` recebe o `tx` e `tx.obra.create` é chamado; o `prisma` do service não é tocado
+- [x] Sem `tx`: comportamento de hoje (testes antigos inalterados)
+- [x] Gate quick da API passando
 
 **Tests**: unit
 **Gate**: quick (api)
@@ -443,6 +455,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T12: Estoque aceita `tx` sem transação aninhada
+
+**Status**: ✅ Concluída (L2)
 
 **What**: `criarMaterial(dto, tx)` e `movimentar(dto, tx?)` com o corpo da transação extraído para `movimentarCom(tx, dto)`.
 **Where**: `apps/api/src/estoque/estoque.service.ts`, `estoque.service.spec.ts`
@@ -457,12 +471,12 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `movimentar(dto, tx)`: chama `movimentarCom(tx, dto)` e **não** chama `prisma.$transaction` (teste explícito)
-- [ ] `movimentar(dto)` sem `tx`: continua abrindo `prisma.$transaction`
-- [ ] Leituras de validação (material, obra) também usam o `tx` quando informado
-- [ ] `criarMaterial` com `tx`: `tx.material.create`; o `P2002` continua virando o mesmo `ConflictException`
-- [ ] Testes antigos de estoque (saldo insuficiente, corrida com `count === 0`, EST-09) continuam passando
-- [ ] Gate quick da API passando
+- [x] `movimentar(dto, tx)`: chama `movimentarCom(tx, dto)` e **não** chama `prisma.$transaction` (teste explícito)
+- [x] `movimentar(dto)` sem `tx`: continua abrindo `prisma.$transaction`
+- [x] Leituras de validação (material, obra) também usam o `tx` quando informado
+- [x] `criarMaterial` com `tx`: `tx.material.create`; o `P2002` continua virando o mesmo `ConflictException`
+- [x] Testes antigos de estoque (saldo insuficiente, corrida com `count === 0`, EST-09) continuam passando
+- [x] Gate quick da API passando
 
 **Tests**: unit
 **Gate**: quick (api)
@@ -472,6 +486,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T13: CORS compartilhado com `Idempotency-Key`
+
+**Status**: ✅ Concluída (L2)
 
 **What**: `configurarCors(app)` com `allowedHeaders` explícito, usado pelo `main.ts`. Incluir a porta 4173 no `CORS_ORIGIN` padrão. Teste e2e de preflight.
 **Where**: `apps/api/src/cors.ts` (novo), `apps/api/src/main.ts`, `docker-compose.yml`, `.env.example`, `apps/api/test/idempotencia.e2e-spec.ts` (novo, primeiro caso)
@@ -486,11 +502,11 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key']`; `origin` e `credentials` iguais aos de hoje
-- [ ] `main.ts` chama `configurarCors(app)`; não há mais `enableCors` direto
-- [ ] `CORS_ORIGIN` padrão `http://localhost:5173,http://localhost:4173` no `docker-compose.yml` e no `.env.example`
-- [ ] e2e: a app de teste chama `configurarCors(app)`; `OPTIONS /api/gesseiros/:id/lancamentos` com `Origin: http://localhost:5173` e `Access-Control-Request-Headers: content-type,authorization,idempotency-key` responde 204 com `idempotency-key` em `Access-Control-Allow-Headers` (comparação sem maiúsculas)
-- [ ] Gate full da API passando
+- [x] `allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key']`; `origin` e `credentials` iguais aos de hoje
+- [x] `main.ts` chama `configurarCors(app)`; não há mais `enableCors` direto
+- [x] `CORS_ORIGIN` padrão `http://localhost:5173,http://localhost:4173` no `docker-compose.yml` e no `.env.example`
+- [x] e2e: a app de teste chama `configurarCors(app)`; `OPTIONS /api/gesseiros/:id/lancamentos` com `Origin: http://localhost:5173` e `Access-Control-Request-Headers: content-type,authorization,idempotency-key` responde 204 com `idempotency-key` em `Access-Control-Allow-Headers` (comparação sem maiúsculas)
+- [x] Gate full da API passando
 
 **Tests**: e2e
 **Gate**: full (api)
@@ -500,6 +516,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T14: Rotas de criação idempotentes + e2e
+
+**Status**: ✅ Concluída (L2)
 
 **What**: As 5 rotas de criação chamam `idempotencia.executar(ctx, (tx) => service.metodo(..., tx))` com `@ApiIdempotencia()`; e2e completo da idempotência.
 **Where**: `apps/api/src/gesseiros/gesseiros.controller.ts`, `apps/api/src/obras/obras.controller.ts`, `apps/api/src/estoque/estoque.controller.ts`, `apps/api/test/idempotencia.e2e-spec.ts`
@@ -514,10 +532,11 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `POST /gesseiros`, `/gesseiros/:id/lancamentos`, `/obras`, `/estoque/materiais` e `/estoque/movimentacoes` com `@ApiIdempotencia()` e `executar()`; `AlocarGesseiro` e o agente não mudam
-- [ ] e2e (dados `[e2e]` apagados no `afterAll`): mesma chave e corpo duas vezes, um `Lancamento` e as duas respostas iguais com 201; mesma chave e outro valor dá 422 e um lançamento; dois POST simultâneos (o primeiro atrasado por `overrideProvider`) dão um 201, um 409 e um lançamento; erro depois do `INSERT` não deixa lançamento nem chave, e o reenvio com a mesma chave grava um; sem cabeçalho, dois POST dão dois lançamentos; mesma chave em `/estoque/movimentacoes` move o saldo uma vez só
-- [ ] Nenhum `[e2e]` sobra no banco depois do teste
-- [ ] Gate full da API passando (fim das fases 2 e 3)
+- [x] `POST /gesseiros`, `/gesseiros/:id/lancamentos`, `/obras`, `/estoque/materiais` e `/estoque/movimentacoes` com `@ApiIdempotencia()` e `executar()`; `AlocarGesseiro` e o agente não mudam
+- [x] e2e (dados `[e2e]` apagados no `afterAll`): mesma chave e corpo duas vezes, um `Lancamento` e as duas respostas iguais com 201; mesma chave e outro valor dá 422 e um lançamento; dois POST simultâneos (o primeiro atrasado por `overrideProvider`) dão um 201, um 409 e um lançamento; erro depois do `INSERT` não deixa lançamento nem chave, e o reenvio com a mesma chave grava um; sem cabeçalho, dois POST dão dois lançamentos; mesma chave em `/estoque/movimentacoes` move o saldo uma vez só
+- [x] Nenhum `[e2e]` sobra no banco depois do teste
+- [x] **Ajuste da revisão do L2**: sem `Idempotency-Key`, o `executar` chama `criar()` sem cliente (não `criar(this.prisma)`). Assim cada service usa o próprio `this.prisma` e o `movimentar()` volta a abrir a sua `$transaction` (saldo + movimentação atômicos, como antes da feature). Prova: `idempotencia.service.spec.ts` "chama criar sem cliente" (`criar.mock.calls[0]` igual a `[]`) + o teste antigo de `movimentar(dto)` que exige `$transaction` 1 vez
+- [x] Gate full da API passando (fim das fases 2 e 3)
 
 **Tests**: e2e
 **Gate**: full (api) + build
@@ -527,6 +546,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T15: Gerador de UUID com fallback
+
+**Status**: ✅ Concluída (L3)
 
 **What**: `gerarUuid()`: `crypto.randomUUID()` quando existe; senão v4 com `getRandomValues`.
 **Where**: `apps/web/src/lib/uuid.ts`, `uuid.test.ts`
@@ -541,9 +562,9 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Com `randomUUID`: usa ele
-- [ ] Sem `randomUUID`: devolve string que casa `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`; 1000 chamadas sem repetição
-- [ ] Gate quick do web passando
+- [x] Com `randomUUID`: usa ele
+- [x] Sem `randomUUID`: devolve string que casa `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`; 1000 chamadas sem repetição
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -553,6 +574,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T16: Sessão limpa o cache
+
+**Status**: ✅ Concluída (L3)
 
 **What**: `lib/sessao.ts` com `NOME_CACHE_API`, `limparCacheApi`, `encerrarSessao` e `iniciarSessao`; o `sair()` do `Layout` passa a usar `encerrarSessao`.
 **Where**: `apps/web/src/lib/sessao.ts` (+ `sessao.test.ts`), `apps/web/src/components/Layout.tsx`, `Layout.test.tsx`
@@ -567,10 +590,10 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `limparCacheApi()` chama `caches.delete('api-dados')`; sem `caches` no `window`, não falha; com `caches.delete` rejeitando, não falha
-- [ ] `encerrarSessao()` remove token e usuário **e** apaga o cache; `iniciarSessao(resposta)` apaga o cache **antes** de gravar token e usuário (ordem testada)
-- [ ] `Layout`: clicar em "Sair" espera `encerrarSessao()` e então navega para `/login` (teste com `caches` mockado)
-- [ ] Gate quick do web passando
+- [x] `limparCacheApi()` chama `caches.delete('api-dados')`; sem `caches` no `window`, não falha; com `caches.delete` rejeitando, não falha
+- [x] `encerrarSessao()` remove token e usuário **e** apaga o cache; `iniciarSessao(resposta)` apaga o cache **antes** de gravar token e usuário (ordem testada)
+- [x] `Layout`: clicar em "Sair" espera `encerrarSessao()` e então navega para `/login` (teste com `caches` mockado)
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -580,6 +603,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T17: Estado de conexão
+
+**Status**: ✅ Concluída (L3)
 
 **What**: `lib/conexao.ts` com `registrarOrigem`, `estaDesatualizado`, `assinar`, `useDesatualizado` e `useAoReconectar`.
 **Where**: `apps/web/src/lib/conexao.ts`, `conexao.test.ts`
@@ -594,11 +619,11 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Desatualizado quando `navigator.onLine === false` ou a última origem foi `'cache'`; volta a falso com `registrarOrigem('rede')` e online
-- [ ] Assinantes notificados em `registrarOrigem`, `online` e `offline`; o retorno de `assinar` cancela
-- [ ] `useDesatualizado` re-renderiza nas mudanças (`renderHook`)
-- [ ] `useAoReconectar(fn)` chama `fn` uma vez por evento `online`, não chama em `offline` e remove o listener ao desmontar
-- [ ] Gate quick do web passando
+- [x] Desatualizado quando `navigator.onLine === false` ou a última origem foi `'cache'`; volta a falso com `registrarOrigem('rede')` e online
+- [x] Assinantes notificados em `registrarOrigem`, `online` e `offline`; o retorno de `assinar` cancela
+- [x] `useDesatualizado` re-renderiza nas mudanças (`renderHook`)
+- [x] `useAoReconectar(fn)` chama `fn` uma vez por evento `online`, não chama em `offline` e remove o listener ao desmontar
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -608,6 +633,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T18: Cliente HTTP para offline, cache e idempotência
+
+**Status**: ✅ Concluída (L3)
 
 **What**: `lib/api.ts`: falha de rede vira `ApiError(…, 0)` com a mensagem por método; GET 200 registra a origem pelo `X-From-Cache`; 401 chama `encerrarSessao()`; `post` aceita `{ idempotencyKey }`.
 **Where**: `apps/web/src/lib/api.ts`, `apps/web/src/lib/api.test.ts` (novo)
@@ -622,14 +649,14 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `fetch` rejeitando com `TypeError` num GET: `ApiError` status 0 e mensagem exata "Sem conexão e sem dados salvos desta tela neste aparelho."
-- [ ] O mesmo em POST/PATCH/PUT/DELETE: mensagem exata "Sem conexão: não foi possível confirmar o envio. Tente de novo; o mesmo lançamento não será duplicado."
-- [ ] GET 200 com `X-From-Cache: 1` chama `registrarOrigem('cache')`; sem o cabeçalho, `registrarOrigem('rede')`; escrita não registra
-- [ ] 401: `encerrarSessao()` é aguardado antes do erro "Sessao expirada. Faca login novamente."
-- [ ] `api.post(caminho, corpo, { idempotencyKey: 'k' })` manda `Idempotency-Key: k`; sem opção, não manda
-- [ ] 409 e 422 sobem como `ApiError` com o `status` certo
-- [ ] `grep -rn "auth.logout" apps/web/src` só encontra `lib/sessao.ts` (AD-010)
-- [ ] Gate quick do web passando
+- [x] `fetch` rejeitando com `TypeError` num GET: `ApiError` status 0 e mensagem exata "Sem conexão e sem dados salvos desta tela neste aparelho."
+- [x] O mesmo em POST/PATCH/PUT/DELETE: mensagem exata "Sem conexão: não foi possível confirmar o envio. Tente de novo; o mesmo lançamento não será duplicado."
+- [x] GET 200 com `X-From-Cache: 1` chama `registrarOrigem('cache')`; sem o cabeçalho, `registrarOrigem('rede')`; escrita não registra
+- [x] 401: `encerrarSessao()` é aguardado antes do erro "Sessao expirada. Faca login novamente."
+- [x] `api.post(caminho, corpo, { idempotencyKey: 'k' })` manda `Idempotency-Key: k`; sem opção, não manda
+- [x] 409 e 422 sobem como `ApiError` com o `status` certo
+- [x] `grep -rn "auth.logout" apps/web/src` só encontra `lib/sessao.ts` (AD-010)
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -639,6 +666,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T19: `useEnvio` com chave de idempotência
+
+**Status**: ✅ Concluída (L3)
 
 **What**: O hook ganha `chave` e trata 0/409/422 conforme o spec.
 **Where**: `apps/web/src/lib/useEnvio.ts`, `useEnvio.test.ts`
@@ -653,14 +682,17 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `chave` criada na montagem e estável entre renders; `enviar(fn)` passa a `chave` para `fn`
-- [ ] Sucesso: `true` e chave nova
-- [ ] 422: `false`, erro exato "O envio anterior pode ter sido gravado com outros dados. Confira a lista antes de enviar de novo." e chave nova
-- [ ] 409: `false`, erro exato "Este envio ainda está sendo processado. Aguarde alguns segundos e tente de novo." e mesma chave
-- [ ] Status 0: `false`, mensagem do `ApiError` e mesma chave
-- [ ] Outros erros: como hoje; mesma chave
-- [ ] Os testes antigos do hook continuam passando
-- [ ] Gate quick do web passando
+- [x] `chave` criada na montagem e estável entre renders; `enviar(fn)` passa a `chave` para `fn`
+- [x] `useEnvio(recurso?)`: quando `recurso` muda com o hook montado (`rerender` com outro valor), a chave é trocada; re-render com o mesmo `recurso` mantém a chave; a montagem não gera duas chaves
+- [x] Depois de uma falha de rede (chave mantida), a troca de `recurso` ainda gera chave nova: o reenvio para o outro recurso nunca reusa a chave do primeiro
+- [x] Sucesso: `true` e chave nova
+- [x] 422: `false`, erro exato "O envio anterior pode ter sido gravado com outros dados. Confira a lista antes de enviar de novo." e chave nova
+- [x] 409 com `codigo` `EM_PROCESSAMENTO`: `false`, erro exato "Este envio ainda está sendo processado. Aguarde alguns segundos e tente de novo." e mesma chave
+- [x] **Ajuste da revisão do L3**: qualquer outro 409 (sem `codigo`, com outro `codigo` ou só com o mesmo texto) mostra a mensagem da API e mantém a chave. A API manda o `codigo` (`idempotencia.service.ts`, `CODIGO_EM_PROCESSAMENTO`; commit aditivo, e2e do 409 simultâneo exige `body.codigo`); o `api.ts` o expõe em `ApiError.codigo`
+- [x] Status 0: `false`, mensagem do `ApiError` e mesma chave
+- [x] Outros erros: como hoje; mesma chave
+- [x] Os testes antigos do hook continuam passando
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -670,6 +702,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T20: Formulários de criação mandam a chave
+
+**Status**: ✅ Concluída (L3)
 
 **What**: Os 5 formulários de criação passam a `chave` do `useEnvio` no `api.post`. É a mesma mudança de uma linha em 5 arquivos.
 **Where**: `apps/web/src/components/forms/` → `NovoGesseiroForm.tsx`, `LancamentoForm.tsx`, `NovaObraForm.tsx`, `NovoMaterialForm.tsx`, `MovimentacaoForm.tsx` (+ os 5 `.test.tsx`)
@@ -684,10 +718,14 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Cada formulário chama `api.post(caminho, corpo, { idempotencyKey: chave })`
-- [ ] Teste por formulário: o primeiro envio leva uma chave; um reenvio depois de falha de rede leva a **mesma** chave e os campos continuam preenchidos; depois do sucesso, o próximo envio leva outra chave
-- [ ] `AlocarGesseiroForm` não muda
-- [ ] Gate quick do web passando (fim da fase 4)
+- [x] Cada formulário chama `api.post(caminho, corpo, { idempotencyKey: chave })`
+- [x] Teste por formulário: o primeiro envio leva uma chave; um reenvio depois de falha de rede leva a **mesma** chave e os campos continuam preenchidos; depois do sucesso, o próximo envio leva outra chave
+- [x] `LancamentoForm` passa `gesseiroId` ao `useEnvio`, e `MovimentacaoForm` passa `inicial?.materialId`
+- [x] Teste do `LancamentoForm` sem desmontar (`rerender` com outro `gesseiroId`, sem `key`): falha de rede no gesseiro A e depois envio no gesseiro B; o POST de B vai para `/gesseiros/B/lancamentos` com uma chave **diferente** da usada em A
+- [x] Teste do `MovimentacaoForm`: `rerender` com outro `inicial` (como o "Resolver" de outro alerta com o formulário aberto) faz o próximo envio levar outra chave
+- [x] **Ajuste da revisão do L3**: `Estoque.tsx` monta o `MovimentacaoForm` com `key={entrada?.materialId}`, para outro alerta com o formulário aberto trocar campos e chave juntos. Teste: `pages/Estoque.test.tsx` "outro alerta com o formulário aberto troca os campos e a chave juntos" (falha de rede no material A, navegação para o alerta de B sem desmontar o Estoque: campos de B e outra chave). Sem o `key`, o teste falha (conferido)
+- [x] `AlocarGesseiroForm` não muda
+- [x] Gate quick do web passando (fim da fase 4)
 
 **Tests**: unit
 **Gate**: quick (web) + build
@@ -697,6 +735,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T21: Login offline e limpeza no login
+
+**Status**: ✅ Concluída (L3)
 
 **What**: `Login.tsx` usa `iniciarSessao()` no sucesso e mostra a mensagem de sem conexão.
 **Where**: `apps/web/src/pages/Login.tsx`, `Login.test.tsx`
@@ -711,10 +751,10 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Sucesso: `iniciarSessao(resposta)` aguardado **antes** do `navigate('/')`
-- [ ] `ApiError` status 0: `.erro` com o texto exato "Sem conexão. Conecte-se à internet para entrar."; o e-mail digitado continua no campo; o campo de senha fica vazio
-- [ ] Outros erros: mensagem da API, como hoje
-- [ ] Gate quick do web passando
+- [x] Sucesso: `iniciarSessao(resposta)` aguardado **antes** do `navigate('/')`
+- [x] `ApiError` status 0: `.erro` com o texto exato "Sem conexão. Conecte-se à internet para entrar."; o e-mail digitado continua no campo; o campo de senha fica vazio
+- [x] Outros erros: mensagem da API, como hoje
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)

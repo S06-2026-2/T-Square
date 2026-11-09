@@ -2,16 +2,14 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { configurarCors } from './cors';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.setGlobalPrefix('api');
 
-  app.enableCors({
-    origin: process.env.CORS_ORIGIN?.split(',') ?? '*',
-    credentials: true,
-  });
+  configurarCors(app);
 
   // Valida e converte automaticamente todos os DTOs anotados com class-validator.
   app.useGlobalPipes(

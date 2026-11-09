@@ -1,6 +1,9 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
+import { ApiIdempotencia } from '../idempotencia/api-idempotencia.decorator';
+import { ContextoIdempotencia } from '../idempotencia/contexto-idempotencia.decorator';
+import { IdempotenciaService } from '../idempotencia/idempotencia.service';
 import { AlocacaoGesseiroDto, CreateObraDto } from './dto/create-obra.dto';
 import { SubstituirMateriaisPrevistosDto } from './dto/materiais-previstos.dto';
 import { QueryObraDto } from './dto/query-obra.dto';
@@ -15,12 +18,14 @@ export class ObrasController {
   constructor(
     private readonly obrasService: ObrasService,
     private readonly materiaisPrevistosService: MateriaisPrevistosService,
+    private readonly idempotencia: IdempotenciaService,
   ) {}
 
   @Post()
   @ApiOperation({ summary: 'Cadastra uma obra (opcionalmente ja com pagamento e gesseiros)' })
-  create(@Body() dto: CreateObraDto) {
-    return this.obrasService.create(dto);
+  @ApiIdempotencia()
+  create(@Body() dto: CreateObraDto, @ContextoIdempotencia() ctx: ContextoIdempotencia) {
+    return this.idempotencia.executar(ctx, (tx) => this.obrasService.create(dto, tx));
   }
 
   @Get()

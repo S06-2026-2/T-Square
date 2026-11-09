@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { api } from '../../lib/api';
 import NovoGesseiroForm from './NovoGesseiroForm';
+import { testarChaveDeIdempotencia } from './chaveIdempotencia.testes';
 
 jest.mock('../../lib/api', () => ({ api: { post: jest.fn() } }));
 
@@ -44,7 +45,7 @@ describe('NovoGesseiroForm', () => {
       nome: 'Joao Ferreira',
       telefone: '(35) 99999-0001',
       chavePix: 'joao@pix.com',
-    });
+    }, { idempotencyKey: expect.any(String) });
     expect(screen.getByLabelText('Nome')).toHaveValue('');
     expect(screen.getByLabelText('Telefone')).toHaveValue('');
     expect(screen.getByLabelText('Chave Pix')).toHaveValue('');
@@ -88,5 +89,15 @@ describe('NovoGesseiroForm', () => {
     expect(screen.getByRole('button', { name: 'Salvar gesseiro' })).toBeDisabled();
     terminar({ id: 'g1' });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Salvar gesseiro' })).toBeEnabled());
+  });
+});
+
+describe('NovoGesseiroForm: Idempotency-Key', () => {
+  testarChaveDeIdempotencia({
+    post,
+    botao: 'Salvar gesseiro',
+    renderizar: () => render(<NovoGesseiroForm onSalvo={jest.fn()} />),
+    preencher: () => preencher('Nome', 'Joao Ferreira'),
+    conferirCampos: () => expect(screen.getByLabelText('Nome')).toHaveValue('Joao Ferreira'),
   });
 });

@@ -367,4 +367,86 @@ describe('GesseirosService', () => {
     expect(prisma.lancamento.groupBy).not.toHaveBeenCalled();
     });
   });
+
+  /**
+   * pwa-instalavel-responsivo (IDP-02, atomicidade): com o `tx` da transacao de idempotencia,
+   * toda leitura e escrita vai para o `tx`, nunca para o `prisma` do service.
+   */
+  describe('com tx externo', () => {
+    let tx: {
+      gesseiro: { findUnique: jest.Mock; create: jest.Mock };
+      obra: { findUnique: jest.Mock };
+      lancamento: { create: jest.Mock };
+    };
+
+    /** Nenhum metodo do `prisma` do service foi chamado. */
+    const prismaIntocado = () => {
+      for (const delegate of Object.values(prisma)) {
+        for (const metodo of Object.values(delegate as Record<string, jest.Mock>)) {
+          expect(metodo).not.toHaveBeenCalled();
+        }
+      }
+    };
+
+    beforeEach(() => {
+      tx = {
+        gesseiro: { findUnique: jest.fn(), create: jest.fn() },
+        obra: { findUnique: jest.fn() },
+        lancamento: { create: jest.fn() },
+      };
+    });
+
+    it('create grava pelo tx', async () => {
+      const dto = { nome: 'Joao Ferreira', telefone: '(35) 99999-0001' };
+      tx.gesseiro.create.mockResolvedValue({ id: 'g-1', ativo: true, ...dto });
+
+      const resultado = await service.create(dto, tx as never);
+
+      expect(tx.gesseiro.create).toHaveBeenCalledWith({ data: dto });
+      expect(resultado).toEqual({ id: 'g-1', ativo: true, ...dto });
+      prismaIntocado();
+    });
+
+    it('registrarLancamento busca gesseiro e obra e grava o lancamento pelo tx', async () => {
+      tx.gesseiro.findUnique.mockResolvedValue({ id: 'g-1', lancamentos: [] });
+      tx.obra.findUnique.mockResolvedValue({ id: 'o-1' });
+      tx.lancamento.create.mockResolvedValue({ id: 'l-1', tipo: TipoLancamento.VALE });
+
+      const resultado = await service.registrarLancamento(
+        'g-1',
+        { tipo: TipoLancamento.VALE, valor: 100, obraId: 'o-1' },
+        tx as never,
+      );
+
+      expect(tx.gesseiro.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'g-1' } }),
+      );
+      expect(tx.obra.findUnique).toHaveBeenCalledWith({ where: { id: 'o-1' } });
+      expect(tx.lancamento.create).toHaveBeenCalledWith({
+        data: { gesseiroId: 'g-1', tipo: TipoLancamento.VALE, valor: 100, obraId: 'o-1' },
+      });
+      expect(resultado).toEqual({ id: 'l-1', tipo: TipoLancamento.VALE });
+      prismaIntocado();
+    });
+
+    it('registrarLancamento com gesseiro inexistente no tx da 404 sem gravar', async () => {
+      tx.gesseiro.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.registrarLancamento('nao-existe', { tipo: TipoLancamento.VALE, valor: 100 }, tx as never),
+      ).rejects.toBeInstanceOf(NotFoundException);
+
+      expect(tx.lancamento.create).not.toHaveBeenCalled();
+      prismaIntocado();
+    });
+
+    it('findOne le pelo tx', async () => {
+      tx.gesseiro.findUnique.mockResolvedValue({ id: 'g-1', lancamentos: [], alocacoes: [] });
+
+      const resultado = await service.findOne('g-1', tx as never);
+
+      expect(resultado).toEqual({ id: 'g-1', lancamentos: [], alocacoes: [] });
+      prismaIntocado();
+    });
+  });
 });

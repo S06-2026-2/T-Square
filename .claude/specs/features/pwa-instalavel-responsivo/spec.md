@@ -174,14 +174,14 @@ lançar o mesmo vale ou movimentação duas vezes.
 
 **Acceptance Criteria**:
 
-1. WHEN o front envia um POST de criação (vale, movimentação de estoque, obra, gesseiro, material) THEN the system SHALL incluir o cabeçalho `Idempotency-Key` com um UUID (`crypto.randomUUID()`) gerado ao abrir o formulário e mantido até o envio ter sucesso ou receber 422 (IDP-07); depois disso, o formulário gera uma chave nova. <!-- IDP-01 -->
+1. WHEN o front envia um POST de criação (vale, movimentação de estoque, obra, gesseiro, material) THEN the system SHALL incluir o cabeçalho `Idempotency-Key` com um UUID (`crypto.randomUUID()`) gerado ao abrir o formulário e mantido até o envio ter sucesso ou receber 422 (IDP-07); depois disso, o formulário gera uma chave nova. O formulário também gera uma chave nova quando passa a apontar para outro recurso sem ser fechado (outro gesseiro no extrato, outro material pré-preenchido pelo "Resolver"), para um envio a um recurso nunca reusar a chave de outro. <!-- IDP-01 -->
 2. WHEN o backend recebe um POST com uma `Idempotency-Key` já processada pelo mesmo usuário na mesma rota THEN the system SHALL devolver o mesmo status e corpo da primeira resposta, sem gravar de novo. <!-- IDP-02 -->
 3. IF chegar a mesma chave com corpo diferente do original THEN the system SHALL responder 422 e não gravar. <!-- IDP-03 -->
-4. IF chegar a mesma chave enquanto o primeiro pedido ainda está em processamento THEN the system SHALL responder 409 e não gravar. <!-- IDP-04 -->
+4. IF chegar a mesma chave enquanto o primeiro pedido ainda está em processamento THEN the system SHALL responder 409 com `codigo: "EM_PROCESSAMENTO"` no corpo (além da mensagem) e não gravar. <!-- IDP-04 -->
 5. The system SHALL guardar as chaves por 24 horas. <!-- IDP-05 -->
 6. IF um POST de criação chegar sem `Idempotency-Key` THEN the system SHALL processar normalmente (compatibilidade durante a transição). <!-- IDP-06 -->
 7. IF o front receber 422 de chave reutilizada com outros dados THEN the system SHALL exibir no formulário "O envio anterior pode ter sido gravado com outros dados. Confira a lista antes de enviar de novo.", SHALL manter os campos preenchidos e SHALL gerar uma chave nova para o próximo envio. <!-- IDP-07 -->
-8. IF o front receber 409 de chave em processamento THEN the system SHALL exibir no formulário "Este envio ainda está sendo processado. Aguarde alguns segundos e tente de novo." e SHALL manter a mesma chave. <!-- IDP-08 -->
+8. IF o front receber 409 com `codigo` igual a `EM_PROCESSAMENTO` THEN the system SHALL exibir no formulário "Este envio ainda está sendo processado. Aguarde alguns segundos e tente de novo." e SHALL manter a mesma chave. Qualquer outro 409 (ex.: material com nome duplicado) mostra a mensagem da API e também mantém a chave; a decisão é pelo `codigo`, nunca pelo texto. <!-- IDP-08 -->
 9. The system SHALL aceitar o cabeçalho `Idempotency-Key` em requisições de outra origem (CORS), respondendo ao preflight (`OPTIONS`) das rotas de criação com `Idempotency-Key` em `Access-Control-Allow-Headers`, sem bloquear o envio. <!-- IDP-09 -->
 
 **Independent Test**: enviar duas vezes o mesmo POST de vale com a mesma chave: um único lançamento,
@@ -281,27 +281,27 @@ instrução. No app já adicionado à tela de início, o botão não aparece.
 | OFF-01 | P1: Consultar sem internet | - | Pending |
 | OFF-02 | P1: Consultar sem internet | - | Pending |
 | OFF-03 | P1: Consultar sem internet | - | Pending |
-| OFF-04 | P1: Consultar sem internet | - | Pending |
-| OFF-05 | P1: Consultar sem internet | - | Pending |
-| OFF-06 | P1: Consultar sem internet | - | Pending |
-| OFF-07 | P1: Consultar sem internet | - | Pending |
-| OFF-08 | P1: Consultar sem internet | - | Pending |
+| OFF-04 | P1: Consultar sem internet | T18 | Implementing |
+| OFF-05 | P1: Consultar sem internet | T18 | Implementing |
+| OFF-06 | P1: Consultar sem internet | T17 | Implementing |
+| OFF-07 | P1: Consultar sem internet | T17 | Implementing |
+| OFF-08 | P1: Consultar sem internet | T18, T19 | Implementing |
 | OFF-09 | P1: Consultar sem internet | - | Pending |
 | OFF-10 | P1: Consultar sem internet | - | Pending |
-| OFF-11 | P1: Consultar sem internet | - | Pending |
-| OFF-12 | P1: Consultar sem internet | - | Pending |
-| OFF-13 | P1: Consultar sem internet | - | Pending |
+| OFF-11 | P1: Consultar sem internet | T16, T18 | Implementing |
+| OFF-12 | P1: Consultar sem internet | T16, T21 | Implementing |
+| OFF-13 | P1: Consultar sem internet | T21 | Implementing |
 | OFF-14 | P1: Consultar sem internet | - | Pending |
-| OFF-15 | P1: Consultar sem internet | - | Pending |
-| IDP-01 | P1: Reenviar sem duplicar | - | Pending |
-| IDP-02 | P1: Reenviar sem duplicar | - | Pending |
-| IDP-03 | P1: Reenviar sem duplicar | - | Pending |
-| IDP-04 | P1: Reenviar sem duplicar | - | Pending |
-| IDP-05 | P1: Reenviar sem duplicar | - | Pending |
-| IDP-06 | P1: Reenviar sem duplicar | - | Pending |
-| IDP-07 | P1: Reenviar sem duplicar | - | Pending |
-| IDP-08 | P1: Reenviar sem duplicar | - | Pending |
-| IDP-09 | P1: Reenviar sem duplicar | - | Pending |
+| OFF-15 | P1: Consultar sem internet | T17 | Implementing |
+| IDP-01 | P1: Reenviar sem duplicar | T15, T18, T19, T20 | Implementing |
+| IDP-02 | P1: Reenviar sem duplicar | T6, T8, T9, T10, T11, T12, T14 | Implementing |
+| IDP-03 | P1: Reenviar sem duplicar | T7, T9, T14 | Implementing |
+| IDP-04 | P1: Reenviar sem duplicar | T9, T14 | Implementing |
+| IDP-05 | P1: Reenviar sem duplicar | T6, T9 | Implementing |
+| IDP-06 | P1: Reenviar sem duplicar | T8, T9, T14 | Implementing |
+| IDP-07 | P1: Reenviar sem duplicar | T19 | Implementing |
+| IDP-08 | P1: Reenviar sem duplicar | T19 | Implementing |
+| IDP-09 | P1: Reenviar sem duplicar | T13 | Implementing |
 | UPD-01 | P2: Versões novas | - | Pending |
 | UPD-02 | P2: Versões novas | - | Pending |
 | UPD-03 | P2: Versões novas | - | Pending |
