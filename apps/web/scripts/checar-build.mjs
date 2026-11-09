@@ -7,6 +7,7 @@
 // 2. PWA-03: dist/sw.js existe.
 // 3. PWA-01: dist/manifest.webmanifest tem exatamente os campos de src/pwa/manifest.json.
 // 4. PWA-01/02: os PNGs dos ícones existem e têm o tamanho declarado (cabeçalho IHDR).
+// 5. PWA-02: dist/index.html com o apple-touch-icon e o apple-mobile-web-app-title "Gesso".
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -66,8 +67,22 @@ for (const { src, sizes } of [...icones, { src: 'apple-touch-icon.png', sizes: '
   if (medido !== sizes) falhas.push(`PWA-01/02: ${src} tem ${medido}, declarado ${sizes}.`);
 }
 
+// 5. PWA-02: o index.html do build declara o ícone e o título do iPhone.
+const html = fs.existsSync(path.join(DIST, 'index.html'))
+  ? fs.readFileSync(path.join(DIST, 'index.html'), 'utf8')
+  : '';
+const tags = [...html.matchAll(/<(?:link|meta)[^>]*>/g)].map((m) => m[0]);
+const temTag = (atributos) =>
+  tags.some((tag) => Object.entries(atributos).every(([nome, valor]) => tag.includes(`${nome}="${valor}"`)));
+if (!temTag({ rel: 'apple-touch-icon', href: '/apple-touch-icon.png' })) {
+  falhas.push('PWA-02: dist/index.html sem <link rel="apple-touch-icon" href="/apple-touch-icon.png">.');
+}
+if (!temTag({ name: 'apple-mobile-web-app-title', content: 'Gesso' })) {
+  falhas.push('PWA-02: dist/index.html sem <meta name="apple-mobile-web-app-title" content="Gesso">.');
+}
+
 if (falhas.length) {
   console.error(`checar-build: ${falhas.length} falha(s)\n- ${falhas.join('\n- ')}`);
   process.exit(1);
 }
-console.log(`checar-build: OK (1 chunk JS: ${js[0]}; sw.js; manifest igual ao PWA-01; ${icones.length + 1} ícones no tamanho)`);
+console.log(`checar-build: OK (1 chunk JS: ${js[0]}; sw.js; manifest igual ao PWA-01; ${icones.length + 1} ícones no tamanho; tags do iPhone)`);
