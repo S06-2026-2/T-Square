@@ -1077,6 +1077,107 @@ T28 → T29 → T30 → T31
 
 ---
 
+## Phase 7: Correções do Verifier (rodada 1, 2026-11-09)
+
+O Verifier da rodada 1 (`validation.md`, FAIL) deixou 1 mutante sobrevivente, 2 Edge Cases sem teste, a volta a `/login` do OFF-11 e lacunas menores. Decisões do usuário: OFF-11 pela opção A (corrigir o app); UPD-01/02 e RSP-11/12 ficam como verificação manual no `validation.md` (não automatizar); IDP-05 com exatamente 24 h ainda vale, como implementado no L2.
+
+### T32: Volta a `/login` depois do 401, sem recarregar (OFF-11)
+
+**Status**: ✅ Concluída (correções)
+
+**What**: Sessão observável (`useSessaoAtiva`, `motivoFimSessao`) em `lib/sessao.ts`; o `encerrarSessao(motivo)` avisa a tela só depois de apagar o cache; a `RotaPrivada` reage e leva a `/login` com `state.sessaoExpirada`; o login mostra "Sessao expirada. Faca login novamente." (`SESSAO_EXPIRADA` em `lib/api.ts`).
+**Where**: `apps/web/src/lib/sessao.ts`, `apps/web/src/lib/api.ts`, `apps/web/src/App.tsx`, `apps/web/src/pages/Login.tsx`, testes em `App.test.tsx`, `lib/sessao.test.ts`, `lib/api.test.ts`; `apps/web/scripts/audit-pwa.mjs` (passo 11)
+**Requirement**: OFF-11, Edge Case do 401
+
+**Done when**:
+
+- [x] 401 com a tela aberta: cache apagado antes da troca de tela, `/login` sem recarregar e a mensagem no `.erro` do login (`App.test.tsx`)
+- [x] "Sair" leva a `/login` sem a mensagem de sessão expirada
+- [x] A tela só é avisada depois do `caches.delete` (`sessao.test.ts`); 401 chama `encerrarSessao('expirada')` (`api.test.ts`)
+- [x] Mutantes mortos: avisar antes de apagar o cache (2 falhas); `RotaPrivada` lendo o token só no render, como na `main` (2 falhas)
+- [x] `audit:pwa` passo 11: troca de aba com token vencido vai a `/login` sem recarregar, com a mensagem e o cache ausente
+
+### T33: Estratégia do cache de dados testada por inteiro (OFF-03/09/10/14)
+
+**Status**: ✅ Concluída (correções)
+
+**What**: `criarEstrategiaDados(classes)` em `pwa/regras-cache.ts` monta o `NetworkFirst` com todas as opções; o `sw.ts` só injeta as classes do Workbox, sem nenhum valor solto.
+**Where**: `apps/web/src/pwa/regras-cache.ts`, `apps/web/src/sw.ts`, `apps/web/src/pwa/regras-cache.test.ts`
+**Requirement**: OFF-03, OFF-09, OFF-10, OFF-14
+
+**Done when**:
+
+- [x] Teste com classes falsas confere `api-dados`, 5 s, `statuses: [200]`, `maxEntries: 200`, `maxAgeSeconds: 604800` e o `pluginRecebimento` na ordem
+- [x] Mutantes mortos: `MAX_ENTRADAS * 500` (o sobrevivente da rodada 1), timeout 10 s, `statuses: [200, 404]`
+- [x] Build compila com as classes reais (`tsc -p tsconfig.sw.json`)
+
+### T34: Nome longo, troca de largura e RSP-07 com toque acima de 900px
+
+**Status**: ✅ Concluída (correções)
+
+**What**: Na `audit:responsive`: (1) o primeiro material, obra e gesseiro de cada lista chegam com um nome de 120 caracteres (fetch embrulhado na página, nada gravado no banco); `obras`, `gesseiros` e `estoque` só contam como montados com o nome na tela, e em 320px o nome tem de quebrar em 2+ linhas sem passar da tela; (2) iPad em 1024/1366 com toque (`pointer: coarse`), e o RSP-07 medido também em `pointer: coarse`; (3) troca de largura 1366 → 390 com o formulário "Novo gesseiro" preenchido: barra inferior fixa, sem recarregar e com o campo mantido.
+**Where**: `apps/web/scripts/audit-responsive.mjs`
+**Requirement**: Edge Cases (nome longo, troca de largura), RSP-07
+
+**Done when**:
+
+- [x] `medidos: 118/118, nao montados: 0, falhas: 0` com os nomes longos e o iPad com toque
+- [x] `troca de largura 1366 -> 390 com formulário preenchido: OK`
+
+### T35: Armazenamento cheio (Edge Case)
+
+**Status**: ✅ Concluída (correções)
+
+**What**: Passo 8b da `audit:pwa`: cota da origem travada no uso atual via CDP (`Storage.overrideQuotaForOrigin`); `/estoque` mostra os dados da API, sem o ícone, e o cache fica sem a entrada (prova de que a gravação falhou).
+**Where**: `apps/web/scripts/audit-pwa.mjs`
+**Requirement**: Edge Case (armazenamento cheio)
+
+**Done when**:
+
+- [x] `audit:pwa` 14/14
+- [x] Mutante (cota ×100): a gravação acontece e a conferência reprova
+
+### T36: Tags do iPhone conferidas no build (PWA-02)
+
+**Status**: ✅ Concluída (correções)
+
+**What**: `checar-build.mjs` exige no `dist/index.html` o `<link rel="apple-touch-icon" href="/apple-touch-icon.png">` e o `<meta name="apple-mobile-web-app-title" content="Gesso">`.
+**Where**: `apps/web/scripts/checar-build.mjs`
+**Requirement**: PWA-02
+
+**Done when**:
+
+- [x] Build atual passa; cópia do `dist` com as duas tags alteradas dá 2 falhas
+
+### T37: OFF-08 no formulário de edição
+
+**Status**: ✅ Concluída (correções)
+
+**What**: Teste do `MateriaisPrevistosForm` (o único formulário de edição, PUT): sem rede, mostra a mensagem do OFF-08 no `.erro`, mantém o valor editado e não reenvia sozinho.
+**Where**: `apps/web/src/components/forms/MateriaisPrevistosForm.test.tsx`
+**Requirement**: OFF-08
+
+**Done when**:
+
+- [x] Teste passando
+
+### T38: Fronteira do IDP-05 e precisão do spec
+
+**Status**: ✅ Concluída (correções)
+
+**What**: Teste de chave com exatamente 24 h (replay, sem apagar). Texto do spec: RSP-06 ("pelo menos" a altura da barra), RSP-11/12 (verificação manual em aparelho real), OFF-13 (campo de senha esvaziado), IDP-01 (UUID v4 com fallback `getRandomValues`), IDP-05 (24 h exatas ainda valem), Edge Case do 401 (alinhado ao OFF-11 corrigido).
+**Where**: `apps/api/src/idempotencia/idempotencia.service.spec.ts`, `spec.md`
+**Requirement**: IDP-05, RSP-06, RSP-11, RSP-12, OFF-13, IDP-01
+
+**Done when**:
+
+- [x] Mutante `>=` no vencimento morto pelo teste novo
+- [x] Spec atualizado
+
+**Verificação manual (sem automação, decisão do usuário)**: UPD-01/02 (versão nova do SW instala e ativa sozinha) e RSP-11/12 (`dvh` e safe areas em aparelho real com notch). Roteiro no `validation.md`.
+
+---
+
 ## Phase Execution Map
 
 ```

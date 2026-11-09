@@ -92,13 +92,13 @@ nem errar o toque, para registrar vales, movimentações e acompanhar obras pelo
 3. WHILE a largura da janela for ≤ 900px the system SHALL exibir a navegação como barra inferior fixa com as 4 abas (ícone + rótulo curto) e destacar a aba da rota atual. <!-- RSP-03 -->
 4. WHILE a largura da janela for ≤ 900px the system SHALL exibir no topo só o ícone da marca, o indicador de conexão (quando visível, ver OFF-06), o avatar, o botão "Instalar app" (quando disponível, ver PWA-05) e o botão "Sair", com o topo em no máximo 64px de altura, sem contar a área de `safe-area-inset-top`. <!-- RSP-04 -->
 5. WHILE a largura da janela for > 900px the system SHALL manter a sidebar lateral atual, com os rótulos atuais ("Visao geral", "Obras", "Gesseiros", "Estoque"). <!-- RSP-05 -->
-6. WHILE a barra inferior estiver visível the system SHALL reservar no fim do conteúdo um espaço igual à altura da barra inferior, incluindo `safe-area-inset-bottom`, para que o último elemento de cada tela fique visível acima da barra ao rolar até o fim. <!-- RSP-06 -->
+6. WHILE a barra inferior estiver visível the system SHALL reservar no fim do conteúdo um espaço de pelo menos a altura da barra inferior, incluindo `safe-area-inset-bottom`, para que o último elemento de cada tela fique visível acima da barra ao rolar até o fim. <!-- RSP-06 -->
 7. WHILE a largura da janela for ≤ 900px OR o dispositivo for de toque (`pointer: coarse`) the system SHALL exibir `input`, `select` e `textarea` com `font-size` de pelo menos 16px. <!-- RSP-07 -->
 8. WHILE a largura da janela for ≤ 900px the system SHALL dar pelo menos 44×44px de área de toque às abas da barra inferior, ao "Sair", ao "Instalar app", aos chips de filtro de Obras, ao botão "+" dos alertas, ao botão "Ver silenciados" dos alertas, aos `summary` dos cards de obra e ao botão "remover" das linhas de material. <!-- RSP-08 -->
 9. The system SHALL tornar a linha inteira de um gesseiro na lista (`.lista-pessoas li`) clicável para abrir o extrato, não só o nome. <!-- RSP-09 -->
 10. WHEN o operador seleciona um gesseiro WHILE a largura da janela for ≤ 760px (lista e extrato empilhados) THEN the system SHALL rolar a página até o início do card do extrato. <!-- RSP-10 -->
-11. The system SHALL dimensionar a altura mínima das telas cheias (`.app`, `.login`) por `100dvh`, com `100vh` como fallback para navegadores sem `dvh`. <!-- RSP-11 -->
-12. WHILE o app estiver aberto em modo instalado (standalone) num aparelho com recorte de tela (notch) the system SHALL afastar o topo e a barra inferior das áreas `env(safe-area-inset-top)` e `env(safe-area-inset-bottom)`. <!-- RSP-12 -->
+11. The system SHALL dimensionar a altura mínima das telas cheias (`.app`, `.login`) por `100dvh`, com `100vh` como fallback para navegadores sem `dvh`. Verificação manual em aparelho real (o Chrome headless não tem barra de endereço que mude a altura). <!-- RSP-11 -->
+12. WHILE o app estiver aberto em modo instalado (standalone) num aparelho com recorte de tela (notch) the system SHALL afastar o topo e a barra inferior das áreas `env(safe-area-inset-top)` e `env(safe-area-inset-bottom)`. Verificação manual em aparelho real com notch (no headless as safe areas valem 0). <!-- RSP-12 -->
 
 **Independent Test**: rodar `npm run audit:responsive` (320/360/390/768/1024/1366px, todas as telas
 do critério 1). Todas devem ter `scrollWidth == innerWidth`, topo ≤ 64px no mobile e nenhum dos alvos
@@ -152,7 +152,7 @@ dos gesseiros e o estoque que já carreguei antes, para consultar sem depender d
 10. The system SHALL descartar do cache de dados as respostas recebidas há mais de 7 dias, com a idade contada a partir da data em que a resposta foi recebida. <!-- OFF-10 -->
 11. WHEN a sessão termina, seja pelo clique em "Sair" ou por logout automático após 401, THEN the system SHALL apagar o cache de dados da API antes de voltar para `/login`. <!-- OFF-11 -->
 12. WHEN um login é concluído com sucesso THEN the system SHALL apagar o cache de dados da API antes de carregar a primeira tela. <!-- OFF-12 -->
-13. IF o envio do login falhar por rede THEN the system SHALL exibir na tela de login "Sem conexão. Conecte-se à internet para entrar." no padrão `.erro`, mantendo o usuário digitado (a senha não é guardada). <!-- OFF-13 -->
+13. IF o envio do login falhar por rede THEN the system SHALL exibir na tela de login "Sem conexão. Conecte-se à internet para entrar." no padrão `.erro`, mantendo o usuário digitado e esvaziando o campo de senha (a senha não fica guardada na tela nem no aparelho). <!-- OFF-13 -->
 14. The system SHALL manter no máximo 200 respostas no cache de dados, descartando as mais antigas. <!-- OFF-14 -->
 15. WHEN a conexão volta (evento `online`) THEN the system SHALL buscar de novo os dados da tela atual na API, sem recarregar a página e sem apagar formulários preenchidos. <!-- OFF-15 -->
 
@@ -174,11 +174,11 @@ lançar o mesmo vale ou movimentação duas vezes.
 
 **Acceptance Criteria**:
 
-1. WHEN o front envia um POST de criação (vale, movimentação de estoque, obra, gesseiro, material) THEN the system SHALL incluir o cabeçalho `Idempotency-Key` com um UUID (`crypto.randomUUID()`) gerado ao abrir o formulário e mantido até o envio ter sucesso ou receber 422 (IDP-07); depois disso, o formulário gera uma chave nova. O formulário também gera uma chave nova quando passa a apontar para outro recurso sem ser fechado (outro gesseiro no extrato, outro material pré-preenchido pelo "Resolver"), para um envio a um recurso nunca reusar a chave de outro. <!-- IDP-01 -->
+1. WHEN o front envia um POST de criação (vale, movimentação de estoque, obra, gesseiro, material) THEN the system SHALL incluir o cabeçalho `Idempotency-Key` com um UUID v4 (`crypto.randomUUID()`, ou `crypto.getRandomValues()` onde ele não existe, como em `http://` fora de localhost) gerado ao abrir o formulário e mantido até o envio ter sucesso ou receber 422 (IDP-07); depois disso, o formulário gera uma chave nova. O formulário também gera uma chave nova quando passa a apontar para outro recurso sem ser fechado (outro gesseiro no extrato, outro material pré-preenchido pelo "Resolver"), para um envio a um recurso nunca reusar a chave de outro. <!-- IDP-01 -->
 2. WHEN o backend recebe um POST com uma `Idempotency-Key` já processada pelo mesmo usuário na mesma rota THEN the system SHALL devolver o mesmo status e corpo da primeira resposta, sem gravar de novo. <!-- IDP-02 -->
 3. IF chegar a mesma chave com corpo diferente do original THEN the system SHALL responder 422 e não gravar. <!-- IDP-03 -->
 4. IF chegar a mesma chave enquanto o primeiro pedido ainda está em processamento THEN the system SHALL responder 409 com `codigo: "EM_PROCESSAMENTO"` no corpo (além da mensagem) e não gravar. <!-- IDP-04 -->
-5. The system SHALL guardar as chaves por 24 horas. <!-- IDP-05 -->
+5. The system SHALL guardar as chaves por 24 horas: uma chave com exatamente 24 horas ainda vale (replay); só depois disso ela vence. <!-- IDP-05 -->
 6. IF um POST de criação chegar sem `Idempotency-Key` THEN the system SHALL processar normalmente (compatibilidade durante a transição). <!-- IDP-06 -->
 7. IF o front receber 422 de chave reutilizada com outros dados THEN the system SHALL exibir no formulário "O envio anterior pode ter sido gravado com outros dados. Confira a lista antes de enviar de novo.", SHALL manter os campos preenchidos e SHALL gerar uma chave nova para o próximo envio. <!-- IDP-07 -->
 8. IF o front receber 409 com `codigo` igual a `EM_PROCESSAMENTO` THEN the system SHALL exibir no formulário "Este envio ainda está sendo processado. Aguarde alguns segundos e tente de novo." e SHALL manter a mesma chave. Qualquer outro 409 (ex.: material com nome duplicado) mostra a mensagem da API e também mantém a chave; a decisão é pelo `codigo`, nunca pelo texto. <!-- IDP-08 -->
@@ -231,7 +231,7 @@ instrução. No app já adicionado à tela de início, o botão não aparece.
 - IF o navegador não suportar service worker THEN the system SHALL funcionar como hoje (online), sem erro na tela nem no console além do aviso do próprio navegador.
 - IF o armazenamento do aparelho estiver cheio e o cache falhar ao gravar THEN the system SHALL entregar a resposta da API normalmente para a tela.
 - WHEN o operador faz login com outro usuário no mesmo aparelho, com ou sem "Sair" antes, THEN the system SHALL começar com o cache de dados vazio (consequência de OFF-12).
-- IF a sessão expirou (401) com rede THEN the system SHALL seguir o comportamento atual (`lib/api.ts`: logout e mensagem "Sessao expirada. Faca login novamente.") e SHALL NOT servir o cache no lugar do 401.
+- IF a sessão expirou (401) com rede THEN the system SHALL encerrar a sessão (OFF-11: cache apagado e volta a `/login`, sem recarregar), SHALL exibir na tela de login "Sessao expirada. Faca login novamente." no padrão `.erro` e SHALL NOT servir o cache no lugar do 401.
 - WHEN a largura da janela passa de > 900px para ≤ 900px (girar o tablet, redimensionar) THEN the system SHALL trocar sidebar por barra inferior sem recarregar e sem perder o estado da tela.
 - IF o nome de um material, obra ou gesseiro for longo (até 120 caracteres) THEN the system SHALL quebrar a linha dentro do card ou da célula, sem aumentar a largura da página em 320px.
 
@@ -262,15 +262,15 @@ instrução. No app já adicionado à tela de início, o botão não aparece.
 | RSP-03 | P1: Celular sem transbordar | T1, T3 | Implementing |
 | RSP-04 | P1: Celular sem transbordar | T1, T3 | Implementing |
 | RSP-05 | P1: Celular sem transbordar | T3 | Implementing |
-| RSP-06 | P1: Celular sem transbordar | T1, T3 | Implementing |
-| RSP-07 | P1: Celular sem transbordar | T1, T4 | Implementing |
+| RSP-06 | P1: Celular sem transbordar | T1, T3, T38 | Implementing |
+| RSP-07 | P1: Celular sem transbordar | T1, T4, T34 | Implementing |
 | RSP-08 | P1: Celular sem transbordar | T1, T4, T25 | Implementing |
 | RSP-09 | P1: Celular sem transbordar | T5 | Implementing |
 | RSP-10 | P1: Celular sem transbordar | T1, T5 | Implementing |
-| RSP-11 | P1: Celular sem transbordar | T2 | Implementing |
-| RSP-12 | P1: Celular sem transbordar | T3 | Implementing |
+| RSP-11 | P1: Celular sem transbordar | T2, T38 | Implementing |
+| RSP-12 | P1: Celular sem transbordar | T3, T38 | Implementing |
 | PWA-01 | P1: Instalar o app | T26, T28, T31 | Implementing |
-| PWA-02 | P1: Instalar o app | T26 | Implementing |
+| PWA-02 | P1: Instalar o app | T26, T36 | Implementing |
 | PWA-03 | P1: Instalar o app | T28, T29, T31 | Implementing |
 | PWA-04 | P1: Instalar o app | T28, T29 | Implementing |
 | PWA-05 | P1: Instalar o app | T24, T25 | Implementing |
@@ -280,24 +280,24 @@ instrução. No app já adicionado à tela de início, o botão não aparece.
 | PWA-09 | P1: Instalar o app | T24, T25 | Implementing |
 | OFF-01 | P1: Consultar sem internet | T28, T31 | Implementing |
 | OFF-02 | P1: Consultar sem internet | T27 | Implementing |
-| OFF-03 | P1: Consultar sem internet | T28, T31 | Implementing |
+| OFF-03 | P1: Consultar sem internet | T28, T31, T33 | Implementing |
 | OFF-04 | P1: Consultar sem internet | T18, T27, T31 | Implementing |
 | OFF-05 | P1: Consultar sem internet | T18, T31 | Implementing |
 | OFF-06 | P1: Consultar sem internet | T17, T22, T31 | Implementing |
 | OFF-07 | P1: Consultar sem internet | T17, T22, T31 | Implementing |
-| OFF-08 | P1: Consultar sem internet | T18, T19 | Implementing |
-| OFF-09 | P1: Consultar sem internet | T27 | Implementing |
-| OFF-10 | P1: Consultar sem internet | T27 | Implementing |
-| OFF-11 | P1: Consultar sem internet | T16, T18, T31 | Implementing |
+| OFF-08 | P1: Consultar sem internet | T18, T19, T37 | Implementing |
+| OFF-09 | P1: Consultar sem internet | T27, T33 | Implementing |
+| OFF-10 | P1: Consultar sem internet | T27, T33 | Implementing |
+| OFF-11 | P1: Consultar sem internet | T16, T18, T31, T32 | Implementing |
 | OFF-12 | P1: Consultar sem internet | T16, T21 | Implementing |
-| OFF-13 | P1: Consultar sem internet | T21 | Implementing |
-| OFF-14 | P1: Consultar sem internet | T28 | Implementing |
+| OFF-13 | P1: Consultar sem internet | T21, T38 | Implementing |
+| OFF-14 | P1: Consultar sem internet | T28, T33 | Implementing |
 | OFF-15 | P1: Consultar sem internet | T17, T23, T31 | Implementing |
-| IDP-01 | P1: Reenviar sem duplicar | T15, T18, T19, T20 | Implementing |
+| IDP-01 | P1: Reenviar sem duplicar | T15, T18, T19, T20, T38 | Implementing |
 | IDP-02 | P1: Reenviar sem duplicar | T6, T8, T9, T10, T11, T12, T14 | Implementing |
 | IDP-03 | P1: Reenviar sem duplicar | T7, T9, T14 | Implementing |
 | IDP-04 | P1: Reenviar sem duplicar | T9, T14 | Implementing |
-| IDP-05 | P1: Reenviar sem duplicar | T6, T9 | Implementing |
+| IDP-05 | P1: Reenviar sem duplicar | T6, T9, T38 | Implementing |
 | IDP-06 | P1: Reenviar sem duplicar | T8, T9, T14 | Implementing |
 | IDP-07 | P1: Reenviar sem duplicar | T19 | Implementing |
 | IDP-08 | P1: Reenviar sem duplicar | T19 | Implementing |
