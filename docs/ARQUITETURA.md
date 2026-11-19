@@ -84,15 +84,33 @@ do Render em produção.
 
 ## Deploy
 
-**API no Render:** Web Service com `Dockerfile Path` = `apps/api/Dockerfile` e o **contexto do
-build na raiz do repositório** (`Root Directory` vazio). O `package-lock.json` do monorepo mora na
-raiz e o `npm ci` do Dockerfile exige o lockfile; com o contexto em `apps/api` ele falha. Build
-local: `docker build -f apps/api/Dockerfile -t gesso-api .`
-Variáveis: `DATABASE_URL` (do Postgres do próprio Render), `JWT_SECRET`, `CORS_ORIGIN`
-(a URL da Vercel). O container roda `prisma migrate deploy` antes de subir.
+**Ordem:** API primeiro (o front precisa da URL dela), depois o front, e por último o
+`CORS_ORIGIN` da API com a URL do front.
 
-**Web na Vercel:** Root Directory `apps/web`, framework Vite.
-Variável: `VITE_API_URL` com a URL pública da API.
+**API + banco no Render (Blueprint):** o `render.yaml` na raiz declara o Postgres e o Web Service
+(Docker, `Dockerfile Path` = `apps/api/Dockerfile`, contexto na raiz; ver AD-011). No Render:
+*New → Blueprint* → este repositório. Build local da mesma imagem:
+`docker build -f apps/api/Dockerfile -t gesso-api .`
 
-O `vercel.json` já reescreve todas as rotas para `index.html` — sem isso, dar F5 em
-`/obras` retorna 404 na Vercel.
+- `JWT_SECRET` é gerado pelo próprio Render. Em produção a API se recusa a subir sem um segredo
+  próprio, ou com o valor padrão deste repositório (`auth/segredo-jwt.ts`); o CI testa isso.
+- `CORS_ORIGIN`: a URL da Vercel. Pode ficar em branco na criação (vazio libera qualquer origem) e
+  ser preenchida depois. Espaços e barra no final são ignorados.
+- O deploy automático só publica commit da `main` com o CI verde (`autoDeployTrigger: checksPass`).
+- O container roda `prisma migrate deploy` antes de subir.
+
+**Front na Vercel:** Root Directory `apps/web`, framework Vite. Variável `VITE_API_URL` = URL da
+API **sem `/api`** e sem barra no final (o front acrescenta `/api`). Ela entra no build: mudou,
+precisa de redeploy. O `vercel.json` reescreve todas as rotas para `index.html` — sem isso, dar F5
+em `/obras` retorna 404 na Vercel.
+
+**Primeiro usuário:** o banco de produção nasce vazio e não roda seed (a senha do seed está neste
+repositório). Criar pelo Swagger: `https://<api>/docs` → `POST /api/auth/register`. Enquanto a
+AD-002 valer, essa rota fica aberta: qualquer pessoa com a URL consegue criar conta.
+
+**Limites do plano gratuito:**
+
+- A API dorme após 15 min sem tráfego e a primeira requisição depois disso leva cerca de 1 min.
+  Antes de uma apresentação, abrir `https://<api>/api/health` e esperar responder.
+- O Postgres gratuito expira 30 dias após a criação (mais 14 de carência, depois é apagado) e só
+  pode existir um por workspace do Render.

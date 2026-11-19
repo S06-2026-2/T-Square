@@ -7,8 +7,21 @@ import { INestApplication } from '@nestjs/common';
  */
 export function configurarCors(app: INestApplication): void {
   app.enableCors({
-    origin: process.env.CORS_ORIGIN?.split(',') ?? '*',
+    origin: origensPermitidas(process.env.CORS_ORIGIN),
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
   });
+}
+
+/**
+ * Le o CORS_ORIGIN (lista separada por virgula). Tira espacos e a barra final: o navegador manda
+ * `Origin: https://x.vercel.app`, sem barra, e `https://x.vercel.app/` nunca bateria. Vazio ou
+ * ausente libera qualquer origem; antes, um CORS_ORIGIN vazio bloqueava todas.
+ */
+export function origensPermitidas(valor: string | undefined): string[] | '*' {
+  const origens = (valor ?? '')
+    .split(',')
+    .map((origem) => origem.trim().replace(/\/+$/, ''))
+    .filter((origem) => origem.length > 0);
+  return origens.length > 0 ? origens : '*';
 }

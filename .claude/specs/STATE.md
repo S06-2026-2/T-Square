@@ -97,6 +97,14 @@
 - **Date**: 2026-11-09
 - **Status**: active
 
+### AD-013
+- **Decision**: O deploy da API e do banco é declarado no `render.yaml` (Blueprint do Render): Postgres e Web Service Docker no plano `free`, região `virginia`, deploy automático só com o CI verde (`checksPass`) e `JWT_SECRET` gerado pelo Render. Em produção (`NODE_ENV=production`) a API se recusa a subir sem `JWT_SECRET` próprio (`auth/segredo-jwt.ts`), e o `CORS_ORIGIN` é normalizado (sem espaços nem barra final; vazio libera tudo).
+- **Reason**: O repositório é público e o segredo padrão (`troque-esse-segredo-em-producao`) estava como fallback no código: um deploy sem `JWT_SECRET` deixaria qualquer pessoa assinar um token válido. Configurar o serviço à mão no dashboard diverge do repositório (trade-off da AD-011); o Blueprint deixa a configuração versionada.
+- **Trade-off**: No plano free a API dorme após 15 min (primeira requisição ~1 min) e o Postgres expira 30 dias após a criação (+14 de carência, depois é apagado, com os dados). Região não muda depois de criada.
+- **Scope**: Deploy da API (Render) e qualquer variável de ambiente nova de produção, que deve entrar no `render.yaml`.
+- **Date**: 2026-11-19
+- **Status**: active
+
 ## Handoff
 
 - **Feature ativa (2026-11-09)**: `pwa-instalavel-responsivo`. Spec (50 requisitos), Design e Tasks (31 tasks, 6 fases) aprovados em 2026-11-09. L1, L2 e L3 commitados no branch `feat/pwa-instalavel-responsivo` (T1–T21; mais o commit aditivo do `codigo: EM_PROCESSAMENTO` no 409). Contagens no fim do L3: API 283 unit + 14 e2e, web 246; `audit:responsive` 84/84. Execução com sub-agentes em 5 lotes sequenciais (L1 T1–T5; L2 T6–T14; L3 T15–T21; L4 T22–T25; L5 T26–T31). Ao fim de cada lote: suítes + gate, relatório (mudanças, requisitos cobertos, desvios) e parada para o usuário revisar e commitar; o próximo lote só com o OK dele. **Próximo passo**: L4 (T22–T25) com o OK do usuário. Antes do L5, o usuário precisa pôr `CORS_ORIGIN=http://localhost:5173,http://localhost:4173` no `.env` e rodar `docker compose up -d api`. `obras-transicoes-status` (abaixo) continua parada em Tasks.

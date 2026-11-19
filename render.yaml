@@ -1,0 +1,37 @@
+# Blueprint do Render: Postgres + API (Docker), declarados como codigo.
+# Uso: Render Dashboard > New > Blueprint > este repositorio. Passo a passo em docs/ARQUITETURA.md (Deploy).
+# O front nao esta aqui: vai para a Vercel (apps/web/vercel.json).
+
+databases:
+  - name: gesso-db
+    plan: free # expira 30 dias apos a criacao (+14 de carencia, depois e apagado); 1 por workspace
+    region: virginia
+    postgresMajorVersion: '16' # mesma versao do docker-compose e do CI
+    databaseName: gesso
+    user: gesso
+
+services:
+  - type: web
+    name: gesso-api
+    runtime: docker
+    plan: free # dorme apos 15 min sem trafego; a primeira requisicao depois disso leva ~1 min
+    region: virginia # mesma regiao do banco, para usar a conexao interna
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: . # a raiz: o package-lock.json do monorepo mora la (AD-011)
+    healthCheckPath: /api/health
+    autoDeployTrigger: checksPass # so publica commit da main com o CI verde
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gesso-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true # sem segredo proprio a API nem sobe em producao (auth/segredo-jwt.ts)
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CORS_ORIGIN
+        sync: false # URL da Vercel; preencher no dashboard depois que o front existir
+      - key: AGENTE_AUTOMATICO
+        value: 'false' # o plano free dorme, o cron das 06:00 nao rodaria de qualquer jeito
+      - key: ANTHROPIC_API_KEY
+        sync: false # opcional: sem ela o agente de estoque roda so com a rede de seguranca
