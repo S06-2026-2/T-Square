@@ -141,6 +141,19 @@ jobs:
       - name: Build da imagem
         run: docker build -f apps/api/Dockerfile -t gesso-api:ci .
 
+      # Sem JWT_SECRET proprio a API usaria o segredo padrao, que esta neste repositorio publico.
+      # Em producao ela tem que se recusar a subir (apps/api/src/auth/segredo-jwt.ts).
+      - name: Recusar subir sem JWT_SECRET
+        run: |
+          if timeout 90 docker run --rm --network host \
+            -e DATABASE_URL='postgresql://gesso:gesso@localhost:5432/gesso?schema=public' \
+            -e PORT=3001 -e AGENTE_AUTOMATICO=false \
+            gesso-api:ci > saida.txt 2>&1; then
+            echo "A API subiu sem JWT_SECRET em producao:"; cat saida.txt; exit 1
+          fi
+          grep -q "JWT_SECRET ausente" saida.txt || { echo "Falhou, mas por outro motivo:"; cat saida.txt; exit 1; }
+          echo "Recusou subir, como esperado."
+
       # O CMD da imagem roda `prisma migrate deploy` e depois `node dist/main`.
       - name: Subir a imagem e checar o health
         run: |
