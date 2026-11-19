@@ -27,7 +27,7 @@ status fora da transação, e dois cliques simultâneos podem gerar os créditos
 | Trocar o hard delete de `DELETE /obras/:id` por soft delete | Problema real, mas separado (convenção AD-003); fica registrado em Deferred Ideas no `context.md` |
 | Corrigir obras que já foram para `CONCLUIDA` por atalho (sem créditos) | Dados legados de dev; não há produção |
 | Chip de filtro "Canceladas" em `Obras.tsx` | As canceladas continuam visíveis em "Todas" e no dashboard |
-| Crédito para gesseiro removido antes da conclusão (spec futura "remanejamento de gesseiros") | Decidido pelo usuário em 2026-10-29. Regra mantida: o crédito vai só para quem está alocado no momento da conclusão (`obras.service.ts:146-181`), e remover apaga a alocação. Contexto de negócio: o pagamento acontece na conclusão, e normalmente o mesmo gesseiro que começou volta e finaliza a obra. O risco é concluir sem realocá-lo, e ele fica sem o crédito daquela obra. Nesta feature, a confirmação do "Concluir obra" mostra quem vai receber (P1 AC10), o que reduz esse risco |
+| Crédito para gesseiro removido antes da conclusão (spec futura "remanejamento de gesseiros") | Decidido pelo usuário em 2026-10-29. Regra mantida: o crédito vai só para quem está alocado no momento da conclusão (`obras.service.ts:147-186`), e remover apaga a alocação. Contexto de negócio: o pagamento acontece na conclusão, e normalmente o mesmo gesseiro que começou volta e finaliza a obra. O risco é concluir sem realocá-lo, e ele fica sem o crédito daquela obra. Nesta feature, a confirmação do "Concluir obra" mostra quem vai receber (P1 AC10), o que reduz esse risco |
 
 ---
 
@@ -53,6 +53,10 @@ status fora da transação, e dois cliques simultâneos podem gerar os créditos
 | Remover a equipe de uma obra em andamento | Permitido em qualquer status em aberto (`ORCAMENTO`, `FECHADA`, `ANDAMENTO`), inclusive o último gesseiro de uma obra `ANDAMENTO`. A exigência de equipe vale só no momento de iniciar | Definido pelo usuário em 2026-10-29: na prática os gesseiros são remanejados entre obras. Substitui o default anterior (bloquear o último) | y (2026-10-29) |
 | Confirmação na UI | "Concluir obra" pede confirmação (`window.confirm`). "Cancelar" abre um formulário inline no card com o motivo obrigatório. "Cliente aprovou" e "Iniciar obra" não pedem confirmação | Concluir e cancelar são irreversíveis; fechar e iniciar só avançam uma etapa | y (2026-10-29) |
 | Pré-condição de equipe na UI | Em `FECHADA` sem gesseiro alocado, o botão "Iniciar obra" aparece desabilitado, com o texto "Aloque pelo menos um gesseiro para iniciar" logo abaixo. A API continua respondendo 400 se for chamada sem equipe (P1 AC3) | Definido pelo usuário em 2026-10-29. Substitui o default anterior (botão habilitado e erro da API na página) | y (2026-10-29) |
+| Idempotência das transições | As transições são `PATCH` e não usam `Idempotency-Key`: a AD-009 (PWA) vale só para `POST` de criação. O reenvio é seguro pelo update condicional (AD-007): repetir uma transição já aplicada responde 400, sem efeito | Revalidação depois do merge do PWA (2026-11-19); registrado na AD-014 | y (2026-11-19) |
+| Erro HTTP numa transição pela UI | A UI mostra a mensagem da API e **recarrega a lista** com o filtro atual, para o card mostrar o status real (ex.: reenvio de um "Concluir obra" cuja resposta se perdeu) | AD-014, confirmada pelo usuário em 2026-11-19. Substitui "manter o card como estava" do P1 AC9 original | y (2026-11-19) |
+| Falha de rede numa transição pela UI | Mensagem `SEM_CONEXAO_ENVIO` de `lib/api.ts` (OFF-08 do PWA: "Sem conexão: não foi possível confirmar o envio. Tente de novo; o mesmo lançamento não será duplicado."). O card fica como estava, o motivo digitado é mantido e nada é reenviado sozinho. A frase sobre duplicação vale aqui pelo TRN-07 | O `lib/api.ts` já gera essa mensagem para todo `PATCH` que falha por rede; a feature só precisa exibi-la e não recarregar (sem rede a recarga falharia) | y (2026-11-19) |
+| Responsividade das telas novas | Os botões de ação (`AcoesStatusObra`), o formulário de cancelamento aberto e o card `CANCELADA` com motivo longo entram na `audit:responsive` (RSP-01, RSP-07, RSP-08 da spec `pwa-instalavel-responsivo`) | A spec do PWA (assumption "Telas futuras de `obras-transicoes-status`") delega esses estados ao PR desta feature | y (2026-11-19) |
 
 **Open questions:** none - all resolved or logged above.
 
@@ -76,8 +80,9 @@ status fora da transação, e dois cliques simultâneos podem gerar os créditos
 6. WHEN o operador vê um card em `Obras.tsx` THEN the system SHALL exibir só o botão de avanço do status atual: "Cliente aprovou" em `ORCAMENTO`, "Iniciar obra" em `FECHADA`, "Concluir obra" em `ANDAMENTO` e nenhum em `CONCLUIDA`/`CANCELADA`. IF a obra `FECHADA` não tem gesseiro alocado THEN the system SHALL exibir "Iniciar obra" desabilitado, com o texto "Aloque pelo menos um gesseiro para iniciar".
 7. WHEN o operador clica em "Concluir obra" e confirma no diálogo THEN the system SHALL chamar `PATCH /obras/:id/concluir`; IF ele não confirma THEN the system SHALL não chamar a API.
 8. WHEN uma transição feita pela UI termina com sucesso THEN the system SHALL recarregar a lista de obras com o filtro atual.
-9. IF uma transição feita pela UI falha THEN the system SHALL exibir a mensagem da API no `erro` da página e manter o card como estava.
+9. IF uma transição feita pela UI ("Cliente aprovou", "Iniciar obra" ou "Concluir obra") recebe uma resposta HTTP de erro THEN the system SHALL recarregar a lista de obras com o filtro atual e, depois da recarga, exibir a mensagem da API no `erro` da página.
 10. WHEN o operador clica em "Concluir obra" THEN the system SHALL mostrar no diálogo de confirmação uma linha `<nome> — <valor combinado em BRL>` para cada gesseiro alocado, usando os dados da obra que o front já carregou; IF a obra não tem gesseiro alocado THEN the system SHALL mostrar `Nenhum gesseiro alocado: nenhum crédito será gerado.`
+11. IF uma transição feita pela UI ("Cliente aprovou", "Iniciar obra" ou "Concluir obra") falha por rede THEN the system SHALL exibir no `erro` da página a mensagem "Sem conexão: não foi possível confirmar o envio. Tente de novo; o mesmo lançamento não será duplicado.", SHALL manter o card como estava e SHALL NOT reenviar a chamada sozinho.
 
 **Independent Test**: criar uma obra pela UI ("Aguardando cliente") e clicar em "Cliente aprovou" (vai para "Fechadas"). Sem equipe, "Iniciar obra" aparece desabilitado com "Aloque pelo menos um gesseiro para iniciar". Alocar um gesseiro e iniciar (vai para "Em andamento", com `dataInicio` preenchida). Concluir e confirmar (vai para "Concluidas", e o extrato do gesseiro mostra um crédito com o valor combinado). O dashboard acompanha cada passo.
 
@@ -117,10 +122,27 @@ status fora da transação, e dois cliques simultâneos podem gerar os créditos
 4. IF `PATCH /obras/:id/cancelar` é chamado para uma obra `CONCLUIDA` ou `CANCELADA` THEN the system SHALL responder 400 com a mensagem `Não é possível cancelar uma obra com status <STATUS>`.
 5. WHEN o operador vê um card `ORCAMENTO`, `FECHADA` ou `ANDAMENTO` THEN the system SHALL exibir a ação "Cancelar obra", que abre no card um formulário com o campo "Motivo" obrigatório.
 6. WHEN o operador envia o formulário de cancelamento com um motivo válido THEN the system SHALL chamar `PATCH /obras/:id/cancelar` com `{ motivo }` e recarregar a lista.
-7. IF o cancelamento falha THEN the system SHALL exibir a mensagem da API no formulário e preservar o motivo digitado.
+7. IF o cancelamento recebe uma resposta HTTP de erro THEN the system SHALL exibir a mensagem da API no formulário, preservar o motivo digitado e recarregar a lista de obras com o filtro atual.
 8. WHEN um card de obra `CANCELADA` é exibido THEN the system SHALL mostrar o motivo do cancelamento.
+9. IF o envio do formulário de cancelamento falha por rede THEN the system SHALL exibir no formulário a mensagem "Sem conexão: não foi possível confirmar o envio. Tente de novo; o mesmo lançamento não será duplicado.", SHALL preservar o motivo digitado e SHALL NOT reenviar a chamada sozinho.
 
-**Independent Test**: cancelar pela UI uma obra "Em andamento" com o motivo "Cliente desistiu". Ela vai para "Canceladas" no dashboard, o card mostra "Cliente desistiu" e o extrato dos gesseiros alocados não ganha crédito.
+**Independent Test**: cancelar pela UI uma obra "Em andamento" com o motivo "Cliente desistiu". Ela vai para "Canceladas" no dashboard, o card mostra "Cliente desistiu" e o extrato dos gesseiros alocados não ganha crédito. No DevTools, marcar "Offline" e tentar cancelar outra obra: a mensagem de sem conexão aparece no formulário e o motivo fica.
+
+---
+
+### P2: Ações de status no celular
+
+**User Story**: Como operador no canteiro, eu quero usar os botões de status e o formulário de cancelamento no celular, para que a feature não quebre a tela responsiva que o PWA entregou.
+
+**Why P2**: A spec `pwa-instalavel-responsivo` deixou para esta feature acrescentar seus estados à auditoria. Sem isso, um botão pequeno ou um motivo longo que estoura a largura passaria sem aviso.
+
+**Acceptance Criteria**:
+
+1. The system SHALL renderizar `/obras` com os botões de ação de status visíveis em cards `ORCAMENTO`, `FECHADA` e `ANDAMENTO`, com o formulário de cancelamento aberto e com um card `CANCELADA` cujo motivo tem 500 caracteres (incluindo um trecho de 120 caracteres sem espaço), com `document.documentElement.scrollWidth` igual a `window.innerWidth` nas larguras 320, 360, 390, 768, 1024 e 1366px (estende o RSP-01 do PWA).
+2. WHILE a largura da janela for ≤ 900px the system SHALL dar pelo menos 44×44px de área de toque aos botões "Cliente aprovou", "Iniciar obra", "Concluir obra", "Cancelar obra" e aos botões do formulário de cancelamento (estende o RSP-08 do PWA).
+3. The system SHALL exibir o campo "Motivo" com fonte de pelo menos 16px, para o iOS não dar zoom ao focar (estende o RSP-07 do PWA).
+
+**Independent Test**: `npm run audit:responsive --workspace apps/web` com a API no Docker termina com `medidos: 126/126, nao montados: 0, falhas: 0` e nenhum registro `[audit]` no banco.
 
 ---
 
@@ -131,12 +153,16 @@ status fora da transação, e dois cliques simultâneos podem gerar os créditos
 - IF a criação dos créditos falha no meio da conclusão THEN the system SHALL desfazer a mudança de status (`$transaction`), deixando a obra em `ANDAMENTO` sem nenhum crédito parcial.
 - WHEN uma obra `ANDAMENTO` sem nenhum gesseiro alocado (todos removidos depois de iniciar) é concluída THEN the system SHALL concluí-la sem criar lançamentos.
 - WHILE uma transição disparada pela UI está em andamento the system SHALL desabilitar os botões de ação daquele card, evitando duplo clique.
-- IF qualquer chamada retornar 401 THEN the system SHALL seguir o comportamento existente de `lib/api.ts`.
+- IF qualquer chamada retornar 401 THEN the system SHALL seguir o comportamento existente de `lib/api.ts` (com o PWA: apaga o cache de dados e volta para `/login`, OFF-11).
+- WHEN o operador reenvia uma transição cuja primeira chamada foi aplicada mas a resposta se perdeu THEN the system SHALL responder 400 de transição inválida sem efeito (API) e SHALL mostrar a obra no status real depois da recarga (UI, P1 AC9).
+- WHEN a conexão volta enquanto o formulário de cancelamento está aberto THEN the system SHALL recarregar a lista (OFF-15 do PWA, `useAoReconectar` em `Obras.tsx`) sem fechar o formulário nem apagar o motivo digitado.
 
 **Dimensions sweep** (feature Large):
 - Validação/limites: motivo com 3–500 caracteres; 404 ao remover gesseiro não alocado.
 - Falha parcial: rollback da conclusão.
-- Idempotência: repetir uma transição gera 400, sem efeito.
+- Idempotência: repetir uma transição gera 400, sem efeito; a UI recarrega a lista (AD-014). Sem `Idempotency-Key` nos `PATCH` (a AD-009 cobre só `POST` de criação).
+- Rede instável (PWA): falha de rede mostra `SEM_CONEXAO_ENVIO` sem reenviar sozinho (TRN-13); o `PATCH` nunca vai para o cache do SW (OFF-09).
+- Responsividade (PWA): estados novos na `audit:responsive` (TRN-14).
 - Concorrência: transição condicional (story "Fechar os atalhos", AC5 / TRN-07).
 - Integridade de transições: P1 inteira.
 - Auth/rate limit: N/A, por AD-002 (sem restrição por papel).
@@ -162,12 +188,14 @@ status fora da transação, e dois cliques simultâneos podem gerar os créditos
 | TRN-10 | P2: Cancelar — formulário de motivo no card e exibição do motivo | Tasks | In Tasks |
 | TRN-11 | P1: Avançar no funil — confirmação do "Concluir obra" lista quem recebe crédito | Tasks | In Tasks |
 | TRN-12 | P1: Atalhos — 404 ao remover gesseiro não alocado | Tasks | In Tasks |
+| TRN-13 | P1 AC9/AC11 + P2 Cancelar AC7/AC9 — erro HTTP recarrega a lista; falha de rede mostra `SEM_CONEXAO_ENVIO` sem reenviar | Tasks | In Tasks |
+| TRN-14 | P2: Ações de status no celular — estados novos na `audit:responsive` (RSP-01/07/08) | Tasks | In Tasks |
 
 **ID format:** `TRN-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 12 total, 12 mapped to tasks, 0 unmapped (ver `tasks.md`)
+**Coverage:** 14 total, 14 mapped to tasks, 0 unmapped (ver `tasks.md`). TRN-13 e TRN-14 entraram na revalidação de 2026-11-19, depois do merge do PWA (PR #11).
 
 ---
 
@@ -176,3 +204,4 @@ status fora da transação, e dois cliques simultâneos podem gerar os créditos
 - [ ] É possível levar uma obra de "Aguardando cliente" até "Concluida" só pela UI, passando por "Fechadas" e "Em andamento" no dashboard
 - [ ] Nenhuma combinação de chamadas à API leva uma obra a `CONCLUIDA` sem passar pela conclusão, nem gera créditos em dobro (cada gesseiro alocado na conclusão recebe exatamente um)
 - [ ] Toda obra `CANCELADA` criada a partir desta feature tem motivo registrado
+- [ ] A `audit:responsive` continua verde com os estados novos (126/126)
