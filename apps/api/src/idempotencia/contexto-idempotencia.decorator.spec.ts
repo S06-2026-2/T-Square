@@ -42,6 +42,18 @@ describe('extrairContexto (@ContextoIdempotencia)', () => {
     expect(() => extrairContexto(ctx)).toThrow('Idempotency-Key deve ser um UUID.');
   });
 
+  it('cabecalho vazio da 400, nao passa como pedido sem chave', () => {
+    const ctx = contexto({ headers: { 'Idempotency-Key': '' } });
+
+    expect(() => extrairContexto(ctx)).toThrow('Idempotency-Key deve ser um UUID.');
+  });
+
+  it.each([`x${CHAVE}`, `${CHAVE}x`, ` ${CHAVE}`])('UUID com sobra (%p) da 400', (chave) => {
+    const ctx = contexto({ headers: { 'Idempotency-Key': chave } });
+
+    expect(() => extrairContexto(ctx)).toThrow('Idempotency-Key deve ser um UUID.');
+  });
+
   it('monta chave, usuario do JWT, rota com o path real e o hash do corpo', () => {
     const body = { tipo: 'VALE', valor: 150 };
 

@@ -1,7 +1,9 @@
 import { ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { CronExpression, ScheduleModule, SchedulerRegistry } from '@nestjs/schedule';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Prisma } from '@prisma/client';
 
+import { AppModule } from '../app.module';
 import { PrismaService } from '../prisma/prisma.service';
 import { IdempotenciaService } from './idempotencia.service';
 
@@ -226,6 +228,70 @@ describe('IdempotenciaService', () => {
       const promessa = service.executar(ctx, criar);
       await expect(promessa).rejects.toBeInstanceOf(ConflictException);
       await expect(promessa).rejects.toMatchObject({ response: { codigo: 'EM_PROCESSAMENTO' } });
+    });
+
+    it('outro erro conhecido do Prisma ao gravar a chave sobe o mesmo erro, nao 409', async () => {
+      const erro = new Prisma.PrismaClientKnownRequestError('Foreign key constraint failed', {
+        code: 'P2003',
+        clientVersion: '5.22.0',
+      });
+      tx.chaveIdempotencia.create.mockRejectedValue(erro);
+
+      await expect(service.executar(ctx, criar)).rejects.toBe(erro);
+    });
+
+    it('erro comum ao gravar a chave sobe o mesmo erro, nao 409', async () => {
+      const erro = new Error('conexao perdida');
+      tx.chaveIdempotencia.create.mockRejectedValue(erro);
+
+      await expect(service.executar(ctx, criar)).rejects.toBe(erro);
+    });
+
+    it('chave vencida: o delete e aguardado antes de gravar a chave nova (IDP-05)', async () => {
+      // Como no Prisma real: a query so roda quando alguem da `then` (await) nela.
+      let apagou = false;
+      tx.chaveIdempotencia.findUnique.mockResolvedValue(linha(DIA_MS + 1));
+      tx.chaveIdempotencia.delete.mockReturnValue({
+        then: (ok: (v: unknown) => unknown, falha?: (e: unknown) => unknown) => {
+          apagou = true;
+          return Promise.resolve({}).then(ok, falha);
+        },
+      });
+      tx.chaveIdempotencia.create.mockImplementation(async () => {
+        if (!apagou) {
+          throw new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+            code: 'P2002',
+            clientVersion: '5.22.0',
+          });
+        }
+        return {};
+      });
+
+      await expect(service.executar(ctx, criar)).resolves.toEqual({ id: 'lanc-novo' });
+      expect(apagou).toBe(true);
+    });
+  });
+
+  describe('agendamento da limpeza (IDP-05)', () => {
+    it('limparVencidas fica registrado como cron de hora em hora', async () => {
+      const modulo = await Test.createTestingModule({
+        imports: [ScheduleModule.forRoot()],
+        providers: [IdempotenciaService, { provide: PrismaService, useValue: prisma }],
+      }).compile();
+      await modulo.init();
+      try {
+        const jobs = modulo.get(SchedulerRegistry).getCronJobs();
+        expect(jobs.size).toBe(1);
+        const [job] = [...jobs.values()];
+        expect(String(job.cronTime.source)).toBe(CronExpression.EVERY_HOUR);
+      } finally {
+        await modulo.close();
+      }
+    });
+
+    it('o AppModule importa o ScheduleModule (sem ele o @Cron nao dispara)', () => {
+      const imports: Array<{ module?: unknown }> = Reflect.getMetadata('imports', AppModule) ?? [];
+      expect(imports.some((i) => i?.module === ScheduleModule)).toBe(true);
     });
   });
 
