@@ -1,7 +1,7 @@
 # Obras — Transições de Status Design
 
 **Spec**: `.claude/specs/features/obras-transicoes-status/spec.md`
-**Status**: Approved (2026-10-29)
+**Status**: Approved (2026-10-29); revalidado depois do merge do PWA (2026-11-19)
 
 ---
 
@@ -45,13 +45,13 @@ de lock explícito (TRN-07).
 
 | Component | Location | How to Use |
 | --- | --- | --- |
-| `ObrasService.concluir()` | `apps/api/src/obras/obras.service.ts:146` | Vira um caso de `transicionar('concluir')`; a criação dos créditos (`createMany`) é mantida, agora lendo a equipe dentro da transação |
-| `findOne` / mensagem 404 | `apps/api/src/obras/obras.service.ts:71` | Mesmo texto `Obra <id> nao encontrada` para as transições |
+| `ObrasService.concluir()` | `apps/api/src/obras/obras.service.ts:147` | Vira um caso de `transicionar('concluir')`; a criação dos créditos (`createMany`) é mantida, agora lendo a equipe dentro da transação |
+| `findOne` / mensagem 404 | `apps/api/src/obras/obras.service.ts:72` | Mesmo texto `Obra <id> nao encontrada` para as transições |
 | `ValidationPipe` com `forbidNonWhitelisted` | `apps/api/src/main.ts:18` | Tirar `status` do `CreateObraDto` já faz `POST`/`PATCH` com `status` responderem 400 (TRN-06); `UpdateObraDto` herda via `PartialType(OmitType(...))` |
 | Padrão de teste com Prisma mockado e `$transaction` executando o callback | `apps/api/src/obras/obras.service.spec.ts:13` | Testes de `transicionar`; o mock ganha `updateMany` e `obraGesseiro.count` |
 | `test/app.e2e-spec.ts` | `apps/api/test/` | Base do e2e de concorrência (sobe o `AppModule` real) |
 | `StatusBadge`, `lib/status.ts` (`rotulo`, `STATUS_FUNIL`) | `apps/web/src/` | Rótulos e cores do status no card; o mapa "próxima ação por status" entra em `lib/status.ts` |
-| Padrão de erro da página (`setErro`) | `apps/web/src/pages/Obras.tsx:70` | Erro de fechar/iniciar/concluir vai para o `erro` da página (P1 AC9) |
+| Padrão de erro da página (`setErro`) | `apps/web/src/pages/Obras.tsx:82-89` | Erro de fechar/iniciar/concluir vai para o `erro` da página (P1 AC9) |
 | `STATUS_SEM_EDICAO` | `apps/api/src/obras/materiais-previstos.service.ts:11` | Nada muda: obra cancelada ou concluída já não edita previstos |
 
 ### Integration Points
@@ -61,8 +61,14 @@ de lock explícito (TRN-07).
 | Agente de estoque / reservas | A reserva só conta obras `FECHADA`/`ANDAMENTO` (`ferramentas-agente.ts`, `previsao-estoque.service.ts`). Ao cancelar ou concluir, a reserva some sozinha porque é derivada. Nenhum código do agente muda |
 | Gesseiros | `STATUS_EM_ABERTO` (`gesseiros.service.ts:14`) continua igual; o extrato só ganha `CREDITO` pela conclusão |
 | Dashboard | `GET /obras/resumo` não muda; as colunas "Fechadas" e "Em andamento" passam a receber obras pela UI |
-| Banco | Migration nova: `Obra.motivoCancelamento String?` |
+| Banco | Migration nova: `Obra.motivoCancelamento String?`, gerada depois da `20261109142058_chaves_idempotencia` (a última da `main` desde a PR #11) |
 | Seed | Grava `status` direto pelo Prisma, sem passar pelo DTO: não muda |
+| Idempotência (PWA, AD-009) | Não se aplica: vale só para `POST` de criação. O `POST /obras` continua passando por `IdempotenciaService.executar()` (`obras.controller.ts:25-29`); tirar `status` do `CreateObraDto` não mexe nisso. As transições não ganham `Idempotency-Key` (AD-014) |
+| `lib/api.ts` (PWA) | Falha de rede num `PATCH` já vira `ApiError(SEM_CONEXAO_ENVIO, 0)`; resposta HTTP de erro vira `ApiError(mensagem, status)`. O `AcoesStatusObra` distingue os dois casos por `status === 0` |
+| `useAoReconectar` (PWA, `Obras.tsx:66`) | Já recarrega obras e gesseiros quando a conexão volta. Como o `AcoesStatusObra` fica num card com `key={obra.id}`, a recarga não remonta o componente e o formulário de cancelamento aberto mantém o motivo |
+| Service worker (PWA, OFF-09) | `PATCH` nunca vai para o cache: nada a configurar |
+| `audit:responsive` (PWA) | Estado novo `obras-cancelar`, alvos de toque novos no RSP-08 e uma obra `[audit]` `CANCELADA` com motivo de 500 caracteres na fixture (TRN-14) |
+| e2e (PWA) | `test/trava-banco-local.ts` já está no `setupFiles` do `jest-e2e.json`: o arquivo novo herda a trava sem código. O `idempotencia.e2e-spec.ts` também cria e apaga gesseiros `[e2e]`, então os e2e rodam com `--runInBand` (como no CI), senão o `afterAll` de um arquivo apagaria os dados do outro no meio do teste |
 
 ---
 
@@ -106,20 +112,30 @@ de lock explícito (TRN-07).
 
 - **Purpose**: Os botões de transição de um card e o formulário de cancelamento.
 - **Location**: `apps/web/src/components/AcoesStatusObra.tsx`
-- **Interfaces**: `props { obra: Obra; onAlterada: () => void; onErro: (mensagem: string) => void }`
+- **Interfaces**: `props { obra: Obra; onAlterada: () => void; onErro: (mensagem: string, recarregar: boolean) => void }`
   - Mostra só o botão de avanço do status atual: "Cliente aprovou" (`ORCAMENTO`), "Iniciar obra" (`FECHADA`), "Concluir obra" (`ANDAMENTO`); nada em `CONCLUIDA`/`CANCELADA` (P1 AC6).
   - Em `FECHADA` sem gesseiro (`obra.gesseiros` vazio), "Iniciar obra" fica desabilitado e o texto "Aloque pelo menos um gesseiro para iniciar" aparece logo abaixo (P1 AC6). O texto some quando a lista recarrega com equipe.
   - "Concluir obra" chama `window.confirm` antes (P1 AC7). O texto vem de `textoConfirmacaoConclusao(obra)` (`lib/status.ts`): uma linha `<nome> — <moeda(valorCombinado)>` por item de `obra.gesseiros`, ou `Nenhum gesseiro alocado: nenhum crédito será gerado.` (TRN-11). Usa só os dados que `GET /obras` já devolve (`gesseiros.gesseiro.nome`, `valorCombinado`): nenhuma rota nova.
-  - "Cancelar obra" em `ORCAMENTO`/`FECHADA`/`ANDAMENTO` abre no card um formulário com "Motivo" obrigatório. O erro do cancelamento fica no próprio formulário e o motivo digitado é mantido (P2 AC5–7).
+  - "Cancelar obra" em `ORCAMENTO`/`FECHADA`/`ANDAMENTO` abre no card um formulário com "Motivo" obrigatório. O erro do cancelamento fica no próprio formulário e o motivo digitado é mantido (P2 AC5–7, AC9).
   - Desabilita os botões do card enquanto uma chamada está em andamento (edge case de duplo clique).
-  - Sucesso → `onAlterada()` (a página recarrega com o filtro atual, P1 AC8). Erro de fechar/iniciar/concluir → `onErro(mensagem)` (P1 AC9).
-- **Reuses**: `api.patch`, classes `.btn`/`.card-acoes`/`.erro` existentes.
+  - Sucesso → `onAlterada()` (a página recarrega com o filtro atual, P1 AC8).
+  - Erro de fechar/iniciar/concluir (TRN-13, AD-014): `ApiError` com `status > 0` (resposta HTTP) → `onErro(mensagem, true)`; `status === 0` (rede) → `onErro(SEM_CONEXAO_ENVIO, false)`. Nada é reenviado sozinho.
+  - Erro do cancelamento: a mensagem fica no formulário nos dois casos; com resposta HTTP também chama `onAlterada()` para a lista mostrar o status real (se a obra já está `CANCELADA`, o card troca e o formulário some); com falha de rede, não recarrega.
+  - Campo "Motivo" usa as classes de input existentes (fonte ≥ 16px, RSP-07). Botões com `.btn`, que já têm 44px de altura no celular (RSP-08).
+- **Reuses**: `api.patch`, `ApiError`/`SEM_CONEXAO_ENVIO` de `lib/api.ts`, classes `.btn`/`.card-acoes`/`.erro` existentes.
 
 ### `Obras.tsx` e `lib/status.ts` (alterados, web)
 
-- `Obras.tsx` troca o bloco do "Concluir obra" (`Obras.tsx:155-165`) por `<AcoesStatusObra>` e mostra `Motivo do cancelamento: …` no card `CANCELADA` (P2 AC8).
+- `Obras.tsx` troca o bloco do "Concluir obra" (`Obras.tsx:167-177`, e a função `concluir()` em `Obras.tsx:82-89`, que sai) por `<AcoesStatusObra>` e mostra `Motivo do cancelamento: …` no card `CANCELADA` (P2 AC8).
 - `lib/status.ts` ganha `textoConfirmacaoConclusao(obra: Obra): string` e `acaoDeAvanco: Partial<Record<StatusObra, { acao: 'fechar' | 'iniciar' | 'concluir'; rotulo: string }>>`.
 - `types.ts`: `Obra.motivoCancelamento?: string | null`.
+- O handler de erro da página roda **nessa ordem**: `if (recarregar) await carregar(); setErro(mensagem)`. O `carregar()` começa com `setErro(null)` (`Obras.tsx:37`), então mostrar o erro antes da recarga apagaria a mensagem (P1 AC9).
+- O motivo é exibido com `overflow-wrap: anywhere`, para um trecho longo sem espaço não estourar a largura do card (TRN-14).
+
+### `audit:responsive` e fixture (alterados, web/API)
+
+- `apps/web/scripts/audit-responsive.mjs`: estado novo `obras-cancelar` (rota `/obras`; clica em "Cancelar obra" no primeiro card que tiver o botão e confere que o formulário com "Motivo" abriu). Ele roda nas 6 larguras com o UA do Safari e em 1024/1366 com o Chrome de desktop: o total passa de 118 para **126** (16 × 6 + 15 × 2). Os botões de avanço já aparecem no estado `obras`, que existe. O RSP-08 ganha os seletores `.card-acoes .btn` e os botões do formulário de cancelamento.
+- `apps/api/scripts/fixture-auditoria.mjs`: o `preparar` cria uma obra `[audit] Cancelada` (`status: CANCELADA` gravado direto pelo Prisma, como o seed) com motivo de 500 caracteres, com um trecho de 120 caracteres sem espaço. `limpar` e `contar` passam a incluir obras com `titulo` começando por `[audit]`. A trava de banco local e a limpeza em erro/sinal já existem.
 
 ---
 
@@ -151,7 +167,9 @@ existente muda.
 | Concluir obra `ANDAMENTO` sem equipe (todos removidos depois de iniciar) | Conclui normalmente, com zero lançamentos | Ninguém recebe crédito por ela |
 | Falha ao criar os créditos na conclusão | A `$transaction` desfaz a troca de status | Obra continua `ANDAMENTO`, sem crédito parcial |
 | `status` no corpo de `POST`/`PATCH /obras` | 400 do `ValidationPipe` (`property status should not exist`) | Só via Swagger; a UI não manda `status` |
-| Motivo ausente, < 3 ou > 500 caracteres depois do trim | 400 do `ValidationPipe` | Mensagem no formulário de cancelamento, motivo preservado |
+| Motivo ausente, < 3 ou > 500 caracteres depois do trim | 400 do `ValidationPipe` | Mensagem no formulário de cancelamento, motivo preservado, lista recarregada |
+| Reenvio de uma transição já aplicada (resposta perdida) | 400 de transição inválida, sem efeito (AD-007) | Mensagem no `erro` da página **depois** da recarga; o card já aparece no status real (AD-014) |
+| Falha de rede numa transição | `ApiError(SEM_CONEXAO_ENVIO, 0)` do `lib/api.ts` | Mensagem de sem conexão (OFF-08); card como estava; sem reenvio automático |
 
 ---
 
@@ -159,11 +177,12 @@ existente muda.
 
 | Concern | Location (file:line) | Impact | Mitigation |
 | --- | --- | --- | --- |
-| Check-then-act fora da transação em `concluir()` | `apps/api/src/obras/obras.service.ts:147-164` | Dois cliques simultâneos geram créditos em dobro | `transicionar()` com `updateMany` condicional dentro da `$transaction`; e2e com dois `concluir` em paralelo (TRN-07) |
-| Mensagens atuais do `concluir` mudam | `obras.service.ts:157,161`; `obras.service.spec.ts:185` | O teste "nao credita duas vezes" espera `Esta obra ja foi concluida` | O teste passa a esperar `Não é possível concluir uma obra com status CONCLUIDA`, a mensagem da spec (mudança de contrato aprovada, já acentuada) |
-| `removerGesseiro` sem 404 | `obras.service.ts:128-133` | Alocação inexistente vira erro do Prisma (P2025 → 500) | Aprovado: 404 `Gesseiro <gesseiroId> não está alocado nesta obra` (TRN-12) |
-| Crédito só para quem está alocado na conclusão | `obras.service.ts:146-185`, `:128-133` | Gesseiro removido antes de concluir não recebe crédito e a alocação some (hard delete), sem registro de que trabalhou ali | Fora de escopo (spec futura "remanejamento de gesseiros"). Mitigação nesta feature: a confirmação do "Concluir obra" lista quem vai receber (TRN-11) |
-| e2e grava no banco de dev | `apps/api/test/obras-transicoes.e2e-spec.ts` | Dados de teste poluem o banco local e entrariam numa análise do agente | Cria só registros com prefixo `[e2e]` (título da obra, nome do gesseiro) e apaga num `afterAll`, que roda mesmo se o teste falhar, filtrando **só** pelo prefixo (lançamentos → obras, que levam as alocações em cascata → gesseiros). Roda dentro do container (`docker exec gesso_api npm run test:e2e`). Aviso no STATE: não rodar perto de uma demonstração do agente |
+| Check-then-act fora da transação em `concluir()` | `apps/api/src/obras/obras.service.ts:147-186` | Dois cliques simultâneos geram créditos em dobro | `transicionar()` com `updateMany` condicional dentro da `$transaction`; e2e com dois `concluir` em paralelo (TRN-07) |
+| Mensagens atuais do `concluir` mudam | `obras.service.ts:158,162`; `obras.service.spec.ts:185` | O teste "nao credita duas vezes" espera `Esta obra ja foi concluida` | O teste passa a esperar `Não é possível concluir uma obra com status CONCLUIDA`, a mensagem da spec (mudança de contrato aprovada, já acentuada) |
+| `removerGesseiro` sem 404 | `obras.service.ts:129-133` | Alocação inexistente vira erro do Prisma (P2025 → 500) | Aprovado: 404 `Gesseiro <gesseiroId> não está alocado nesta obra` (TRN-12) |
+| Crédito só para quem está alocado na conclusão | `obras.service.ts:147-186`, `:129-133` | Gesseiro removido antes de concluir não recebe crédito e a alocação some (hard delete), sem registro de que trabalhou ali | Fora de escopo (spec futura "remanejamento de gesseiros"). Mitigação nesta feature: a confirmação do "Concluir obra" lista quem vai receber (TRN-11) |
+| e2e grava no banco de dev | `apps/api/test/obras-transicoes.e2e-spec.ts` | Dados de teste poluem o banco local e entrariam numa análise do agente | Cria só registros com prefixo `[e2e]` (título da obra, nome do gesseiro) e apaga num `afterAll`, que roda mesmo se o teste falhar, filtrando **só** pelo prefixo (lançamentos → obras, que levam as alocações em cascata → gesseiros). Roda dentro do container com `--runInBand` (`docker exec gesso_api npm run test:e2e -- --runInBand`), porque o `idempotencia.e2e-spec.ts` usa o mesmo prefixo. A trava `trava-banco-local.ts` recusa banco que não seja local. O CI também roda esse e2e (AD-011). Aviso no STATE: não rodar perto de uma demonstração do agente |
+| Fixture da auditoria cria uma obra | `apps/api/scripts/fixture-auditoria.mjs` | Uma obra `[audit]` que sobrasse apareceria na tela e no snapshot do agente | Mesmo padrão de limpeza da fixture (início, fim, erro, SIGINT/SIGTERM) e a `audit:responsive` reprova se sobrar registro `[audit]` |
 | Obras legadas `CONCLUIDA` sem créditos | dados de dev | Nenhum (fora de escopo na spec) | Nada a fazer |
 
 ---
@@ -177,6 +196,7 @@ existente muda.
 | Créditos | Equipe lida **dentro** da transação, depois da troca de status | Mesma visão de dados da troca; não usa uma leitura feita antes da corrida |
 | Testes | Unit (service, tabela, DTO via `class-validator`) + 1 e2e no Postgres do Docker | Escolhido pelo usuário em 2026-10-29: o e2e prova a concorrência de verdade |
 | Trim do motivo | `@Transform` no DTO, antes da validação | O `ValidationPipe` usa `transform: true`; "3 a 500 depois do trim" fica no DTO e o service grava o valor já limpo |
+| Reenvio e falha de rede na UI | Erro HTTP → mensagem + recarga; rede → `SEM_CONEXAO_ENVIO` sem recarga e sem reenvio | AD-014 (2026-11-19). Sem `Idempotency-Key` nos `PATCH`: o update condicional já torna o reenvio inofensivo |
 
 > **AD-007 (proposta para o STATE):** o status da `Obra` só muda pelos endpoints de transição
 > (`/fechar`, `/iniciar`, `/concluir`, `/cancelar`); nenhum DTO genérico aceita `status`. Toda

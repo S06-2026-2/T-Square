@@ -11,7 +11,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: `.claude/specs/features/obras-transicoes-status/design.md`
-**Status**: Approved (2026-10-29) — Execute adiado pelo usuário
+**Status**: Approved (2026-10-29) — Execute adiado pelo usuário. Revalidado em 2026-11-19 depois do merge do PWA (PR #11): T16 nova, TRN-13/TRN-14, refs de linha e gates atualizados
 
 ---
 
@@ -28,7 +28,8 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 | Rotas HTTP + banco (concorrência, `status` no corpo) | e2e (Postgres do Docker, dados `[e2e]` apagados no `afterAll`) | TRN-06 e TRN-07 de ponta a ponta: 400 por `status` no `POST`/`PATCH`, dois `concluir` em paralelo → um 200, um 400, créditos exatos | `apps/api/test/*.e2e-spec.ts` | `docker exec gesso_api npm run test:e2e` |
 | Schema / migration | none | build gate + `prisma migrate dev` aplicada | - | build gate |
 | Helper (web) | unit | Mapa de ação por status e texto exato da confirmação (com e sem equipe) | `apps/web/src/lib/*.test.ts` | `npm run test --workspace apps/web` |
-| Componente / página (web) | unit (Testing Library, `api` e `window.confirm` mockados) | Todo AC de UI da task: botões por status, desabilitado sem equipe, confirmação aceita/recusada, ocupado, erro, recarga, formulário de cancelamento | `apps/web/src/**/*.test.tsx` | `npm run test --workspace apps/web` |
+| Componente / página (web) | unit (Testing Library, `api` e `window.confirm` mockados) | Todo AC de UI da task: botões por status, desabilitado sem equipe, confirmação aceita/recusada, ocupado, erro HTTP (mensagem + recarga), falha de rede (`ApiError` com `status: 0`), formulário de cancelamento | `apps/web/src/**/*.test.tsx` | `npm run test --workspace apps/web` |
+| Layout no celular (web) | browser (`audit:responsive`, Chrome headless) | RSP-01/07/08 nos estados novos (TRN-14); o script sai ≠ 0 em qualquer falha, estado não montado ou resto `[audit]` | `apps/web/scripts/audit-responsive.mjs` | `npm run audit:responsive --workspace apps/web` |
 
 ## Gate Check Commands
 
@@ -37,10 +38,11 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 | Gate Level | When to Use | Command |
 | --- | --- | --- |
 | Quick | Tasks com testes unitários de um workspace | `npm run test --workspace apps/api` ou `npm run test --workspace apps/web` (o do workspace tocado) |
-| Full | Task do e2e e fim de fase da API | `npm run test --workspace apps/api && docker exec gesso_api npm run test:e2e` |
+| Full | Task do e2e e fim de fase da API | `npm run test --workspace apps/api && docker exec gesso_api npm run test:e2e -- --runInBand` (`--runInBand` como no CI: o `idempotencia.e2e-spec.ts` usa o mesmo prefixo `[e2e]`) |
 | Build | Schema, controller, fim de fase | `npm run build && npm test` (raiz: build de API e web, depois as duas suítes) |
+| Browser | T16 | `npm run build --workspace apps/web`, `npx vite preview --port 4173` (em `apps/web`, em segundo plano) e `npm run audit:responsive --workspace apps/web`. Precisa do `gesso_api` no Docker (fixture) e do `CORS_ORIGIN` com `http://localhost:4173` no `.env`. Verde só com `medidos: 126/126, nao montados: 0, falhas: 0` |
 
-Base antes da feature: API 236 testes, web 137 (branch `feat/obras-transicoes-status` em `cc27963`). Nenhuma task pode terminar com menos testes do que começou.
+Base antes da feature: API 321 testes, web 330 (branch `feat/obras-transicoes-status` em `cc61e5f` mais os testes da rodada 2 do Verifier do PWA; medido em 2026-11-19). `audit:responsive` base: 118/118. Nenhuma task pode terminar com menos testes do que começou.
 
 ---
 
@@ -75,7 +77,7 @@ T10 → T11
 ### Phase 3: Front
 
 ```
-T12 → T13 → T14 → T15
+T12 → T13 → T14 → T15 → T16
 ```
 
 ---
@@ -102,7 +104,7 @@ T12 → T13 → T14 → T15
 - [ ] `transicoes-obra.spec.ts` cobre as 4 ações × 5 status: origem aceita só onde a spec manda, e destino certo
 - [ ] Mensagem exata com acento, para cada ação (ex.: `Não é possível concluir uma obra com status CONCLUIDA`)
 - [ ] Gate check passes: `npm run test --workspace apps/api`
-- [ ] Test count: API ≥ 236 + novos, nenhum removido
+- [ ] Test count: API ≥ 321 + novos, nenhum removido
 
 **Tests**: unit
 **Gate**: quick
@@ -126,7 +128,7 @@ T12 → T13 → T14 → T15
 
 **Done when**:
 
-- [ ] Migration criada em `apps/api/prisma/migrations/` e aplicada no banco local, sem perder dados (obras do seed e "Moldura - Bairro Centro" continuam lá)
+- [ ] Migration criada em `apps/api/prisma/migrations/` **depois** da `20261109142058_chaves_idempotencia` (a pasta nova tem timestamp maior), com o SQL contendo só o `ADD COLUMN`, e aplicada no banco local, sem perder dados (obras do seed e "Moldura - Bairro Centro" continuam lá)
 - [ ] Prisma Client regenerado no container (`gesso_api` reiniciado e `/api/health` 200)
 - [ ] Gate check passes: `npm run build && npm test`
 
@@ -142,7 +144,7 @@ T12 → T13 → T14 → T15
 **What**: Remover o campo `status` do `CreateObraDto`; o `UpdateObraDto` herda a remoção. Obra nova nasce com o default `ORCAMENTO` do schema.
 **Where**: `apps/api/src/obras/dto/create-obra.dto.ts`
 **Depends on**: None
-**Reuses**: `ValidationPipe` global com `forbidNonWhitelisted` (`apps/api/src/main.ts:18`)
+**Reuses**: `ValidationPipe` global com `forbidNonWhitelisted` (`apps/api/src/main.ts:18`). O `create(dto, tx)` e o `IdempotenciaService.executar()` do `POST /obras` (AD-009) não mudam
 **Requirement**: TRN-06
 
 **Tools**:
@@ -196,7 +198,7 @@ T12 → T13 → T14 → T15
 **What**: Método privado `transicionar(acao, id, { dados?, validar?, depois? })` com o fluxo do design (lê na `$transaction` → 404 → origem inválida 400 → `validar` → `updateMany` condicional → `count === 0` relê e 400 → `depois(tx, obra)` → devolve a obra com o `include` padrão). `concluir()` passa a usá-lo: grava `dataConclusao` e cria um `CREDITO` por gesseiro, lendo a equipe dentro da transação.
 **Where**: `apps/api/src/obras/obras.service.ts`
 **Depends on**: None
-**Reuses**: `include`, `createMany` de créditos atual (`obras.service.ts:171-181`), `transicoes-obra.ts` (T1)
+**Reuses**: `include`, `createMany` de créditos atual (`obras.service.ts:173-182`), `transicoes-obra.ts` (T1)
 **Requirement**: TRN-03, TRN-04, TRN-07 (lado unitário)
 
 **Tools**:
@@ -337,7 +339,7 @@ T12 → T13 → T14 → T15
 **What**: `PATCH :id/fechar`, `PATCH :id/iniciar` e `PATCH :id/cancelar` (corpo `CancelarObraDto`), com `@ApiOperation`; só delegam ao service.
 **Where**: `apps/api/src/obras/obras.controller.ts`
 **Depends on**: T6, T7, T8
-**Reuses**: padrão do `PATCH :id/concluir` (`obras.controller.ts:83`)
+**Reuses**: padrão do `PATCH :id/concluir` (`obras.controller.ts:88`)
 **Requirement**: TRN-01, TRN-02, TRN-09
 
 **Tools**:
@@ -359,10 +361,10 @@ T12 → T13 → T14 → T15
 
 #### T11: e2e de concorrência e de `status` no corpo
 
-**What**: `obras-transicoes.e2e-spec.ts`: faz login com o admin do seed, cria um gesseiro e uma obra `[e2e]`, leva a obra até `ANDAMENTO` pelas rotas, dispara dois `PATCH /concluir` em paralelo e confere um 200 + um 400 e exatamente 1 `CREDITO` por gesseiro no banco. Também confere 400 em `POST /obras` com `status` e em `PATCH /obras/:id` com `status`. Limpeza num `afterAll` que roda mesmo com falha, apagando só registros com prefixo `[e2e]` (lançamentos → obras → gesseiros).
+**What**: `obras-transicoes.e2e-spec.ts`: faz login com o admin do seed, cria um gesseiro e uma obra `[e2e]`, leva a obra até `ANDAMENTO` pelas rotas, dispara dois `PATCH /concluir` em paralelo e confere um 200 + um 400 e exatamente 1 `CREDITO` por gesseiro no banco. Também confere 400 em `POST /obras` com `status` e em `PATCH /obras/:id` com `status`. Limpeza num `afterAll` que roda mesmo com falha, apagando só registros com prefixo `[e2e]` (lançamentos → obras → gesseiros), no mesmo padrão do `idempotencia.e2e-spec.ts` (`MARCADOR`). A trava `trava-banco-local.ts` já vem do `setupFiles`: não importar de novo.
 **Where**: `apps/api/test/obras-transicoes.e2e-spec.ts`
 **Depends on**: T10
-**Reuses**: `test/app.e2e-spec.ts` (sobe o `AppModule`), `PrismaService` para conferir e limpar
+**Reuses**: `test/app.e2e-spec.ts` e `test/idempotencia.e2e-spec.ts` (sobem o `AppModule`, login e limpeza por prefixo), `PrismaService` para conferir e limpar
 **Requirement**: TRN-06, TRN-07
 
 **Tools**:
@@ -372,9 +374,9 @@ T12 → T13 → T14 → T15
 
 **Done when**:
 
-- [ ] `docker exec gesso_api npm run test:e2e` passa (inclui os 2 testes antigos)
+- [ ] `docker exec gesso_api npm run test:e2e -- --runInBand` passa (inclui os e2e que já existem: `app` e `idempotencia`)
 - [ ] Depois de rodar: zero obras, gesseiros e lançamentos com `[e2e]` no banco (conferido por `psql`)
-- [ ] Gate check passes: `npm run test --workspace apps/api && docker exec gesso_api npm run test:e2e`
+- [ ] Gate check passes: `npm run test --workspace apps/api && docker exec gesso_api npm run test:e2e -- --runInBand`
 
 **Tests**: e2e
 **Gate**: full
@@ -413,11 +415,11 @@ T12 → T13 → T14 → T15
 
 #### T13: `AcoesStatusObra` — avanço no funil
 
-**What**: Componente com o botão de avanço do status atual; "Iniciar obra" desabilitado sem equipe, com "Aloque pelo menos um gesseiro para iniciar" abaixo; "Concluir obra" com `window.confirm(textoConfirmacaoConclusao(obra))`; botões desabilitados durante a chamada; sucesso → `onAlterada()`, erro → `onErro(mensagem)`.
+**What**: Componente com o botão de avanço do status atual; "Iniciar obra" desabilitado sem equipe, com "Aloque pelo menos um gesseiro para iniciar" abaixo; "Concluir obra" com `window.confirm(textoConfirmacaoConclusao(obra))`; botões desabilitados durante a chamada; sucesso → `onAlterada()`; erro HTTP (`ApiError.status > 0`) → `onErro(mensagem, true)`; falha de rede (`status === 0`) → `onErro(SEM_CONEXAO_ENVIO, false)` (AD-014).
 **Where**: `apps/web/src/components/AcoesStatusObra.tsx`
 **Depends on**: T12
-**Reuses**: `api.patch`, classes `.btn`/`.card-acoes`
-**Requirement**: TRN-05, TRN-11
+**Reuses**: `api.patch`, `ApiError` e `SEM_CONEXAO_ENVIO` de `lib/api.ts`, classes `.btn`/`.card-acoes`
+**Requirement**: TRN-05, TRN-11, TRN-13
 
 **Tools**:
 
@@ -429,7 +431,9 @@ T12 → T13 → T14 → T15
 - [ ] `AcoesStatusObra.test.tsx`: rótulo certo por status e nenhum em `CONCLUIDA`/`CANCELADA` (P1 AC6)
 - [ ] `FECHADA` sem gesseiro: botão desabilitado + texto exato; com gesseiro: habilitado e chama `PATCH /obras/:id/iniciar` (P1 AC6)
 - [ ] "Concluir obra": `confirm` recebe o texto com nomes e valores; recusado → nenhuma chamada; aceito → `PATCH /obras/:id/concluir` (P1 AC7, AC10)
-- [ ] Durante a chamada os botões ficam desabilitados (edge case); sucesso chama `onAlterada`; erro chama `onErro` com a mensagem da API (P1 AC8, AC9)
+- [ ] Durante a chamada os botões ficam desabilitados (edge case); sucesso chama `onAlterada` (P1 AC8)
+- [ ] `api.patch` rejeita com `ApiError("Não é possível concluir uma obra com status CONCLUIDA", 400)` → `onErro(mensagem, true)` (P1 AC9)
+- [ ] `api.patch` rejeita com `ApiError(SEM_CONEXAO_ENVIO, 0)` → `onErro` com o texto exato da spec e `false`; `api.patch` chamado uma vez só, mesmo depois de esperar (P1 AC11)
 - [ ] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit
@@ -441,11 +445,11 @@ T12 → T13 → T14 → T15
 
 #### T14: `AcoesStatusObra` — cancelar com motivo
 
-**What**: Ação "Cancelar obra" em `ORCAMENTO`/`FECHADA`/`ANDAMENTO` que abre no card um formulário com "Motivo" obrigatório; envia `PATCH /obras/:id/cancelar` com `{ motivo }`; erro aparece no formulário e o motivo digitado fica.
+**What**: Ação "Cancelar obra" em `ORCAMENTO`/`FECHADA`/`ANDAMENTO` que abre no card um formulário com "Motivo" obrigatório; envia `PATCH /obras/:id/cancelar` com `{ motivo }`; erro aparece no formulário e o motivo digitado fica. Erro HTTP também chama `onAlterada()`; falha de rede mostra `SEM_CONEXAO_ENVIO` no formulário, sem recarregar nem reenviar (AD-014, OFF-08).
 **Where**: `apps/web/src/components/AcoesStatusObra.tsx`
 **Depends on**: T13
-**Reuses**: padrão de formulário e `.erro` dos forms em `components/forms/`
-**Requirement**: TRN-10
+**Reuses**: padrão de formulário e `.erro` dos forms em `components/forms/`, `SEM_CONEXAO_ENVIO`
+**Requirement**: TRN-10, TRN-13
 
 **Tools**:
 
@@ -456,7 +460,9 @@ T12 → T13 → T14 → T15
 
 - [ ] "Cancelar obra" só aparece nos 3 status em aberto e abre o formulário (P2 AC5)
 - [ ] Motivo válido → `PATCH /obras/:id/cancelar` com `{ motivo }` e `onAlterada` (P2 AC6)
-- [ ] Erro da API → mensagem dentro do formulário, motivo preservado, `onErro` não chamado (P2 AC7)
+- [ ] Erro HTTP da API → mensagem dentro do formulário, motivo preservado, `onAlterada` chamado e `onErro` não (P2 AC7)
+- [ ] Falha de rede (`ApiError(SEM_CONEXAO_ENVIO, 0)`) → texto exato da spec no formulário, motivo preservado, `onAlterada` e `onErro` não chamados, `api.patch` chamado uma vez só (P2 AC9)
+- [ ] Re-render com a mesma `obra` (simula a recarga do `useAoReconectar`) mantém o formulário aberto e o motivo (edge case)
 - [ ] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit
@@ -468,11 +474,11 @@ T12 → T13 → T14 → T15
 
 #### T15: `Obras.tsx` usa `AcoesStatusObra` e mostra o motivo
 
-**What**: Trocar o bloco do "Concluir obra" (`Obras.tsx:155-165`) por `<AcoesStatusObra obra onAlterada={carregar} onErro={setErro} />` e mostrar "Motivo do cancelamento: …" no card `CANCELADA`.
+**What**: Com o handler de erro da página na ordem `if (recarregar) await carregar(); setErro(mensagem)` (o `carregar()` limpa o `erro` em `Obras.tsx:37`), trocar o bloco do "Concluir obra" (`Obras.tsx:167-177`) e a função `concluir()` (`Obras.tsx:82-89`) por `<AcoesStatusObra obra onAlterada={carregar} onErro={falhaTransicao} />` e mostrar "Motivo do cancelamento: …" no card `CANCELADA`.
 **Where**: `apps/web/src/pages/Obras.tsx`
 **Depends on**: T14
 **Reuses**: `carregar()` e `erro` da página
-**Requirement**: TRN-05, TRN-10
+**Requirement**: TRN-05, TRN-10, TRN-13
 
 **Tools**:
 
@@ -482,15 +488,45 @@ T12 → T13 → T14 → T15
 **Done when**:
 
 - [ ] `Obras.test.tsx`: transição com sucesso recarrega com o filtro atual (`GET /obras?status=...`) (P1 AC8)
-- [ ] Erro de transição aparece no `erro` da página e o card fica como estava (P1 AC9)
+- [ ] Erro HTTP de transição: a lista é recarregada com o filtro atual e a mensagem da API continua visível no `erro` da página depois da recarga; o card mostra o status que o `GET` devolveu (P1 AC9)
+- [ ] Falha de rede: mensagem de sem conexão no `erro` da página, nenhum `GET /obras` novo, card como estava (P1 AC11)
+- [ ] O `useAoReconectar` continua recarregando obras e gesseiros (os testes de OFF-15 do PWA em `Obras.test.tsx` passam sem mudança)
 - [ ] Card `CANCELADA` mostra o motivo (P2 AC8)
 - [ ] Gate check passes: `npm run build && npm test`
-- [ ] Teste manual: o Independent Test da P1 e da P2 pela UI (`gesso_web` reiniciado)
+- [ ] Teste manual: o Independent Test da P1 e da P2 pela UI (`gesso_web` reiniciado), inclusive o cancelamento com o DevTools em "Offline"
 
 **Tests**: unit
 **Gate**: build
 
 **Commit**: `feat(web): leva a obra pelo funil na tela de obras`
+
+---
+
+#### T16: Estados de status das obras na `audit:responsive`
+
+**What**: Na fixture, criar uma obra `[audit] Cancelada` (`status: CANCELADA` gravado direto pelo Prisma) com motivo de 500 caracteres, incluindo um trecho de 120 sem espaço; `limpar` e `contar` passam a incluir obras com `titulo` começando por `[audit]`. Na auditoria, estado novo `obras-cancelar` (clica em "Cancelar obra" e confere que o formulário com "Motivo" abriu) e os seletores `.card-acoes .btn` e os botões do formulário de cancelamento no RSP-08. Se a medida mostrar estouro, o motivo exibido ganha `overflow-wrap: anywhere`.
+**Where**: `apps/web/scripts/audit-responsive.mjs`; `apps/api/scripts/fixture-auditoria.mjs`
+**Depends on**: T15
+**Reuses**: estados `obras`/`obras-form` (`montar` + `esperar`), `MARCADOR` e trava da fixture
+**Requirement**: TRN-14
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [ ] `npm run audit:responsive --workspace apps/web` termina com `medidos: 126/126, nao montados: 0, falhas: 0` (era 118/118) e "fixture limpa: nenhum registro [audit] no banco" (P2 Celular AC1–3)
+- [ ] O card `[audit] Cancelada` aparece no estado `obras` com o motivo, sem estouro em 320px (RSP-01)
+- [ ] Prova de que a medida pega o erro (feita e revertida): com o `min-height` dos botões de `.card-acoes` forçado a 30px, o RSP-08 reprova em ≤ 900px; com o motivo em `white-space: nowrap`, o RSP-01 reprova em 320px
+- [ ] `npm run audit:pwa --workspace apps/web` continua 14/14 (a fixture é compartilhada)
+- [ ] Gate check passes: browser (ver Gate Check Commands) e `npm run build && npm test`
+
+**Tests**: browser
+**Gate**: browser
+
+**Commit**: `test(web): estados de status da obra na auditoria responsiva`
 
 ---
 
@@ -504,10 +540,10 @@ Phase 2:  T5 → T6 ┐
           T5 → T7 ├→ T10 → T11
           T5 → T8 ┘
           T9                           (independente)
-Phase 3:  T12 → T13 → T14 → T15
+Phase 3:  T12 → T13 → T14 → T15 → T16
 ```
 
-Execução sequencial: uma task por vez, na ordem T1 → T15. São 15 tasks: no Execute, ofereço sub-agentes em 3 lotes (Fase 1 = 4 tasks; Fase 2 = 7; Fase 3 = 4), um depois do outro.
+Execução sequencial: uma task por vez, na ordem T1 → T15. São 16 tasks: no Execute, ofereço sub-agentes em 3 lotes (Fase 1 = 4 tasks; Fase 2 = 7; Fase 3 = 5), um depois do outro.
 
 ---
 
@@ -530,6 +566,7 @@ Execução sequencial: uma task por vez, na ordem T1 → T15. São 15 tasks: no 
 | T13: avanço | 1 componente | ✅ Granular |
 | T14: cancelar | 1 formulário no mesmo componente | ✅ Granular |
 | T15: integração na página | 1 página | ✅ Granular |
+| T16: auditoria responsiva | 1 estado + seletores no script + 1 obra na fixture | ⚠️ 2 arquivos coesos (o estado depende do dado da fixture) |
 
 ## Diagram-Definition Cross-Check
 
@@ -550,6 +587,7 @@ Execução sequencial: uma task por vez, na ordem T1 → T15. São 15 tasks: no 
 | T13 | T12 | T12 → T13 | ✅ Match |
 | T14 | T13 | T13 → T14 | ✅ Match |
 | T15 | T14 | T14 → T15 | ✅ Match |
+| T16 | T15 | T15 → T16 | ✅ Match |
 
 ## Test Co-location Validation
 
@@ -570,6 +608,7 @@ Execução sequencial: uma task por vez, na ordem T1 → T15. São 15 tasks: no 
 | T13 | Componente (web) | unit | unit | ✅ OK |
 | T14 | Componente (web) | unit | unit | ✅ OK |
 | T15 | Página (web) | unit | unit | ✅ OK |
+| T16 | Layout no celular (web) | browser | browser | ✅ OK |
 
 ---
 
@@ -589,5 +628,7 @@ Execução sequencial: uma task por vez, na ordem T1 → T15. São 15 tasks: no 
 | TRN-10 | T14, T15 |
 | TRN-11 | T12, T13 |
 | TRN-12 | T9 |
+| TRN-13 | T13, T14, T15 |
+| TRN-14 | T16 |
 
-12 de 12 requisitos mapeados.
+14 de 14 requisitos mapeados.

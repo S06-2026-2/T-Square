@@ -96,8 +96,11 @@ async function clicar(page, seletor, texto) {
 // Edge Case "nome longo (até 120 caracteres)": o primeiro material, a primeira obra e o primeiro
 // gesseiro de cada lista chegam à tela com um nome de 120 caracteres. A troca é feita na resposta
 // do GET dentro da página (fetch embrulhado), sem gravar nada no banco.
+// Começa com um trecho de 48 caracteres sem espaço: sem ele o nome quebraria nos espaços mesmo
+// sem o `overflow-wrap: anywhere`, e a regra que protege o Edge Case nunca seria exercitada
+// (mutante RR1 da rodada 2 do Verifier).
 const NOME_LONGO = (
-  'Residencial Jardim das Acácias bloco B apartamento 1204 forro de gesso acartonado ' +
+  'ResidencialJardimDasAcaciasBlocoBApartamento1204 forro de gesso acartonado ' +
   'com sanca invertida e iluminação embutida na sala'
 ).slice(0, 120);
 if (NOME_LONGO.length !== 120) throw new Error(`NOME_LONGO com ${NOME_LONGO.length} caracteres`);

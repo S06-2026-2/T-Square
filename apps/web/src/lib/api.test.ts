@@ -152,6 +152,13 @@ describe('api: origem dos dados (OFF-04, OFF-06, OFF-07)', () => {
     expect(origem).not.toHaveBeenCalled();
   });
 
+  it('POST com 200 (o login) não registra origem', async () => {
+    fetchMock.mockResolvedValue(resposta(200, { token: 't' }));
+
+    await api.post('/auth/login', { email: 'a@b.c', senha: 'x' });
+    expect(origem).not.toHaveBeenCalled();
+  });
+
   it('GET com erro HTTP não registra origem', async () => {
     fetchMock.mockResolvedValue(resposta(500));
 

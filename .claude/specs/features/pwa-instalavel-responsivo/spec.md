@@ -23,10 +23,10 @@ vira saldo errado.
 
 ## Goals
 
-- [ ] Nenhuma tela transborda na horizontal entre 320px e 1366px de largura
-- [ ] O app pode ser instalado (Android/Chrome/Edge desktop) e abre a partir do ícone em janela própria
-- [ ] Sem internet, o app abre e mostra os últimos dados carregados de cada tela, marcados como possivelmente desatualizados
-- [ ] Reenviar um formulário de criação nunca duplica o lançamento
+- [x] Nenhuma tela transborda na horizontal entre 320px e 1366px de largura
+- [x] O app pode ser instalado (Android/Chrome/Edge desktop) e abre a partir do ícone em janela própria
+- [x] Sem internet, o app abre e mostra os últimos dados carregados de cada tela, marcados como possivelmente desatualizados
+- [x] Reenviar um formulário de criação nunca duplica o lançamento
 
 ## Out of Scope
 
@@ -257,69 +257,69 @@ instrução. No app já adicionado à tela de início, o botão não aparece.
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| RSP-01 | P1: Celular sem transbordar | T1, T2, T3, T4 | Implementing |
-| RSP-02 | P1: Celular sem transbordar | T1, T2 | Implementing |
-| RSP-03 | P1: Celular sem transbordar | T1, T3 | Implementing |
-| RSP-04 | P1: Celular sem transbordar | T1, T3 | Implementing |
-| RSP-05 | P1: Celular sem transbordar | T3 | Implementing |
-| RSP-06 | P1: Celular sem transbordar | T1, T3, T38 | Implementing |
-| RSP-07 | P1: Celular sem transbordar | T1, T4, T34 | Implementing |
-| RSP-08 | P1: Celular sem transbordar | T1, T4, T25 | Implementing |
-| RSP-09 | P1: Celular sem transbordar | T5 | Implementing |
-| RSP-10 | P1: Celular sem transbordar | T1, T5 | Implementing |
-| RSP-11 | P1: Celular sem transbordar | T2, T38 | Implementing |
-| RSP-12 | P1: Celular sem transbordar | T3, T38 | Implementing |
-| PWA-01 | P1: Instalar o app | T26, T28, T31 | Implementing |
-| PWA-02 | P1: Instalar o app | T26, T36 | Implementing |
-| PWA-03 | P1: Instalar o app | T28, T29, T31 | Implementing |
-| PWA-04 | P1: Instalar o app | T28, T29 | Implementing |
-| PWA-05 | P1: Instalar o app | T24, T25 | Implementing |
-| PWA-06 | P1: Instalar o app | T24, T25 | Implementing |
-| PWA-07 | P1: Instalar o app | T24 | Implementing |
-| PWA-08 | P1: Instalar o app | T24, T25 | Implementing |
-| PWA-09 | P1: Instalar o app | T24, T25 | Implementing |
-| OFF-01 | P1: Consultar sem internet | T28, T31 | Implementing |
-| OFF-02 | P1: Consultar sem internet | T27 | Implementing |
-| OFF-03 | P1: Consultar sem internet | T28, T31, T33 | Implementing |
-| OFF-04 | P1: Consultar sem internet | T18, T27, T31 | Implementing |
-| OFF-05 | P1: Consultar sem internet | T18, T31 | Implementing |
-| OFF-06 | P1: Consultar sem internet | T17, T22, T31 | Implementing |
-| OFF-07 | P1: Consultar sem internet | T17, T22, T31 | Implementing |
-| OFF-08 | P1: Consultar sem internet | T18, T19, T37 | Implementing |
-| OFF-09 | P1: Consultar sem internet | T27, T33 | Implementing |
-| OFF-10 | P1: Consultar sem internet | T27, T33 | Implementing |
-| OFF-11 | P1: Consultar sem internet | T16, T18, T31, T32 | Implementing |
-| OFF-12 | P1: Consultar sem internet | T16, T21 | Implementing |
-| OFF-13 | P1: Consultar sem internet | T21, T38 | Implementing |
-| OFF-14 | P1: Consultar sem internet | T28, T33 | Implementing |
-| OFF-15 | P1: Consultar sem internet | T17, T23, T31 | Implementing |
-| IDP-01 | P1: Reenviar sem duplicar | T15, T18, T19, T20, T38 | Implementing |
-| IDP-02 | P1: Reenviar sem duplicar | T6, T8, T9, T10, T11, T12, T14 | Implementing |
-| IDP-03 | P1: Reenviar sem duplicar | T7, T9, T14 | Implementing |
-| IDP-04 | P1: Reenviar sem duplicar | T9, T14 | Implementing |
-| IDP-05 | P1: Reenviar sem duplicar | T6, T9, T38 | Implementing |
-| IDP-06 | P1: Reenviar sem duplicar | T8, T9, T14 | Implementing |
-| IDP-07 | P1: Reenviar sem duplicar | T19 | Implementing |
-| IDP-08 | P1: Reenviar sem duplicar | T19 | Implementing |
-| IDP-09 | P1: Reenviar sem duplicar | T13 | Implementing |
-| UPD-01 | P2: Versões novas | T29 | Implementing |
-| UPD-02 | P2: Versões novas | T28 | Implementing |
-| UPD-03 | P2: Versões novas | T29 | Implementing |
-| UPD-04 | P2: Versões novas | T30 | Implementing |
-| PWA-10 | P3: Instrução no iPhone | T24, T25 | Implementing |
+| RSP-01 | P1: Celular sem transbordar | T1, T2, T3, T4 | Verified |
+| RSP-02 | P1: Celular sem transbordar | T1, T2 | Verified |
+| RSP-03 | P1: Celular sem transbordar | T1, T3 | Verified |
+| RSP-04 | P1: Celular sem transbordar | T1, T3 | Verified |
+| RSP-05 | P1: Celular sem transbordar | T3 | Verified |
+| RSP-06 | P1: Celular sem transbordar | T1, T3, T38 | Verified |
+| RSP-07 | P1: Celular sem transbordar | T1, T4, T34 | Verified |
+| RSP-08 | P1: Celular sem transbordar | T1, T4, T25 | Verified |
+| RSP-09 | P1: Celular sem transbordar | T5 | Verified |
+| RSP-10 | P1: Celular sem transbordar | T1, T5 | Verified |
+| RSP-11 | P1: Celular sem transbordar | T2, T38 | Implementing (verificação manual em aparelho pendente) |
+| RSP-12 | P1: Celular sem transbordar | T3, T38 | Implementing (verificação manual em aparelho pendente) |
+| PWA-01 | P1: Instalar o app | T26, T28, T31 | Verified |
+| PWA-02 | P1: Instalar o app | T26, T36 | Verified |
+| PWA-03 | P1: Instalar o app | T28, T29, T31 | Verified |
+| PWA-04 | P1: Instalar o app | T28, T29 | Verified |
+| PWA-05 | P1: Instalar o app | T24, T25 | Verified |
+| PWA-06 | P1: Instalar o app | T24, T25 | Verified |
+| PWA-07 | P1: Instalar o app | T24 | Verified |
+| PWA-08 | P1: Instalar o app | T24, T25 | Verified |
+| PWA-09 | P1: Instalar o app | T24, T25 | Verified |
+| OFF-01 | P1: Consultar sem internet | T28, T31 | Verified |
+| OFF-02 | P1: Consultar sem internet | T27 | Verified |
+| OFF-03 | P1: Consultar sem internet | T28, T31, T33 | Verified |
+| OFF-04 | P1: Consultar sem internet | T18, T27, T31 | Verified |
+| OFF-05 | P1: Consultar sem internet | T18, T31 | Verified |
+| OFF-06 | P1: Consultar sem internet | T17, T22, T31 | Verified |
+| OFF-07 | P1: Consultar sem internet | T17, T22, T31 | Verified |
+| OFF-08 | P1: Consultar sem internet | T18, T19, T37 | Verified |
+| OFF-09 | P1: Consultar sem internet | T27, T33 | Verified |
+| OFF-10 | P1: Consultar sem internet | T27, T33 | Verified |
+| OFF-11 | P1: Consultar sem internet | T16, T18, T31, T32 | Verified |
+| OFF-12 | P1: Consultar sem internet | T16, T21 | Verified |
+| OFF-13 | P1: Consultar sem internet | T21, T38 | Verified |
+| OFF-14 | P1: Consultar sem internet | T28, T33 | Verified |
+| OFF-15 | P1: Consultar sem internet | T17, T23, T31 | Verified |
+| IDP-01 | P1: Reenviar sem duplicar | T15, T18, T19, T20, T38 | Verified |
+| IDP-02 | P1: Reenviar sem duplicar | T6, T8, T9, T10, T11, T12, T14 | Verified |
+| IDP-03 | P1: Reenviar sem duplicar | T7, T9, T14 | Verified |
+| IDP-04 | P1: Reenviar sem duplicar | T9, T14 | Verified |
+| IDP-05 | P1: Reenviar sem duplicar | T6, T9, T38 | Verified |
+| IDP-06 | P1: Reenviar sem duplicar | T8, T9, T14 | Verified |
+| IDP-07 | P1: Reenviar sem duplicar | T19 | Verified |
+| IDP-08 | P1: Reenviar sem duplicar | T19 | Verified |
+| IDP-09 | P1: Reenviar sem duplicar | T13 | Verified |
+| UPD-01 | P2: Versões novas | T29 | Verified |
+| UPD-02 | P2: Versões novas | T28 | Verified |
+| UPD-03 | P2: Versões novas | T29 | Verified |
+| UPD-04 | P2: Versões novas | T30 | Verified |
+| PWA-10 | P3: Instrução no iPhone | T24, T25 | Verified |
 
 **ID format:** `RSP-NN` (responsividade), `PWA-NN` (instalação), `OFF-NN` (offline), `IDP-NN` (idempotência), `UPD-NN` (atualização)
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 50 total, 0 mapped to tasks, 50 unmapped ⚠️ (esperado: a spec ainda não passou por Design/Tasks)
+**Coverage:** 50 total, 50 mapped to tasks, 0 unmapped. 48 `Verified` pelo Verifier rodada 2 (2026-11-19, `validation.md` PASS). RSP-11 e RSP-12 aguardam a verificação manual num iPhone com notch (decisão do usuário, 2026-11-09).
 
 ---
 
 ## Success Criteria
 
-- [ ] `npm run audit:responsive` em 320–1366px: 0 telas com transbordo horizontal (hoje: 30 de 66 combinações tela × largura, todas as logadas em 320, 360 e 390px)
-- [ ] Chrome DevTools > Application: manifest sem erros e app instalável no build de produção
-- [ ] Com o aparelho offline, `/obras`, `/estoque` e um extrato já visitados abrem com dados e com o ícone de sinal vermelho no topo
-- [ ] Depois de "Sair", o Cache Storage de dados da API está vazio
-- [ ] Reenviar um vale com a mesma `Idempotency-Key` não cria um segundo lançamento
+- [x] `npm run audit:responsive` em 320–1366px: 0 telas com transbordo horizontal (2026-11-19: 118/118) (hoje: 30 de 66 combinações tela × largura, todas as logadas em 320, 360 e 390px)
+- [x] Chrome DevTools > Application: manifest sem erros e app instalável no build de produção
+- [x] Com o aparelho offline, `/obras`, `/estoque` e um extrato já visitados abrem com dados e com o ícone de sinal vermelho no topo
+- [x] Depois de "Sair", o Cache Storage de dados da API está vazio
+- [x] Reenviar um vale com a mesma `Idempotency-Key` não cria um segundo lançamento
