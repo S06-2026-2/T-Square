@@ -239,6 +239,24 @@ describe('MateriaisPrevistosForm', () => {
     expect(corpoDaTabela()).toEqual([['Cal (saco)', '20', '8', 'pendente: 12']]);
   });
 
+  it('sem rede: mostra a mensagem do OFF-08, mantém o editado e não reenvia sozinho', async () => {
+    const semConexao =
+      'Sem conexão: não foi possível confirmar o envio. Tente de novo; o mesmo lançamento não será duplicado.';
+    responder(linhas.slice(0, 1));
+    // O api.ts transforma a falha de rede do PUT nesta ApiError (status 0).
+    put.mockRejectedValue(Object.assign(new Error(semConexao), { status: 0 }));
+    render(<MateriaisPrevistosForm obraId="o1" status="ANDAMENTO" />);
+    await screen.findByRole('table');
+
+    fireEvent.change(screen.getByLabelText('Quantidade'), { target: { value: '30' } });
+    salvar();
+
+    expect(await screen.findByText(semConexao)).toHaveClass('erro');
+    expect(screen.getByLabelText('Quantidade')).toHaveValue(30);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(put).toHaveBeenCalledTimes(1);
+  });
+
   it('desabilita o botão enquanto salva', async () => {
     responder(linhas.slice(0, 1));
     let terminar!: (valor: unknown) => void;

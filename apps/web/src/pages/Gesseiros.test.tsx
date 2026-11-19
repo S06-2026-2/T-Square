@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { api } from '../lib/api';
 import type { Extrato, Gesseiro } from '../types';
@@ -148,5 +148,55 @@ describe('Gesseiros', () => {
       expect(matchMedia).toHaveBeenCalledWith('(max-width: 760px)');
       expect(scrollIntoView).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('Gesseiros: conexão de volta (OFF-15)', () => {
+  function online() {
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+  }
+
+  it('sem extrato aberto, o evento online busca a lista de novo e não busca extrato', async () => {
+    get.mockResolvedValueOnce([ana]);
+    render(<Gesseiros />);
+    await screen.findByRole('button', { name: 'Ana' });
+    get.mockResolvedValueOnce([ana, { id: 'g-joao', nome: 'Joao Ferreira', ativo: true }]);
+
+    online();
+
+    expect(await screen.findByRole('button', { name: 'Joao Ferreira' })).toBeInTheDocument();
+    expect(get.mock.calls).toEqual([['/gesseiros'], ['/gesseiros']]);
+  });
+
+  it('com extrato aberto e formulários preenchidos, busca lista e extrato de novo e mantém os formulários com os valores', async () => {
+    telaEstreita = true;
+    let atual = extrato(0, 100);
+    get.mockImplementation(async (caminho: string) => (caminho === '/gesseiros' ? [ana] : atual));
+    render(<Gesseiros />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ana' }));
+    await screen.findByLabelText('Tipo');
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Novo gesseiro' }));
+    fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'Joao Ferreira' } });
+    fireEvent.change(screen.getByLabelText('Valor'), { target: { value: '50' } });
+    fireEvent.change(screen.getByLabelText('Descricao'), { target: { value: 'Vale da semana' } });
+    atual = extrato(100, 0);
+
+    online();
+
+    await waitFor(() =>
+      expect(screen.getByText('Saldo a receber').nextElementSibling).toHaveTextContent(/R\$\s0,00/),
+    );
+    expect(chamadas('/gesseiros')).toBe(2);
+    expect(chamadas('/gesseiros/g-ana/extrato')).toBe(2);
+    expect(screen.getByLabelText('Nome')).toHaveValue('Joao Ferreira');
+    expect(screen.getByLabelText('Valor')).toHaveValue(50);
+    expect(screen.getByLabelText('Descricao')).toHaveValue('Vale da semana');
+    // Recarregar o extrato não é uma seleção: a tela não rola de novo.
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(post).not.toHaveBeenCalled();
   });
 });

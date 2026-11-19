@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
+import { iniciarCapturaInstalacao } from '../lib/instalacao';
 import Layout from './Layout';
 
 jest.mock('../lib/api', () => ({
@@ -60,6 +61,65 @@ describe('Layout', () => {
     renderEm('/obras');
 
     expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument();
+  });
+});
+
+describe('Layout: indicador de conexão (OFF-06)', () => {
+  afterEach(() => {
+    delete (navigator as { onLine?: boolean }).onLine;
+  });
+
+  it('offline: o ícone aparece na área do usuário (topo no celular, sidebar no desktop), antes do avatar', () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
+    renderEm('/obras');
+
+    const icone = screen.getByRole('img', { name: 'Dados possivelmente desatualizados' });
+    const usuario = icone.closest('.usuario') as HTMLElement;
+    expect(usuario).not.toBeNull();
+    expect(usuario.closest('.sidebar')).not.toBeNull();
+    expect(icone.nextElementSibling).toHaveClass('avatar');
+  });
+
+  it('online: a área do usuário não tem o ícone', () => {
+    renderEm('/obras');
+
+    expect(
+      screen.queryByRole('img', { name: 'Dados possivelmente desatualizados' }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe('Layout: botão Instalar app (PWA-05)', () => {
+  beforeAll(() => {
+    iniciarCapturaInstalacao();
+  });
+
+  afterEach(() => {
+    act(() => {
+      window.dispatchEvent(new Event('appinstalled'));
+    });
+  });
+
+  it('sem convite do navegador, não há botão de instalar', () => {
+    renderEm('/obras');
+
+    expect(screen.queryByRole('button', { name: 'Instalar app' })).not.toBeInTheDocument();
+  });
+
+  it('com beforeinstallprompt, o botão aparece na área do usuário (topo no celular, sidebar no desktop), antes do Sair', () => {
+    renderEm('/obras');
+
+    act(() => {
+      window.dispatchEvent(new Event('beforeinstallprompt', { cancelable: true }));
+    });
+
+    const botao = screen.getByRole('button', { name: 'Instalar app' });
+    const usuario = botao.closest('.usuario') as HTMLElement;
+    expect(usuario).not.toBeNull();
+    expect(usuario.closest('.sidebar')).not.toBeNull();
+    expect(botao.closest('.instalar')?.nextElementSibling).toBe(
+      screen.getByRole('button', { name: 'Sair' }),
+    );
   });
 });
 

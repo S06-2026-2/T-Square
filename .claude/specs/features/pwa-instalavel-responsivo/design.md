@@ -370,7 +370,14 @@ VitePWA({
   Faz login pela API, percorre as 14 telas/estados × 6 larguras e mede. São as 11 da auditoria de
   2026-11-09, mais três estados do agente de estoque: o painel "Silenciados" aberto e a justificativa
   de um alerta aberta (os dois no `/dashboard`), e o `/estoque` aberto pelo "Resolver" de um alerta
-  (`?alerta=&material=&quantidade=`, com aviso e movimentação preenchida).
+  (`?alerta=&material=&quantidade=`, com aviso e movimentação preenchida). Desde o L4 são 15 estados
+  (90 combinações): o 15º é a instrução de instalação do Safari do iOS aberta (PWA-10).
+- **"Instalar app" medido (RSP-08, PWA-10)**: o headless nunca dispara `beforeinstallprompt`, então
+  cada largura usa o UA do Safari de um aparelho Apple real (iPhone em 320–768px, iPad em
+  1024/1366px), em que o botão aparece no modo `'ios'`. O `.btn-instalar` tem de estar visível em
+  toda página logada; sem ele o estado sai `NAO_MONTADO` e a auditoria reprova. Uma passada extra em
+  1024/1366 com o Chrome de desktop (sem toque, UA padrão) mede os 14 estados sem o botão, para o
+  RSP-05 continuar coberto com mouse. Total do gate: 118 combinações.
 - **Dados montados, não supostos**: antes de medir, a auditoria roda
   `docker exec gesso_api node scripts/fixture-auditoria.mjs preparar`
   (`apps/api/scripts/fixture-auditoria.mjs`, Prisma Client do container), que cria um alerta

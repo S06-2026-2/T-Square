@@ -2,8 +2,7 @@ import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import Layout from './components/Layout';
-import { auth } from './lib/api';
-import { limparCacheApi } from './lib/sessao';
+import { limparCacheApi, motivoFimSessao, useSessaoAtiva } from './lib/sessao';
 import Dashboard from './pages/Dashboard';
 import Estoque from './pages/Estoque';
 import Gesseiros from './pages/Gesseiros';
@@ -15,13 +14,17 @@ import Obras from './pages/Obras';
  * mão, aba antiga) não pode sobrar para o próximo login (AD-010). Limpa num efeito, nunca no render.
  */
 function RotaPrivada({ children }: { children: JSX.Element }) {
-  const logado = auth.estaLogado();
+  // Observa a sessão: um 401 em qualquer tela leva a /login na hora (OFF-11), já com o cache
+  // apagado pelo encerrarSessao(), e o login mostra o motivo.
+  const logado = useSessaoAtiva();
 
   useEffect(() => {
     if (!logado) void limparCacheApi();
   }, [logado]);
 
-  return logado ? children : <Navigate to="/login" replace />;
+  if (logado) return children;
+  const estado = motivoFimSessao() === 'expirada' ? { sessaoExpirada: true } : undefined;
+  return <Navigate to="/login" replace state={estado} />;
 }
 
 export default function App() {

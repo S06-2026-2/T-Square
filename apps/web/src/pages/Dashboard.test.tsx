@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import { api } from '../lib/api';
@@ -6,10 +6,12 @@ import type { RespostaAlertasEstoque, ResumoStatus } from '../types';
 import Dashboard from './Dashboard';
 
 jest.mock('../lib/api', () => ({
-  api: { get: jest.fn() },
+  api: { get: jest.fn(), post: jest.fn(), patch: jest.fn() },
 }));
 
 const get = api.get as jest.Mock;
+const post = api.post as jest.Mock;
+const patch = api.patch as jest.Mock;
 
 /** Resposta de GET /obras/resumo com o seed padrao. */
 const seed: ResumoStatus[] = [
@@ -185,5 +187,45 @@ describe('Dashboard', () => {
       ).toBeInTheDocument();
       expect(get).toHaveBeenCalledWith('/estoque/agente/alertas');
     });
+  });
+});
+
+describe('Dashboard: conexão de volta (OFF-15)', () => {
+  const SEM_CONEXAO = 'Sem conexão e sem dados salvos desta tela neste aparelho.';
+
+  it('o evento online busca de novo o resumo e os alertas, troca o erro pelos dados e nunca roda a análise do agente', async () => {
+    let tentativas = 0;
+    porCaminho(() => {
+      tentativas += 1;
+      return tentativas === 1 ? Promise.reject(new Error(SEM_CONEXAO)) : Promise.resolve(seed);
+    });
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText(SEM_CONEXAO)).toHaveClass('erro');
+    await screen.findByText('Estoque em dia');
+
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+
+    const andamento = await card('Em andamento');
+    expect(andamento.getByTestId('valor')).toHaveTextContent(/^R\$\s8\.500,00$/);
+    expect(screen.queryByText(SEM_CONEXAO)).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(get.mock.calls.map(([c]) => c).sort()).toEqual([
+        '/estoque/agente/alertas',
+        '/estoque/agente/alertas',
+        '/obras/resumo',
+        '/obras/resumo',
+      ]),
+    );
+    // Só leituras: nenhum caminho do agente que não seja a lista de alertas.
+    expect(get.mock.calls.some(([c]) => String(c).includes('analisar'))).toBe(false);
+    // A análise do agente (LLM) é POST /estoque/agente/analisar: reconectar nunca a dispara.
+    expect(post).not.toHaveBeenCalled();
+    expect(patch).not.toHaveBeenCalled();
   });
 });

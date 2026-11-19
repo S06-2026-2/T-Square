@@ -1,8 +1,8 @@
 import { FormEvent, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import Icone from '../components/Icone';
-import { api } from '../lib/api';
+import { api, SESSAO_EXPIRADA } from '../lib/api';
 import { iniciarSessao } from '../lib/sessao';
 import type { LoginResponse } from '../types';
 
@@ -10,9 +10,11 @@ const SEM_CONEXAO_LOGIN = 'Sem conexão. Conecte-se à internet para entrar.';
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const expirou = (location.state as { sessaoExpirada?: boolean } | null)?.sessaoExpirada === true;
   const [email, setEmail] = useState('admin@gesso.com');
   const [senha, setSenha] = useState('admin123');
-  const [erro, setErro] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(expirou ? SESSAO_EXPIRADA : null);
   const [carregando, setCarregando] = useState(false);
 
   async function entrar(evento: FormEvent) {

@@ -162,6 +162,16 @@ describe('IdempotenciaService', () => {
       expect(resultado).toEqual({ id: 'lanc-novo' });
     });
 
+    it('chave com exatamente 24 h ainda vale: replay, sem apagar (IDP-05)', async () => {
+      tx.chaveIdempotencia.findUnique.mockResolvedValue(linha(DIA_MS));
+
+      const resultado = await service.executar(ctx, criar);
+
+      expect(resultado).toEqual({ id: 'lanc-original', valor: '150.5' });
+      expect(tx.chaveIdempotencia.delete).not.toHaveBeenCalled();
+      expect(criar).not.toHaveBeenCalled();
+    });
+
     it('chave com 24 h - 1 ms ainda vale (IDP-05)', async () => {
       tx.chaveIdempotencia.findUnique.mockResolvedValue(linha(DIA_MS - 1));
 

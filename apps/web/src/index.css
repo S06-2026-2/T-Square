@@ -138,6 +138,7 @@ body {
 
 .usuario {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 12px 6px 0;
@@ -171,6 +172,14 @@ body {
   white-space: nowrap;
 }
 
+/* Ícone vermelho de "dados possivelmente desatualizados" ao lado do avatar (OFF-06). */
+.indicador-conexao {
+  display: inline-flex;
+  align-items: center;
+  color: var(--alerta);
+  flex-shrink: 0;
+}
+
 .btn-sair {
   display: inline-flex;
   align-items: center;
@@ -195,6 +204,56 @@ body {
 .btn-sair:hover {
   color: #fff;
   background: rgba(255, 255, 255, 0.06);
+}
+
+/* "Instalar app" (PWA-05, PWA-10). No desktop ocupa uma linha própria abaixo do usuário, com
+   ícone e texto; no celular vira só ícone no topo (bloco <= 900px abaixo). */
+.instalar {
+  position: relative;
+  order: 1;
+  flex-basis: 100%;
+}
+
+.btn-instalar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--raio-sm);
+  color: var(--sidebar-texto);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 500;
+}
+
+.btn-instalar:hover,
+.btn-instalar[aria-expanded='true'] {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Instrução do iPhone, no estilo do painel dos silenciados. No desktop abre para cima. */
+.painel-instalar {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  width: 240px;
+  max-width: calc(100vw - 32px);
+  background: var(--superficie);
+  color: var(--texto);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  box-shadow: var(--sombra-lg);
+  padding: 14px 16px;
+}
+
+.painel-instalar p {
+  margin: 0;
+  font-size: 14px;
 }
 
 .conteudo {
@@ -267,9 +326,43 @@ body {
   }
 
   .usuario {
+    flex-wrap: nowrap;
     margin-left: auto;
     padding: 0;
     border: none;
+  }
+
+  /* Topo do celular: só o ícone; o nome "Instalar app" fica para o leitor de tela. */
+  .instalar {
+    order: 0;
+    flex-basis: auto;
+  }
+
+  .btn-instalar {
+    width: auto;
+    justify-content: center;
+    padding: 6px;
+    border: none;
+  }
+
+  .btn-instalar span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  /* Abre logo abaixo do topo, com as margens da página: o botão fica perto da borda direita e
+     um painel ancorado nele sairia da tela em 320px. */
+  .painel-instalar {
+    position: fixed;
+    top: calc(56px + env(safe-area-inset-top) + 8px);
+    right: 16px;
+    bottom: auto;
+    left: 16px;
+    width: auto;
+    max-width: none;
   }
 
   .conteudo {

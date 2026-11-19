@@ -3,7 +3,9 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { auth } from '../lib/api';
 import { iniciais } from '../lib/formato';
 import { encerrarSessao } from '../lib/sessao';
+import BotaoInstalar from './BotaoInstalar';
 import Icone, { type NomeIcone } from './Icone';
+import IndicadorConexao from './IndicadorConexao';
 
 /** rotulo: sidebar do desktop; rotuloCurto: barra inferior do celular (<= 900px), via CSS. */
 const abas: Array<{ para: string; rotulo: string; rotuloCurto: string; icone: NomeIcone }> = [
@@ -52,8 +54,10 @@ export default function Layout() {
         </nav>
 
         <div className="usuario">
+          <IndicadorConexao />
           <span className="avatar">{iniciais(nome) || '?'}</span>
           <span className="usuario-nome">{nome}</span>
+          <BotaoInstalar />
           <button type="button" className="btn-sair" onClick={sair} title="Sair">
             <Icone nome="sair" />
             <span>Sair</span>

@@ -4,6 +4,7 @@ import LancamentoForm from '../components/forms/LancamentoForm';
 import NovoGesseiroForm from '../components/forms/NovoGesseiroForm';
 import Icone from '../components/Icone';
 import { api } from '../lib/api';
+import { useAoReconectar } from '../lib/conexao';
 import { iniciais, moeda } from '../lib/formato';
 import type { Extrato, Gesseiro } from '../types';
 
@@ -27,6 +28,14 @@ export default function Gesseiros() {
   useEffect(() => {
     void carregar();
   }, []);
+
+  // A conexão voltou: lista e extrato aberto de novo (OFF-15). O extrato é trocado pelo do
+  // mesmo gesseiro, então o LancamentoForm (key = id) não remonta e não rola a tela.
+  useAoReconectar(() => {
+    setErro(null);
+    void carregar();
+    if (extrato) void abrirExtrato(extrato.gesseiro.id);
+  });
 
   async function gesseiroCriado() {
     setMostrarForm(false);

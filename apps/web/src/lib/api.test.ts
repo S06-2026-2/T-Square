@@ -173,6 +173,7 @@ describe('api: 401 (OFF-11)', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(encerrar).toHaveBeenCalledTimes(1);
+    expect(encerrar).toHaveBeenCalledWith('expirada');
     expect(rejeitou).toBe(false);
 
     terminar();

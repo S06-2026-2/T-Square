@@ -23,7 +23,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 | Code Layer | Required Test Type | Coverage Expectation | Location Pattern | Run Command |
 | --- | --- | --- | --- | --- |
-| CSS / estrutura de layout (web) | browser (auditoria Chrome headless) | Toda medida dos RSP da task nas 6 larguras × 14 telas/estados; o script sai ≠ 0 em qualquer falha | `apps/web/scripts/audit-responsive.mjs` | `npm run audit:responsive --workspace apps/web` |
+| CSS / estrutura de layout (web) | browser (auditoria Chrome headless) | Toda medida dos RSP da task nas 6 larguras × 15 telas/estados (mais 14 estados em 1024/1366 com o Chrome de desktop); o script sai ≠ 0 em qualquer falha | `apps/web/scripts/audit-responsive.mjs` | `npm run audit:responsive --workspace apps/web` |
 | Service worker em execução (web) | browser (auditoria Chrome headless, `setOfflineMode`) | OFF-01/03/04/05/06/07/11, PWA-01/03 de ponta a ponta no build de produção | `apps/web/scripts/audit-pwa.mjs` | `npm run audit:pwa --workspace apps/web` |
 | Regras puras do SW (web) | unit (`@jest-environment node`) | Todo ramo de `ehRequisicaoDeDados` (método, origem, `/api/`, `/api/auth/`), plugin (200 vs outros, 7 dias exatos e 1 ms depois, `X-From-Cache`) | `apps/web/src/pwa/*.test.ts` | `npm run test --workspace apps/web` |
 | Libs e hooks (web) | unit | Todo AC da task, incluindo os ramos de falha (sem `caches`, sem `randomUUID`, 0/409/422/401) e o texto exato das mensagens | `apps/web/src/lib/*.test.ts` | `npm run test --workspace apps/web` |
@@ -43,7 +43,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 | --- | --- | --- |
 | Quick | Tasks com testes unitários de um workspace | `npm run test --workspace apps/api` ou `npm run test --workspace apps/web` (o do workspace tocado) |
 | Full (API) | Tasks com e2e e fim das fases 2 e 3 | `npm run test --workspace apps/api && docker exec gesso_api npm run test:e2e` |
-| Browser | Tasks de layout e de SW | `npm run build --workspace apps/web`, `npx vite preview --port 4173` (em `apps/web`, em segundo plano) e `npm run audit:responsive --workspace apps/web` ou `npm run audit:pwa --workspace apps/web`. Precisa da API no Docker (`gesso_api`, para a fixture). O `audit:responsive` só é verde com `medidos: 84/84, nao montados: 0, falhas: 0`; um estado não montado reprova o RSP-01 |
+| Browser | Tasks de layout e de SW | `npm run build --workspace apps/web`, `npx vite preview --port 4173` (em `apps/web`, em segundo plano) e `npm run audit:responsive --workspace apps/web` ou `npm run audit:pwa --workspace apps/web`. Precisa da API no Docker (`gesso_api`, para a fixture). O `audit:responsive` só é verde com `medidos: 118/118, nao montados: 0, falhas: 0` (84/84 até o L3; 118/118 desde o L4); um estado não montado reprova o RSP-01, e uma página logada sem o "Instalar app" conta como não montada |
 | Build | Schema, controller, config e fim de fase | `npm run build && npm test` (raiz: build de API e web, depois as duas suítes) |
 
 Base antes da feature: **API 251 testes, web 147** (todos passando em 2026-11-09; medido de novo no branch `feat/pwa-instalavel-responsivo` em `4fe273c`, a partir da `main` `8e99dc8`, com o mesmo resultado). Nenhuma task pode terminar com menos testes do que começou.
@@ -129,18 +129,19 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [x] Percorre `/login`, `/dashboard` (+ painel "Silenciados" aberto, + justificativa de um alerta aberta pelo "+"), `/obras` (+ "Nova obra", + `details` abertos), `/gesseiros` (+ extrato, + "Novo gesseiro"), `/estoque` (+ "Registrar entrada/saida", + "Novo material", + vindo do "Resolver" de um alerta com `?alerta=&material=&quantidade=`), ou seja, 14 estados, em 320, 360, 390, 768, 1024 e 1366px, com `isMobile`/`hasTouch` nas larguras ≤ 768
+- [x] Percorre `/login`, `/dashboard` (+ painel "Silenciados" aberto, + justificativa de um alerta aberta pelo "+"), `/obras` (+ "Nova obra", + `details` abertos), `/gesseiros` (+ extrato, + "Novo gesseiro"), `/estoque` (+ "Registrar entrada/saida", + "Novo material", + vindo do "Resolver" de um alerta com `?alerta=&material=&quantidade=`), ou seja, 14 estados (15 com a instrução de instalação aberta, desde o L4), em 320, 360, 390, 768, 1024 e 1366px, com `isMobile`/`hasTouch` nas larguras ≤ 768
 - [x] **Fixture** (`apps/api/scripts/fixture-auditoria.mjs`, Prisma Client do container, rodado pela auditoria com `docker exec gesso_api node scripts/fixture-auditoria.mjs preparar|limpar`):
   - `preparar` primeiro apaga qualquer resto `[audit]`. Depois cria dois materiais `[audit] Alerta ativo` (saldo 0, mínimo 10) e `[audit] Silenciado`, uma `AnaliseEstoque` `MANUAL`/`SUCESSO` com `iniciadoEm` em 2000-01-01, um `AlertaEstoque` `ATIVO` `REPOSICAO` com justificativa no primeiro material e um `AlertaEstoque` `DISPENSADO` com `dispensadoEm` = agora no segundo. Imprime em JSON `{ alertaId, materialId, quantidade }`
   - A análise com data de 2000 nunca vira a "última análise" (as consultas ordenam por `iniciadoEm desc`), então não muda o aviso do dashboard nem o catch-up do agendador (`agendador-agente.service.ts:54-58`). O agente LLM não é chamado
   - `limpar` apaga alertas, análise e materiais `[audit]`. A auditoria chama `limpar` num `finally`, inclusive quando falha ou é interrompida (`SIGINT`); ao terminar, nenhum `[audit]` sobra no banco (conferido pela própria auditoria)
   - Mesmo aviso do e2e no Handoff: não rodar durante uma análise real nem perto de uma demonstração do agente
-- [x] **Estado não montado é falha, nunca "pulado"**: para cada um dos 14 estados, a auditoria confere que o estado foi de fato montado antes de medir. Exemplos: o painel `#painel-silenciados` visível com o material `[audit] Silenciado`; a `.justificativa` do alerta `[audit]` visível; `[data-testid="aviso-alerta"]` visível no `/estoque` do "Resolver"; o formulário e o extrato abertos. Se algum não montar (fixture falhou, elemento não apareceu em 5 s), o estado sai como `NAO_MONTADO` no relatório e a auditoria **termina com código 1**, mesmo que as outras medidas tenham passado. Não existe status "pulado"
+- [x] **Estado não montado é falha, nunca "pulado"**: para cada um dos estados, a auditoria confere que o estado foi de fato montado antes de medir. Exemplos: o painel `#painel-silenciados` visível com o material `[audit] Silenciado`; a `.justificativa` do alerta `[audit]` visível; `[data-testid="aviso-alerta"]` visível no `/estoque` do "Resolver"; o formulário e o extrato abertos. Se algum não montar (fixture falhou, elemento não apareceu em 5 s), o estado sai como `NAO_MONTADO` no relatório e a auditoria **termina com código 1**, mesmo que as outras medidas tenham passado. Não existe status "pulado"
 - [x] **Ajuste da revisão do L1**: a auditoria trata `SIGINT` e `SIGTERM` (limpa a fixture e sai com 130) e, no início de cada execução, conta e apaga restos `[audit]` antes do `preparar`. Prova: um `preparar` solto deixou 5 restos; a execução seguinte registrou "5 resto(s) [audit] de uma execução anterior: limpando" e terminou com `{"restos":0}`. Ctrl+C real não é disparável por automação no Windows; a limpeza do início cobre esse caso
 - [x] **Trava de banco**: `fixture-auditoria.mjs` recusa (exit 3, sem abrir conexão, em `preparar`, `limpar` e `contar`) qualquer `DATABASE_URL` cujo host não seja `localhost`, `127.0.0.1`, `::1` ou `db`. Testado com host do Render, IP de rede, URL vazia e URL inválida (todos recusados) e com `db`/`localhost` (aceitos)
 - [x] A auditoria nunca envia formulários: o `/estoque` do "Resolver" é só aberto, nunca salvo, para o alerta `[audit]` não ser resolvido
 - [x] Mede: `scrollWidth == innerWidth`; `.tabela-wrap` rolando por dentro; `.nav` fixa com 4 links e topo ≤ 64px (≤ 900px); último filho de `.conteudo` acima da `.nav` no fim da rolagem; `font-size` ≥ 16 em `input/select/textarea` (≤ 900px); alvos do RSP-08 ≥ 44×44; extrato no topo da viewport depois de selecionar um gesseiro em 360px
-- [x] Imprime um relatório por tela × largura (84 combinações) e sai com código 1 se qualquer medida falhar ou qualquer estado ficar `NAO_MONTADO`. A última linha resume `medidos: N/84, nao montados: M, falhas: F`; o gate só é verde com `84/84, 0, 0`
+- [x] Imprime um relatório por tela × largura (84 combinações; 118 desde o L4) e sai com código 1 se qualquer medida falhar ou qualquer estado ficar `NAO_MONTADO`. A última linha resume `medidos: N/118, nao montados: M, falhas: F`; o gate só é verde com `118/118, 0, 0`
+- [x] **Ajuste da revisão do L4 ("Instalar app" medido de verdade)**: o headless nunca dispara `beforeinstallprompt`, então sem ajuste o `.btn-instalar` não existia e o RSP-08 dele era medido sobre uma lista vazia. Cada largura usa o UA do Safari de um aparelho Apple real (iPhone em 320–768, iPad em 1024/1366), em que o botão aparece no modo `'ios'`. (1) Em toda página logada o `.btn-instalar` precisa estar visível; sem ele o estado sai `NAO_MONTADO` ("botão Instalar app ausente na página logada") e a auditoria reprova. (2) Estado novo `instalar-instrucao` (`/obras`, clique no botão, `#instrucao-instalar` com o texto do PWA-10) e medida PWA-10: a instrução fica inteira dentro da largura da tela. Prova: com o botão forçado a 30×30 no CSS do build, RSP-08 reprova (`button.btn-instalar "Instalar app" 30x30`, exit 1); com o botão escondido, as páginas logadas saem `NAO_MONTADO` (exit 1). (3) Passada extra `1024-chrome` e `1366-chrome`: Chrome de desktop sem toque e sem trocar o UA, com os 14 estados (sem a instrução de instalação e sem exigir o botão), para o RSP-05 continuar medido com mouse. Total: 15 × 6 + 14 × 2 = 118
 - [x] Rodado contra o código atual, **falha** e aponta os mesmos problemas da auditoria de 2026-11-09 (transbordo em 320–390px, topo esticado em 768px, inputs de 14px, alvos pequenos). Esse é o "vermelho" do ciclo
 - [x] Screenshots em `apps/web/.audit/`, ignorado pelo git
 - [x] `CHROME_PATH` configurável, com padrão do Chrome do Windows
@@ -765,6 +766,8 @@ T28 → T29 → T30 → T31
 
 ### T22: Indicador de conexão no topo
 
+**Status**: ✅ Concluída (L4)
+
 **What**: `IndicadorConexao` com o ícone `wifi-off` vermelho, no topo ao lado do avatar.
 **Where**: `apps/web/src/components/IndicadorConexao.tsx` (+ `.test.tsx`), `apps/web/src/components/Icone.tsx`, `apps/web/src/components/Layout.tsx`, `apps/web/src/index.css`
 **Depends on**: None (dentro da fase; usa T17)
@@ -778,11 +781,11 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Desatualizado: renderiza `role="img"` com `aria-label` e `title` exatos "Dados possivelmente desatualizados" e nenhum texto visível
-- [ ] Não desatualizado: não renderiza nada
-- [ ] Testes: offline mostra; `registrarOrigem('cache')` mostra; `registrarOrigem('rede')` com online esconde
-- [ ] Cor `var(--alerta)`; aparece no topo mobile e na área do usuário da sidebar
-- [ ] Gate quick do web passando
+- [x] Desatualizado: renderiza `role="img"` com `aria-label` e `title` exatos "Dados possivelmente desatualizados" e nenhum texto visível
+- [x] Não desatualizado: não renderiza nada
+- [x] Testes: offline mostra; `registrarOrigem('cache')` mostra; `registrarOrigem('rede')` com online esconde
+- [x] Cor `var(--alerta)`; aparece no topo mobile e na área do usuário da sidebar
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -792,6 +795,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T23: Telas recarregam ao reconectar
+
+**Status**: ✅ Concluída (L4)
 
 **What**: `useAoReconectar(carregar)` em `Dashboard`, `Obras`, `Gesseiros` (lista + extrato aberto), `Estoque` e `AlertasEstoque`.
 **Where**: `apps/web/src/pages/` → `Dashboard.tsx`, `Obras.tsx`, `Gesseiros.tsx`, `Estoque.tsx`; `apps/web/src/components/AlertasEstoque.tsx` (+ testes de cada um)
@@ -806,10 +811,10 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Em cada tela, `window.dispatchEvent(new Event('online'))` chama de novo o GET da tela (`api.get` mockado)
-- [ ] Teste em `Estoque` e `Gesseiros`: com um formulário aberto e preenchido, o evento `online` recarrega os dados e o formulário continua aberto com os valores
-- [ ] `Gesseiros` com extrato aberto: o extrato também é buscado de novo
-- [ ] Gate quick do web passando
+- [x] Em cada tela, `window.dispatchEvent(new Event('online'))` chama de novo o GET da tela (`api.get` mockado)
+- [x] Teste em `Estoque` e `Gesseiros`: com um formulário aberto e preenchido, o evento `online` recarrega os dados e o formulário continua aberto com os valores
+- [x] `Gesseiros` com extrato aberto: o extrato também é buscado de novo
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -819,6 +824,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T24: Estado de instalação
+
+**Status**: ✅ Concluída (L4)
 
 **What**: `lib/instalacao.ts` com `iniciarCapturaInstalacao()` e `useInstalacao()`.
 **Where**: `apps/web/src/lib/instalacao.ts`, `instalacao.test.ts`
@@ -833,12 +840,12 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `beforeinstallprompt` chama `preventDefault()` e o modo vira `'prompt'`
-- [ ] `instalar()` chama `prompt()`, aguarda `userChoice` e o modo vira `null` tanto em `accepted` quanto em `dismissed`; um novo `beforeinstallprompt` volta a `'prompt'`
-- [ ] `appinstalled` vira `null`
-- [ ] `display-mode: standalone` ou `navigator.standalone`: `null`, mesmo com evento
-- [ ] UA de iPhone/iPad Safari (e `MacIntel` com `maxTouchPoints > 1`): `'ios'`; com `CriOS`/`FxiOS`/`EdgiOS`: `null`; Firefox desktop sem evento: `null`
-- [ ] Gate quick do web passando
+- [x] `beforeinstallprompt` chama `preventDefault()` e o modo vira `'prompt'`
+- [x] `instalar()` chama `prompt()`, aguarda `userChoice` e o modo vira `null` tanto em `accepted` quanto em `dismissed`; um novo `beforeinstallprompt` volta a `'prompt'`
+- [x] `appinstalled` vira `null`
+- [x] `display-mode: standalone` ou `navigator.standalone`: `null`, mesmo com evento
+- [x] UA de iPhone/iPad Safari (e `MacIntel` com `maxTouchPoints > 1`): `'ios'`; com `CriOS`/`FxiOS`/`EdgiOS`: `null`; Firefox desktop sem evento: `null`
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -848,6 +855,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T25: Botão "Instalar app"
+
+**Status**: ✅ Concluída (L4)
 
 **What**: `BotaoInstalar` (prompt e instrução do iOS) no topo mobile e na área do usuário da sidebar; ícone `instalar`.
 **Where**: `apps/web/src/components/BotaoInstalar.tsx` (+ `.test.tsx`), `apps/web/src/components/Icone.tsx`, `apps/web/src/components/Layout.tsx`, `apps/web/src/index.css`
@@ -862,11 +871,12 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `modo === null`: nada renderizado
-- [ ] `'prompt'`: botão com nome acessível "Instalar app"; clique chama `instalar()`
-- [ ] `'ios'`: o clique abre o texto exato "Toque em Compartilhar e depois em Adicionar à Tela de Início"; Esc ou clique fora fecha
-- [ ] `.btn-instalar` com 44×44 no ≤ 900px (regra da T4)
-- [ ] Gate quick do web passando; auditoria de responsividade continua verde (fim da fase 5)
+- [x] `modo === null`: nada renderizado
+- [x] `'prompt'`: botão com nome acessível "Instalar app"; clique chama `instalar()`
+- [x] `'ios'`: o clique abre o texto exato "Toque em Compartilhar e depois em Adicionar à Tela de Início"; Esc ou clique fora fecha
+- [x] `.btn-instalar` com 44×44 no ≤ 900px (regra da T4), **medido pela auditoria** (UA do Safari de iPhone/iPad; presença obrigatória nas páginas logadas, ver T1)
+- [x] Estado `instalar-instrucao` da auditoria: a instrução do PWA-10 aberta cabe na tela em todas as larguras (o painel é `position: fixed` com margens de 16px no ≤ 900px)
+- [x] Gate quick do web passando; auditoria de responsividade verde com `118/118, 0, 0` contra o `vite preview` 4173 (fim da fase 5)
 
 **Tests**: unit + browser
 **Gate**: quick (web) + browser
@@ -876,6 +886,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T26: Ícones do app
+
+**Status**: ✅ Concluída (L5)
 
 **What**: Script que renderiza o SVG da marca em PNG e os ícones em `public/`; `index.html` com `apple-touch-icon` e `apple-mobile-web-app-title`.
 **Where**: `apps/web/scripts/gerar-icones.mjs` (novo), `apps/web/public/icone-192.png`, `icone-512.png`, `icone-512-maskable.png`, `apple-touch-icon.png` (gerados), `apps/web/index.html`
@@ -890,10 +902,10 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] PNGs com as dimensões exatas 192×192, 512×512, 512×512 e 180×180 (conferidas pelo próprio script, que lê o cabeçalho IHDR do PNG)
-- [ ] Maskable com fundo cheio `#1f6f5c` e desenho dentro do círculo de 80% (conferido visualmente e registrado no commit)
-- [ ] `index.html` com `<link rel="apple-touch-icon" href="/apple-touch-icon.png">` e `<meta name="apple-mobile-web-app-title" content="Gesso">`
-- [ ] Gate build passando
+- [x] PNGs com as dimensões exatas 192×192, 512×512, 512×512 e 180×180 (conferidas pelo próprio script, que lê o cabeçalho IHDR do PNG)
+- [x] Maskable com fundo cheio `#1f6f5c` e desenho dentro do círculo de 80% (conferido visualmente e registrado no commit)
+- [x] `index.html` com `<link rel="apple-touch-icon" href="/apple-touch-icon.png">` e `<meta name="apple-mobile-web-app-title" content="Gesso">`
+- [x] Gate build passando
 
 **Tests**: none
 **Gate**: build
@@ -903,6 +915,10 @@ T28 → T29 → T30 → T31
 ---
 
 ### T27: Regras de cache do service worker (puras)
+
+**Status**: ✅ Concluída (L5)
+
+**Desvio do design (L5)**: O nome `api-dados` mora em `apps/web/src/pwa/nomes-cache.ts` (sem dependências), importado pelo `regras-cache.ts` e reexportado pelo `lib/sessao.ts`: um valor só para quem grava e quem apaga, e o `sw.js` não carrega o `api.ts`. O plugin é criado por `criarPluginRecebimento(agora)` para o teste fixar o relógio; `pluginRecebimento` é a instância do SW.
 
 **What**: `src/pwa/regras-cache.ts` com `ehRequisicaoDeDados`, `pluginRecebimento`, `origensApi` e as constantes (`NOME_CACHE_API` reexportada de `sessao.ts`, `SETE_DIAS`).
 **Where**: `apps/web/src/pwa/regras-cache.ts`, `regras-cache.test.ts` (`@jest-environment node`)
@@ -917,11 +933,11 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `ehRequisicaoDeDados`: GET `/api/obras` da origem da API é verdadeiro; o mesmo com query string é verdadeiro; POST/PATCH/PUT/DELETE são falsos; `/api/auth/login` é falso; outra origem é falsa; `/assets/x.js` é falso
-- [ ] `cacheWillUpdate`: 200 devolve cópia com `X-Recebido-Em` numérico e o mesmo corpo; 404/500 devolvem `null`
-- [ ] `cachedResponseWillBeUsed`: recebida há exatamente 7 dias devolve a resposta; 7 dias + 1 ms devolve `null`; sem `X-Recebido-Em`, `null`; resposta válida sai com `X-From-Cache: 1` e corpo intacto
-- [ ] `origensApi('http://localhost:3000', 'http://localhost:4173')` devolve as duas; `undefined` ou igual à própria devolve uma
-- [ ] Gate quick do web passando
+- [x] `ehRequisicaoDeDados`: GET `/api/obras` da origem da API é verdadeiro; o mesmo com query string é verdadeiro; POST/PATCH/PUT/DELETE são falsos; `/api/auth/login` é falso; outra origem é falsa; `/assets/x.js` é falso
+- [x] `cacheWillUpdate`: 200 devolve cópia com `X-Recebido-Em` numérico e o mesmo corpo; 404/500 devolvem `null`
+- [x] `cachedResponseWillBeUsed`: recebida há exatamente 7 dias devolve a resposta; 7 dias + 1 ms devolve `null`; sem `X-Recebido-Em`, `null`; resposta válida sai com `X-From-Cache: 1` e corpo intacto
+- [x] `origensApi('http://localhost:3000', 'http://localhost:4173')` devolve as duas; `undefined` ou igual à própria devolve uma
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -931,6 +947,10 @@ T28 → T29 → T30 → T31
 ---
 
 ### T28: Service worker e manifest no build
+
+**Status**: ✅ Concluída (L5)
+
+**Desvio do design (L5)**: O manifest é `apps/web/src/pwa/manifest.json` (no lugar de `manifest.ts`), lido pelo `vite.config.ts`, pelo `manifest.test.ts` (`jest.requireActual`) e pelo `checar-build.mjs`: o ts-jest do web (CommonJS, sem `esModuleInterop`) não importa JSON por default import e o web não tem `@types/node`. O vite-plugin-pwa preenche `description` com a do `package.json`; o `vite.config.ts` passa `description: undefined` para o manifest ficar só com os campos do PWA-01. O `sw.ts` usa o `BASE_URL` de `lib/config.ts` (o mesmo do `api.ts`, com o padrão `http://localhost:3000`) em vez de ler `VITE_API_URL` direto. O `tsconfig.sw.json` inclui só `sw.ts`, `pwa/regras-cache.ts`, `pwa/nomes-cache.ts` e `lib/config.ts`.
 
 **What**: `vite-plugin-pwa@1.3.0` em `injectManifest` com o manifest do spec; `src/sw.ts` com precache, fallback de navegação, `NetworkFirst` de dados, fontes, `skipWaiting` e `clientsClaim`; `tsconfig.sw.json`; manifest em `src/pwa/manifest.ts` testado.
 **Where**: `apps/web/vite.config.ts`, `apps/web/src/sw.ts` (novo), `apps/web/src/pwa/manifest.ts` (+ `manifest.test.ts`), `apps/web/tsconfig.sw.json` (novo), `apps/web/tsconfig.json` (excluir `src/sw.ts`), `apps/web/package.json` (`vite-plugin-pwa`, `workbox-core`, `-precaching`, `-routing`, `-strategies`, `-expiration`, `-cacheable-response` `@7.4.1`; `build` também roda `tsc -p tsconfig.sw.json`)
@@ -945,12 +965,12 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `manifest.test.ts`: `id` "/", `name` "Gesso Manager", `short_name` "Gesso", `lang` "pt-BR", `start_url` e `scope` "/", `display` "standalone", `theme_color` "#0f2a24", `background_color` "#f3f5f4" e os 3 ícones com tamanhos e `purpose` exatos
-- [ ] `injectRegister: false`, `devOptions.enabled: false`
-- [ ] `sw.ts` registra exatamente o que o design lista: `NavigationRoute` com `denylist: [/^\/api\//]`; `NetworkFirst` com `networkTimeoutSeconds: 5`, `CacheableResponsePlugin([200])`, `ExpirationPlugin({ maxEntries: 200, maxAgeSeconds: 7 dias })` e `pluginRecebimento`; fontes conforme o design
-- [ ] `npm run build --workspace apps/web` gera `dist/sw.js` e `dist/manifest.webmanifest`, e o manifest gerado é igual ao do teste
-- [ ] `npm run dev` não gera nem registra SW (`/sw.js` em dev responde 404 ou o `index.html`)
-- [ ] Gate quick do web + build passando
+- [x] `manifest.test.ts`: `id` "/", `name` "Gesso Manager", `short_name` "Gesso", `lang` "pt-BR", `start_url` e `scope` "/", `display` "standalone", `theme_color` "#0f2a24", `background_color` "#f3f5f4" e os 3 ícones com tamanhos e `purpose` exatos
+- [x] `injectRegister: false`, `devOptions.enabled: false`
+- [x] `sw.ts` registra exatamente o que o design lista: `NavigationRoute` com `denylist: [/^\/api\//]`; `NetworkFirst` com `networkTimeoutSeconds: 5`, `CacheableResponsePlugin([200])`, `ExpirationPlugin({ maxEntries: 200, maxAgeSeconds: 7 dias })` e `pluginRecebimento`; fontes conforme o design
+- [x] `npm run build --workspace apps/web` gera `dist/sw.js` e `dist/manifest.webmanifest`, e o manifest gerado é igual ao do teste
+- [x] `npm run dev` não gera nem registra SW (`/sw.js` em dev responde 404 ou o `index.html`)
+- [x] Gate quick do web + build passando
 
 **Tests**: unit
 **Gate**: quick (web) + build
@@ -960,6 +980,8 @@ T28 → T29 → T30 → T31
 ---
 
 ### T29: Registro do service worker
+
+**Status**: ✅ Concluída (L5)
 
 **What**: `src/pwa/registrar-sw.ts` (registro só no build de produção, sem recarregar a página) e `main.tsx` chamando `iniciarCapturaInstalacao()` e `registrarSw()`.
 **Where**: `apps/web/src/pwa/registrar-sw.ts` (+ `.test.ts`), `apps/web/src/main.tsx`
@@ -974,11 +996,11 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] `registrarSw({ prod: true })` com `serviceWorker` disponível chama `register('/sw.js', { scope: '/' })`
-- [ ] `prod: false` não registra; sem `serviceWorker` no navegador não registra nem lança erro
-- [ ] Nenhum listener de `controllerchange` ou chamada a `location.reload` (teste espia os dois)
-- [ ] `main.tsx` chama `iniciarCapturaInstalacao()` antes do `render` e `registrarSw({ prod: import.meta.env.PROD })`
-- [ ] Gate quick do web passando
+- [x] `registrarSw({ prod: true })` com `serviceWorker` disponível chama `register('/sw.js', { scope: '/' })`
+- [x] `prod: false` não registra; sem `serviceWorker` no navegador não registra nem lança erro
+- [x] Nenhum listener de `controllerchange` ou chamada a `location.reload` (teste espia os dois)
+- [x] `main.tsx` chama `iniciarCapturaInstalacao()` antes do `render` e `registrarSw({ prod: import.meta.env.PROD })`
+- [x] Gate quick do web passando
 
 **Tests**: unit
 **Gate**: quick (web)
@@ -988,6 +1010,10 @@ T28 → T29 → T30 → T31
 ---
 
 ### T30: Build em chunk único e `sw.js` sem cache longo
+
+**Status**: ✅ Concluída (L5)
+
+**Desvio do design (L5)**: O `scripts/checar-build.mjs` também confere o PWA-01/02/03 no `dist`: `sw.js` gerado, `manifest.webmanifest` igual a `src/pwa/manifest.json` (deepStrictEqual) e os PNGs com o tamanho declarado (IHDR). Provas de mutação (revertidas): `React.lazy` temporário → 2 chunks + `import()` reprovados (AD-010); cópia do `dist` com `description` a mais, sem `id`, maskable 192×192 e sem `sw.js` → 3 falhas.
 
 **What**: Script que falha se o build tiver mais de um `.js` em `dist/assets` ou algum `import()` dinâmico (AD-010, UPD-04); `vercel.json` com `Cache-Control: no-cache` em `/sw.js`.
 **Where**: `apps/web/scripts/checar-build.mjs` (novo), `apps/web/package.json` (`build` roda o checador no fim), `apps/web/vercel.json`
@@ -1002,10 +1028,10 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] Build atual passa (um `.js` só)
-- [ ] Com um `React.lazy` temporário numa tela, o build falha com mensagem citando a AD-010 (testado e revertido; registrado no commit)
-- [ ] `vercel.json` com `headers` de `/sw.js`: `Cache-Control: no-cache`; os `rewrites` atuais continuam
-- [ ] Gate build passando
+- [x] Build atual passa (um `.js` só)
+- [x] Com um `React.lazy` temporário numa tela, o build falha com mensagem citando a AD-010 (testado e revertido; registrado no commit)
+- [x] `vercel.json` com `headers` de `/sw.js`: `Cache-Control: no-cache`; os `rewrites` atuais continuam
+- [x] Gate build passando
 
 **Tests**: none
 **Gate**: build
@@ -1015,6 +1041,10 @@ T28 → T29 → T30 → T31
 ---
 
 ### T31: Auditoria do PWA no navegador
+
+**Status**: ✅ Concluída (L5)
+
+**Desvio do design (L5)**: A fixture vem de `apps/web/scripts/fixture-cliente.mjs`, extraído da `audit-responsive.mjs` e usado pelas duas auditorias (mesma trava e mesma limpeza no fim, em erro e em SIGINT/SIGTERM). "Sem rede" e "API lenta (6 s)" são aplicados também no alvo do service worker via CDP (`Network.emulateNetworkConditions`), porque o `setOfflineMode` da página não alcança o fetch do SW. Conferências a mais: nenhuma entrada de `/api/auth`, só GET 200; 401 com rede chega como 401 (Edge Case); 401 automático apaga o cache; no fim, Cache Storage e SW removidos. Provas de mutação no SW (revertidas): sem `denylist` → a navegação a `/api/obras` offline recebe o app (OFF-01 reprova); `X-From-Cache` renomeado → OFF-04 e API lenta reprovam.
 
 **What**: `audit-pwa.mjs` contra o `vite preview`, verificando o PWA de ponta a ponta com `page.setOfflineMode`; script `audit:pwa`.
 **Where**: `apps/web/scripts/audit-pwa.mjs` (novo), `apps/web/package.json`
@@ -1029,21 +1059,122 @@ T28 → T29 → T30 → T31
 
 **Done when**:
 
-- [ ] SW ativo com escopo "/" e `manifest.webmanifest` servido com os campos do PWA-01 (PWA-03)
-- [ ] Online: abre `/obras`, `/estoque` e um extrato; o cache `api-dados` tem as 3 URLs com `X-Recebido-Em`
-- [ ] Offline + recarregar em `/estoque`: a página abre, a tabela mostra os materiais e o ícone com `aria-label` "Dados possivelmente desatualizados" aparece (OFF-01/04/06)
-- [ ] Offline, extrato de um gesseiro nunca aberto: `.erro` com o texto do OFF-05
-- [ ] Offline, `fetch('/api/obras')` direto pela página não recebe HTML (o fallback de navegação não responde `/api/**`)
-- [ ] De volta online: a tela busca de novo e o ícone some (OFF-07/15)
-- [ ] API lenta (requisição interceptada com atraso de 6 s): a tela mostra o cache e o ícone (OFF-03)
-- [ ] "Sair": `caches.has('api-dados')` falso ou cache vazio (OFF-11)
-- [ ] Sai com código ≠ 0 em qualquer falha; screenshots em `.audit/`
-- [ ] Gate browser (as duas auditorias) + build passando (fim da fase 6)
+- [x] SW ativo com escopo "/" e `manifest.webmanifest` servido com os campos do PWA-01 (PWA-03)
+- [x] Online: abre `/obras`, `/estoque` e um extrato; o cache `api-dados` tem as 3 URLs com `X-Recebido-Em`
+- [x] Offline + recarregar em `/estoque`: a página abre, a tabela mostra os materiais e o ícone com `aria-label` "Dados possivelmente desatualizados" aparece (OFF-01/04/06)
+- [x] Offline, extrato de um gesseiro nunca aberto: `.erro` com o texto do OFF-05
+- [x] Offline, `fetch('/api/obras')` direto pela página não recebe HTML (o fallback de navegação não responde `/api/**`)
+- [x] De volta online: a tela busca de novo e o ícone some (OFF-07/15)
+- [x] API lenta (requisição interceptada com atraso de 6 s): a tela mostra o cache e o ícone (OFF-03)
+- [x] "Sair": `caches.has('api-dados')` falso ou cache vazio (OFF-11)
+- [x] Sai com código ≠ 0 em qualquer falha; screenshots em `.audit/`
+- [x] Gate browser (as duas auditorias) + build passando (fim da fase 6)
 
 **Tests**: browser
 **Gate**: browser + build
 
 **Commit**: `test(pwa): auditoria do service worker e da leitura offline`
+
+---
+
+## Phase 7: Correções do Verifier (rodada 1, 2026-11-09)
+
+O Verifier da rodada 1 (`validation.md`, FAIL) deixou 1 mutante sobrevivente, 2 Edge Cases sem teste, a volta a `/login` do OFF-11 e lacunas menores. Decisões do usuário: OFF-11 pela opção A (corrigir o app); UPD-01/02 e RSP-11/12 ficam como verificação manual no `validation.md` (não automatizar); IDP-05 com exatamente 24 h ainda vale, como implementado no L2.
+
+### T32: Volta a `/login` depois do 401, sem recarregar (OFF-11)
+
+**Status**: ✅ Concluída (correções)
+
+**What**: Sessão observável (`useSessaoAtiva`, `motivoFimSessao`) em `lib/sessao.ts`; o `encerrarSessao(motivo)` avisa a tela só depois de apagar o cache; a `RotaPrivada` reage e leva a `/login` com `state.sessaoExpirada`; o login mostra "Sessao expirada. Faca login novamente." (`SESSAO_EXPIRADA` em `lib/api.ts`).
+**Where**: `apps/web/src/lib/sessao.ts`, `apps/web/src/lib/api.ts`, `apps/web/src/App.tsx`, `apps/web/src/pages/Login.tsx`, testes em `App.test.tsx`, `lib/sessao.test.ts`, `lib/api.test.ts`; `apps/web/scripts/audit-pwa.mjs` (passo 11)
+**Requirement**: OFF-11, Edge Case do 401
+
+**Done when**:
+
+- [x] 401 com a tela aberta: cache apagado antes da troca de tela, `/login` sem recarregar e a mensagem no `.erro` do login (`App.test.tsx`)
+- [x] "Sair" leva a `/login` sem a mensagem de sessão expirada
+- [x] A tela só é avisada depois do `caches.delete` (`sessao.test.ts`); 401 chama `encerrarSessao('expirada')` (`api.test.ts`)
+- [x] Mutantes mortos: avisar antes de apagar o cache (2 falhas); `RotaPrivada` lendo o token só no render, como na `main` (2 falhas)
+- [x] `audit:pwa` passo 11: troca de aba com token vencido vai a `/login` sem recarregar, com a mensagem e o cache ausente
+
+### T33: Estratégia do cache de dados testada por inteiro (OFF-03/09/10/14)
+
+**Status**: ✅ Concluída (correções)
+
+**What**: `criarEstrategiaDados(classes)` em `pwa/regras-cache.ts` monta o `NetworkFirst` com todas as opções; o `sw.ts` só injeta as classes do Workbox, sem nenhum valor solto.
+**Where**: `apps/web/src/pwa/regras-cache.ts`, `apps/web/src/sw.ts`, `apps/web/src/pwa/regras-cache.test.ts`
+**Requirement**: OFF-03, OFF-09, OFF-10, OFF-14
+
+**Done when**:
+
+- [x] Teste com classes falsas confere `api-dados`, 5 s, `statuses: [200]`, `maxEntries: 200`, `maxAgeSeconds: 604800` e o `pluginRecebimento` na ordem
+- [x] Mutantes mortos: `MAX_ENTRADAS * 500` (o sobrevivente da rodada 1), timeout 10 s, `statuses: [200, 404]`
+- [x] Build compila com as classes reais (`tsc -p tsconfig.sw.json`)
+
+### T34: Nome longo, troca de largura e RSP-07 com toque acima de 900px
+
+**Status**: ✅ Concluída (correções)
+
+**What**: Na `audit:responsive`: (1) o primeiro material, obra e gesseiro de cada lista chegam com um nome de 120 caracteres (fetch embrulhado na página, nada gravado no banco); `obras`, `gesseiros` e `estoque` só contam como montados com o nome na tela, e em 320px o nome tem de quebrar em 2+ linhas sem passar da tela; (2) iPad em 1024/1366 com toque (`pointer: coarse`), e o RSP-07 medido também em `pointer: coarse`; (3) troca de largura 1366 → 390 com o formulário "Novo gesseiro" preenchido: barra inferior fixa, sem recarregar e com o campo mantido.
+**Where**: `apps/web/scripts/audit-responsive.mjs`
+**Requirement**: Edge Cases (nome longo, troca de largura), RSP-07
+
+**Done when**:
+
+- [x] `medidos: 118/118, nao montados: 0, falhas: 0` com os nomes longos e o iPad com toque
+- [x] `troca de largura 1366 -> 390 com formulário preenchido: OK`
+
+### T35: Armazenamento cheio (Edge Case)
+
+**Status**: ✅ Concluída (correções)
+
+**What**: Passo 8b da `audit:pwa`: cota da origem travada no uso atual via CDP (`Storage.overrideQuotaForOrigin`); `/estoque` mostra os dados da API, sem o ícone, e o cache fica sem a entrada (prova de que a gravação falhou).
+**Where**: `apps/web/scripts/audit-pwa.mjs`
+**Requirement**: Edge Case (armazenamento cheio)
+
+**Done when**:
+
+- [x] `audit:pwa` 14/14
+- [x] Mutante (cota ×100): a gravação acontece e a conferência reprova
+
+### T36: Tags do iPhone conferidas no build (PWA-02)
+
+**Status**: ✅ Concluída (correções)
+
+**What**: `checar-build.mjs` exige no `dist/index.html` o `<link rel="apple-touch-icon" href="/apple-touch-icon.png">` e o `<meta name="apple-mobile-web-app-title" content="Gesso">`.
+**Where**: `apps/web/scripts/checar-build.mjs`
+**Requirement**: PWA-02
+
+**Done when**:
+
+- [x] Build atual passa; cópia do `dist` com as duas tags alteradas dá 2 falhas
+
+### T37: OFF-08 no formulário de edição
+
+**Status**: ✅ Concluída (correções)
+
+**What**: Teste do `MateriaisPrevistosForm` (o único formulário de edição, PUT): sem rede, mostra a mensagem do OFF-08 no `.erro`, mantém o valor editado e não reenvia sozinho.
+**Where**: `apps/web/src/components/forms/MateriaisPrevistosForm.test.tsx`
+**Requirement**: OFF-08
+
+**Done when**:
+
+- [x] Teste passando
+
+### T38: Fronteira do IDP-05 e precisão do spec
+
+**Status**: ✅ Concluída (correções)
+
+**What**: Teste de chave com exatamente 24 h (replay, sem apagar). Texto do spec: RSP-06 ("pelo menos" a altura da barra), RSP-11/12 (verificação manual em aparelho real), OFF-13 (campo de senha esvaziado), IDP-01 (UUID v4 com fallback `getRandomValues`), IDP-05 (24 h exatas ainda valem), Edge Case do 401 (alinhado ao OFF-11 corrigido).
+**Where**: `apps/api/src/idempotencia/idempotencia.service.spec.ts`, `spec.md`
+**Requirement**: IDP-05, RSP-06, RSP-11, RSP-12, OFF-13, IDP-01
+
+**Done when**:
+
+- [x] Mutante `>=` no vencimento morto pelo teste novo
+- [x] Spec atualizado
+
+**Verificação manual (sem automação, decisão do usuário)**: UPD-01/02 (versão nova do SW instala e ativa sozinha) e RSP-11/12 (`dvh` e safe areas em aparelho real com notch). Roteiro no `validation.md`.
 
 ---
 

@@ -37,6 +37,8 @@ export class ApiError extends Error {
 }
 
 /** Falha de rede (`fetch` rejeitou, inclusive o SW sem cópia): status 0, mensagem por método. */
+/** 401: a sessão acabou (o login também a mostra, OFF-11). */
+export const SESSAO_EXPIRADA = 'Sessao expirada. Faca login novamente.';
 export const SEM_CONEXAO_LEITURA = 'Sem conexão e sem dados salvos desta tela neste aparelho.';
 export const SEM_CONEXAO_ENVIO =
   'Sem conexão: não foi possível confirmar o envio. Tente de novo; o mesmo lançamento não será duplicado.';
@@ -65,8 +67,8 @@ async function request<T>(caminho: string, options: RequestInit = {}): Promise<T
   }
 
   if (resposta.status === 401) {
-    await encerrarSessao();
-    throw new ApiError('Sessao expirada. Faca login novamente.', 401);
+    await encerrarSessao('expirada');
+    throw new ApiError(SESSAO_EXPIRADA, 401);
   }
 
   if (!resposta.ok) {

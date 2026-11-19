@@ -1,8 +1,15 @@
 // Auditoria de responsividade (spec pwa-instalavel-responsivo, RSP-01..RSP-10).
 //
-// Percorre 14 telas/estados em 6 larguras (84 combinações) num Chrome headless e mede o layout.
+// Percorre 15 telas/estados em 6 larguras com o UA do Safari da Apple (90 combinações) e, de novo,
+// 14 estados em 1024/1366 com o Chrome de desktop sem toque (28), num total de 118, e mede o layout.
 // Sai com código 1 se qualquer medida falhar, se algum estado não montar (NAO_MONTADO) ou se
 // sobrar dado "[audit]" no banco. Não existe estado "pulado".
+//
+// Edge Cases: o primeiro material, obra e gesseiro de cada lista chegam com um nome de 120
+// caracteres (troca na resposta do GET, na página; nada vai ao banco) e precisam quebrar a linha
+// em 320px; no fim, a troca de largura 1366 -> 390 com um formulário preenchido não pode recarregar
+// a página nem perder o que foi digitado. O iPad (1024/1366) tem toque, e o RSP-07 vale também
+// para `pointer: coarse`.
 //
 // Pré-requisitos: o front servido em AUDIT_BASE_URL (padrão: `vite preview`, porta 4173) e a API
 // no Docker (container gesso_api), que roda a fixture dos alertas:
@@ -11,67 +18,50 @@
 //
 // Variáveis: AUDIT_BASE_URL, AUDIT_API_URL (padrão http://localhost:3000), CHROME_PATH,
 // AUDIT_API_CONTAINER (padrão gesso_api). Screenshots e relatorio.json vão para apps/web/.audit/.
-import { execFileSync } from 'node:child_process';
+//
+// "Instalar app" (RSP-08, PWA-10): o headless nunca dispara beforeinstallprompt, então o botão só
+// existe no modo 'ios'. Por isso cada largura usa o UA do Safari de um aparelho Apple real
+// (iPhone até 768px, iPad em 1024/1366): o botão aparece em toda página logada e é medido.
+// A passada "chrome" em 1024/1366 mede o desktop com mouse como ele é no Chrome (sem o botão, que
+// lá só aparece com beforeinstallprompt): nela o botão não é exigido e o estado da instrução não roda.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import puppeteer from 'puppeteer-core';
 
+import { limparFixture, prepararFixture, relatarLimpeza } from './fixture-cliente.mjs';
+
 const BASE = (process.env.AUDIT_BASE_URL ?? 'http://localhost:4173').replace(/\/$/, '');
 const API = (process.env.AUDIT_API_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 const CHROME = process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const CONTAINER = process.env.AUDIT_API_CONTAINER ?? 'gesso_api';
 const SAIDA = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.audit');
 const ESPERA_MONTAGEM = 5000;
 
+const UA_IPHONE =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+const UA_IPAD =
+  'Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+
 const LARGURAS = [
-  { largura: 320, altura: 640, toque: true, escala: 2 },
-  { largura: 360, altura: 780, toque: true, escala: 2 },
-  { largura: 390, altura: 844, toque: true, escala: 2 },
-  { largura: 768, altura: 1024, toque: true, escala: 1 },
-  { largura: 1024, altura: 768, toque: false, escala: 1 },
-  { largura: 1366, altura: 768, toque: false, escala: 1 },
+  { largura: 320, altura: 640, toque: true, escala: 2, ua: UA_IPHONE },
+  { largura: 360, altura: 780, toque: true, escala: 2, ua: UA_IPHONE },
+  { largura: 390, altura: 844, toque: true, escala: 2, ua: UA_IPHONE },
+  { largura: 768, altura: 1024, toque: true, escala: 1, ua: UA_IPHONE },
+  // iPad: tela de toque (pointer: coarse, mede o RSP-07 acima de 900px), sem o modo celular.
+  { largura: 1024, altura: 768, toque: true, movel: false, escala: 1, ua: UA_IPAD },
+  { largura: 1366, altura: 768, toque: true, movel: false, escala: 1, ua: UA_IPAD },
+  // Chrome de desktop, sem toque e sem trocar o UA (RSP-05 com mouse).
+  { largura: 1024, altura: 768, toque: false, escala: 1, ua: null, rotulo: '1024-chrome' },
+  { largura: 1366, altura: 768, toque: false, escala: 1, ua: null, rotulo: '1366-chrome' },
 ];
 
-// ---------------------------------------------------------------- fixture
+/** Estados medidos numa largura: a instrução de instalação só existe com o UA da Apple. */
+const estadosDa = (v) => ESTADOS.filter((e) => v.ua || !e.precisaInstalar);
+const nomeDa = (v) => v.rotulo ?? String(v.largura);
 
-function fixture(comando) {
-  const saida = execFileSync(
-    'docker',
-    ['exec', CONTAINER, 'node', 'scripts/fixture-auditoria.mjs', comando],
-    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
-  );
-  const linhas = saida.trim().split('\n');
-  return JSON.parse(linhas[linhas.length - 1]);
-}
-
-let limpo = false;
-function limparFixture() {
-  if (limpo) return null;
-  limpo = true;
-  try {
-    return fixture('limpar').restos;
-  } catch (erro) {
-    console.error(`[audit] falha ao limpar a fixture: ${erro.message}`);
-    return null;
-  }
-}
-
-// Ctrl+C (SIGINT) ou encerramento (SIGTERM): limpa antes de sair. Se nem isso rodar (processo
-// morto à força), a limpeza do início da próxima execução apaga os restos.
-for (const sinal of ['SIGINT', 'SIGTERM']) {
-  process.on(sinal, () => {
-    console.error(`\n[audit] ${sinal}: limpando a fixture antes de sair...`);
-    const restos = limparFixture();
-    console.error(
-      restos === 0
-        ? '[audit] fixture limpa: nenhum registro [audit] no banco'
-        : `[audit] ERRO: a limpeza deixou ${restos ?? '?'} registro(s) [audit] no banco`,
-    );
-    process.exit(130);
-  });
-}
+// A fixture (trava de banco local, limpeza no fim e em SIGINT/SIGTERM) fica em fixture-cliente.mjs,
+// compartilhada com a audit-pwa.mjs.
 
 // ---------------------------------------------------------------- helpers de página
 
@@ -103,12 +93,66 @@ async function clicar(page, seletor, texto) {
   );
 }
 
+// Edge Case "nome longo (até 120 caracteres)": o primeiro material, a primeira obra e o primeiro
+// gesseiro de cada lista chegam à tela com um nome de 120 caracteres. A troca é feita na resposta
+// do GET dentro da página (fetch embrulhado), sem gravar nada no banco.
+const NOME_LONGO = (
+  'Residencial Jardim das Acácias bloco B apartamento 1204 forro de gesso acartonado ' +
+  'com sanca invertida e iluminação embutida na sala'
+).slice(0, 120);
+if (NOME_LONGO.length !== 120) throw new Error(`NOME_LONGO com ${NOME_LONGO.length} caracteres`);
+
+function embrulharFetchComNomeLongo(nome) {
+  const original = window.fetch.bind(window);
+  const campos = { '/api/estoque/materiais': 'nome', '/api/obras': 'titulo', '/api/gesseiros': 'nome' };
+  window.fetch = async (entrada, opcoes) => {
+    const resposta = await original(entrada, opcoes);
+    try {
+      const url = new URL(typeof entrada === 'string' ? entrada : entrada.url, location.href);
+      const metodo = (opcoes?.method ?? (typeof entrada === 'string' ? 'GET' : entrada.method)).toUpperCase();
+      const campo = campos[url.pathname];
+      if (!campo || metodo !== 'GET' || resposta.status !== 200) return resposta;
+      const dados = await resposta.clone().json();
+      if (!Array.isArray(dados) || dados.length === 0) return resposta;
+      dados[0] = { ...dados[0], [campo]: nome };
+      return new Response(JSON.stringify(dados), {
+        status: resposta.status,
+        statusText: resposta.statusText,
+        headers: resposta.headers,
+      });
+    } catch {
+      return resposta;
+    }
+  };
+}
+
+/** Edge Case: o nome longo quebra a linha dentro do card/célula (2+ linhas) e não passa da tela. */
+function medirNomeLongo(seletor, nome, largura) {
+  const el = [...document.querySelectorAll(seletor)].find((e) => e.textContent.includes(nome));
+  if (!el) return `nome de 120 caracteres não encontrado em ${seletor}`;
+  const faixa = document.createRange();
+  faixa.selectNodeContents(el);
+  const linhas = new Set([...faixa.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top))).size;
+  const r = el.getBoundingClientRect();
+  const noScrollDaTabela = Boolean(el.closest('.tabela-wrap'));
+  if (linhas < 2) return `nome de 120 caracteres em ${seletor} numa linha só (${Math.round(r.width)}px)`;
+  if (!noScrollDaTabela && r.right > largura + 0.5) return `nome em ${seletor} vai até x=${Math.round(r.right)} (largura ${largura})`;
+  return null;
+}
+
 // Funções avaliadas no navegador (sem closures).
 function visivelComTexto(seletor, texto) {
   return [...document.querySelectorAll(seletor)].some((el) => {
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0 && (!texto || el.textContent.includes(texto));
   });
+}
+
+function botaoInstalarVisivel() {
+  const b = document.querySelector('.btn-instalar');
+  if (!b) return false;
+  const r = b.getBoundingClientRect();
+  return r.width > 0 && r.height > 0;
 }
 
 function formularioAberto() {
@@ -119,6 +163,7 @@ function formularioAberto() {
 // ---------------------------------------------------------------- estados
 
 const ALERTA = '[audit] Alerta ativo';
+const INSTRUCAO_IOS = 'Toque em Compartilhar e depois em Adicionar à Tela de Início';
 const SILENCIADO = '[audit] Silenciado';
 
 /**
@@ -131,6 +176,17 @@ const ESTADOS = [
     rota: '/login',
     logado: false,
     montar: (p) => esperar(p, visivelComTexto, '.login-card input', ''),
+  },
+  {
+    // PWA-10: instrução do Safari do iOS aberta pelo "Instalar app" (só abre; nada a enviar).
+    id: 'instalar-instrucao',
+    rota: '/obras',
+    precisaInstalar: true,
+    montar: async (p) => {
+      if (!(await esperar(p, botaoInstalarVisivel))) return false;
+      await p.evaluate(() => document.querySelector('.btn-instalar').click());
+      return esperar(p, visivelComTexto, '#instrucao-instalar', INSTRUCAO_IOS);
+    },
   },
   {
     id: 'dashboard',
@@ -192,6 +248,7 @@ const ESTADOS = [
   {
     id: 'obras',
     rota: '/obras',
+    nomeLongo: '.card-obra h2',
     montar: (p) => esperar(p, visivelComTexto, '.grade .card-obra', ''),
   },
   {
@@ -224,6 +281,7 @@ const ESTADOS = [
   {
     id: 'gesseiros',
     rota: '/gesseiros',
+    nomeLongo: '.lista-pessoas .btn-texto',
     montar: (p) => esperar(p, visivelComTexto, '.lista-pessoas li', ''),
   },
   {
@@ -252,6 +310,7 @@ const ESTADOS = [
   {
     id: 'estoque',
     rota: '/estoque',
+    nomeLongo: '.tabela-wrap tbody td',
     montar: (p) => esperar(p, visivelComTexto, '.tabela-wrap tbody tr', ''),
   },
   {
@@ -396,6 +455,14 @@ async function medir(page, logado, largura) {
         falha('RSP-02', `.tabela-wrap vai de ${Math.round(r.left)} a ${Math.round(r.right)} (viewport ${vw})`);
     }
 
+    // PWA-10: a instrução aberta cabe inteira na largura da tela.
+    const instrucao = document.querySelector('#instrucao-instalar');
+    if (instrucao && visivel(instrucao)) {
+      const r = instrucao.getBoundingClientRect();
+      if (r.left < -tolerancia || r.right > vw + tolerancia || r.top < -tolerancia)
+        falha('PWA-10', `instrução vai de x=${Math.round(r.left)} a ${Math.round(r.right)}, y=${Math.round(r.top)} (viewport ${vw})`);
+    }
+
     if (logado) {
       const sidebar = document.querySelector('.sidebar');
       const nav = document.querySelector('.nav');
@@ -443,14 +510,17 @@ async function medir(page, logado, largura) {
       }
     }
 
-    if (mobile) {
-      // RSP-07: campos com pelo menos 16px.
+    // RSP-07: campos com pelo menos 16px em ≤ 900px OU em tela de toque (pointer: coarse), que é o
+    // caso do iPad em 1024/1366.
+    if (mobile || window.matchMedia('(pointer: coarse)').matches) {
       const pequenos = [...document.querySelectorAll('input, select, textarea')]
         .filter((el) => el.type !== 'hidden' && visivel(el))
         .map((el) => parseFloat(getComputedStyle(el).fontSize))
         .filter((t) => t < 16);
       if (pequenos.length) falha('RSP-07', `${pequenos.length} campo(s) com fonte < 16px (${[...new Set(pequenos)].join(', ')}px)`);
+    }
 
+    if (mobile) {
       // RSP-08: alvos de toque com pelo menos 44x44.
       const alvos = [
         '.nav-link', '.btn-sair', '.btn-instalar', '.chip', '.btn-detalhes', '.btn-icone',
@@ -484,12 +554,22 @@ async function auditar(browser, login, ctx, relatorio) {
       width: v.largura,
       height: v.altura,
       deviceScaleFactor: v.escala,
-      isMobile: v.toque,
+      isMobile: v.movel ?? v.toque,
       hasTouch: v.toque,
     });
+    if (v.ua) {
+      await page.setUserAgent(v.ua);
+      // Safari não tem `beforeinstallprompt`. Com o app instalável (manifest + SW, L5) o Chrome
+      // headless dispara o evento mesmo com o UA da Apple, e o botão iria para o modo 'prompt'.
+      // Este listener roda antes do app e engole o evento, como no Safari de verdade.
+      await page.evaluateOnNewDocument(() => {
+        window.addEventListener('beforeinstallprompt', (e) => e.stopImmediatePropagation(), true);
+      });
+    }
+    await page.evaluateOnNewDocument(embrulharFetchComNomeLongo, NOME_LONGO);
 
-    for (const estado of ESTADOS) {
-      const chave = `${v.largura}/${estado.id}`;
+    for (const estado of estadosDa(v)) {
+      const chave = `${nomeDa(v)}/${estado.id}`;
       const logado = estado.logado !== false;
       let resultado;
       try {
@@ -508,8 +588,17 @@ async function auditar(browser, login, ctx, relatorio) {
         await page.goto(`${BASE}${estado.rota}`, { waitUntil: 'networkidle0', timeout: 30000 });
 
         const montado = (!estado.precisaFixture || ctx.fixture) && (await estado.montar(page, ctx));
-        if (!montado) {
-          resultado = { status: 'NAO_MONTADO', falhas: [] };
+        // RSP-08/PWA-10: com o UA do Safari da Apple, toda página logada tem o "Instalar app".
+        // Sem ele, o alvo de toque não seria medido: o estado não conta como montado.
+        const semBotao = montado && logado && Boolean(v.ua) && !(await esperar(page, botaoInstalarVisivel));
+        // Edge Case: nas telas de lista, o nome de 120 caracteres tem de estar na tela.
+        const semNomeLongo =
+          montado && estado.nomeLongo && !(await esperar(page, visivelComTexto, estado.nomeLongo, NOME_LONGO));
+        if (!montado || semBotao || semNomeLongo) {
+          const motivos = [];
+          if (semBotao) motivos.push('botão "Instalar app" (.btn-instalar) ausente na página logada');
+          if (semNomeLongo) motivos.push(`nome de 120 caracteres ausente em ${estado.nomeLongo}`);
+          resultado = { status: 'NAO_MONTADO', falhas: motivos };
         } else {
           await page.evaluate(() => document.fonts.ready);
           const falhas = [];
@@ -518,16 +607,20 @@ async function auditar(browser, login, ctx, relatorio) {
             const f = await page.evaluate(medirExtrato);
             if (f) falhas.push(`RSP-10: ${f}`);
           }
+          if (estado.nomeLongo && v.largura === 320) {
+            const f = await page.evaluate(medirNomeLongo, estado.nomeLongo, NOME_LONGO, v.largura);
+            if (f) falhas.push(`Edge Case nome longo: ${f}`);
+          }
           falhas.push(...(await medir(page, logado, v.largura)));
           resultado = { status: falhas.length ? 'FALHA' : 'OK', falhas };
         }
-        await page.screenshot({ path: path.join(SAIDA, `${v.largura}-${estado.id}.png`), fullPage: true });
+        await page.screenshot({ path: path.join(SAIDA, `${nomeDa(v)}-${estado.id}.png`), fullPage: true });
       } catch (erro) {
         resultado = { status: 'NAO_MONTADO', falhas: [`erro: ${erro.message.split('\n')[0]}`] };
       }
       relatorio[chave] = resultado;
       const detalhe = resultado.falhas.length ? `  ${resultado.falhas.join(' | ')}` : '';
-      console.log(`${String(v.largura).padStart(4)}  ${estado.id.padEnd(24)} ${resultado.status}${detalhe}`);
+      console.log(`${nomeDa(v).padStart(11)}  ${estado.id.padEnd(24)} ${resultado.status}${detalhe}`);
     }
     await page.close();
   }
@@ -541,15 +634,11 @@ async function principal() {
   const ctx = { fixture: null };
   let browser;
   let restos = null;
+  let troca = { ok: false, detalhe: 'não rodou' };
   try {
     try {
       // Restos de uma execução interrompida à força saem antes de qualquer coisa.
-      const restosAnteriores = fixture('contar').restos;
-      if (restosAnteriores > 0) {
-        console.log(`[audit] ${restosAnteriores} resto(s) [audit] de uma execução anterior: limpando`);
-      }
-      fixture('limpar');
-      ctx.fixture = fixture('preparar');
+      ctx.fixture = prepararFixture();
       console.log(`[audit] fixture preparada: ${JSON.stringify(ctx.fixture)}`);
     } catch (erro) {
       console.error(`[audit] fixture falhou (os estados do agente ficam NAO_MONTADO): ${erro.message.split('\n')[0]}`);
@@ -565,23 +654,80 @@ async function principal() {
 
     browser = await puppeteer.launch({ executablePath: CHROME, headless: true });
     await auditar(browser, login, ctx, relatorio);
+    troca = await trocaDeLargura(browser, login);
   } finally {
     if (browser) await browser.close().catch(() => {});
     restos = limparFixture();
   }
 
   const valores = Object.values(relatorio);
-  const total = LARGURAS.length * ESTADOS.length;
+  const total = LARGURAS.reduce((n, v) => n + estadosDa(v).length, 0);
   const naoMontados = total - valores.filter((r) => r.status !== 'NAO_MONTADO').length;
   const medidos = total - naoMontados;
   const falhas = valores.filter((r) => r.status === 'FALHA').length;
   fs.writeFileSync(path.join(SAIDA, 'relatorio.json'), JSON.stringify(relatorio, null, 2));
 
-  if (restos === 0) console.log('[audit] fixture limpa: nenhum registro [audit] no banco');
-  else console.log(`[audit] ERRO: a limpeza da fixture deixou ${restos ?? '?'} registro(s) [audit] no banco`);
+  relatarLimpeza(restos);
 
+  console.log(`troca de largura 1366 -> 390 com formulário preenchido: ${troca.ok ? 'OK' : 'FALHA'} (${troca.detalhe})`);
   console.log(`medidos: ${medidos}/${total}, nao montados: ${naoMontados}, falhas: ${falhas}`);
-  return falhas === 0 && naoMontados === 0 && restos === 0 ? 0 : 1;
+  return falhas === 0 && naoMontados === 0 && restos === 0 && troca.ok ? 0 : 1;
+}
+
+/**
+ * Edge Case: a janela passa de > 900px para ≤ 900px (redimensionar, girar o tablet) com um
+ * formulário preenchido. A sidebar vira barra inferior sem recarregar a página e sem perder o
+ * que foi digitado. Nada é enviado.
+ */
+async function trocaDeLargura(browser, login) {
+  const page = await browser.newPage();
+  try {
+    await page.setViewport({ width: 1366, height: 768, deviceScaleFactor: 1 });
+    await page.goto(`${BASE}/login`, { waitUntil: 'networkidle0', timeout: 30000 });
+    await page.evaluate((l) => {
+      localStorage.setItem('gesso.token', l.accessToken);
+      localStorage.setItem('gesso.usuario', JSON.stringify(l.usuario));
+    }, login);
+    await page.goto(`${BASE}/gesseiros`, { waitUntil: 'networkidle0', timeout: 30000 });
+    if (!(await esperar(page, visivelComTexto, '.cabecalho-pagina .btn', 'Novo gesseiro'))) {
+      return { ok: false, detalhe: 'botão "Novo gesseiro" não apareceu' };
+    }
+    await clicar(page, '.cabecalho-pagina .btn', 'Novo gesseiro');
+    if (!(await esperar(page, formularioAberto))) return { ok: false, detalhe: 'formulário não abriu' };
+    const digitado = '[audit] troca de largura';
+    await page.type('.conteudo form.formulario input', digitado);
+    const antes = await page.evaluate(() => {
+      window.__semRecarga = true;
+      return getComputedStyle(document.querySelector('.nav')).position;
+    });
+
+    // Só a largura muda (sem trocar isMobile/hasTouch, que faria o puppeteer recarregar).
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+    await pausa(300);
+    const depois = await page.evaluate(() => {
+      const nav = document.querySelector('.nav');
+      const campo = document.querySelector('.conteudo form.formulario input');
+      return {
+        semRecarga: window.__semRecarga === true,
+        navFixa: getComputedStyle(nav).position === 'fixed',
+        navNoFim: Math.abs(nav.getBoundingClientRect().bottom - innerHeight) <= 1,
+        valor: campo ? campo.value : null,
+      };
+    });
+    const ok =
+      antes !== 'fixed' && depois.semRecarga && depois.navFixa && depois.navNoFim && depois.valor === digitado;
+    await page.screenshot({ path: path.join(SAIDA, 'troca-de-largura.png'), fullPage: true });
+    return {
+      ok,
+      detalhe:
+        `nav antes: ${antes}; depois: ${depois.navFixa ? 'fixa' : 'não fixa'}${depois.navNoFim ? ' no fim' : ''}; ` +
+        `sem recarregar: ${depois.semRecarga}; campo mantido: ${depois.valor === digitado}`,
+    };
+  } catch (erro) {
+    return { ok: false, detalhe: `erro: ${erro.message.split('\n')[0]}` };
+  } finally {
+    await page.close();
+  }
 }
 
 principal()
@@ -589,6 +735,7 @@ principal()
   .catch((erro) => {
     console.error(`[audit] erro: ${erro.stack ?? erro}`);
     limparFixture();
-    console.log(`medidos: 0/${LARGURAS.length * ESTADOS.length}, nao montados: ${LARGURAS.length * ESTADOS.length}, falhas: 0`);
+    const total = LARGURAS.reduce((n, v) => n + estadosDa(v).length, 0);
+    console.log(`medidos: 0/${total}, nao montados: ${total}, falhas: 0`);
     process.exit(1);
   });
