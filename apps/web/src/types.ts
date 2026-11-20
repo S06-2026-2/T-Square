@@ -41,6 +41,8 @@ export interface Obra {
   plantaBaixaUrl?: string | null;
   dataInicio?: string | null;
   dataConclusao?: string | null;
+  /** Preenchido só em obra CANCELADA (PATCH /obras/:id/cancelar). */
+  motivoCancelamento?: string | null;
   pagamento?: Pagamento | null;
   gesseiros?: AlocacaoGesseiro[];
 }
