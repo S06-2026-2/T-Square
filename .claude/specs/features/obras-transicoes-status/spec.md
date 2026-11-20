@@ -176,20 +176,20 @@ status fora da transação, e dois cliques simultâneos podem gerar os créditos
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| TRN-01 | P1: Avançar no funil — fechar (`ORCAMENTO → FECHADA`) | Tasks | In Tasks |
-| TRN-02 | P1: Avançar no funil — iniciar com equipe e `dataInicio` | Tasks | In Tasks |
-| TRN-03 | P1: Avançar no funil — concluir só a partir de `ANDAMENTO`, créditos uma vez | Tasks | In Tasks |
-| TRN-04 | P1: Avançar no funil — transição inválida (400 + mensagem, sem efeito) | Tasks | In Tasks |
-| TRN-05 | P1: Avançar no funil — botões por status, confirmação, recarga e erro na UI | Tasks | In Tasks |
-| TRN-06 | P1: Atalhos — `status` fora de `POST`/`PATCH /obras` | Tasks | In Tasks |
-| TRN-07 | P1: Atalhos — transição concorrente aplicada uma vez | Tasks | In Tasks |
-| TRN-08 | P1: Atalhos — remoção de gesseiro permitida em obra aberta, inclusive o último de `ANDAMENTO` | Tasks | In Tasks |
-| TRN-09 | P2: Cancelar — API com motivo, sem lançamentos | Tasks | In Tasks |
-| TRN-10 | P2: Cancelar — formulário de motivo no card e exibição do motivo | Tasks | In Tasks |
-| TRN-11 | P1: Avançar no funil — confirmação do "Concluir obra" lista quem recebe crédito | Tasks | In Tasks |
-| TRN-12 | P1: Atalhos — 404 ao remover gesseiro não alocado | Tasks | In Tasks |
-| TRN-13 | P1 AC9/AC11 + P2 Cancelar AC7/AC9 — erro HTTP recarrega a lista; falha de rede mostra `SEM_CONEXAO_ENVIO` sem reenviar | Tasks | In Tasks |
-| TRN-14 | P2: Ações de status no celular — estados novos na `audit:responsive` (RSP-01/07/08) | Tasks | In Tasks |
+| TRN-01 | P1: Avançar no funil — fechar (`ORCAMENTO → FECHADA`) | Tasks | Verified |
+| TRN-02 | P1: Avançar no funil — iniciar com equipe e `dataInicio` | Tasks | Verified |
+| TRN-03 | P1: Avançar no funil — concluir só a partir de `ANDAMENTO`, créditos uma vez | Tasks | Verified |
+| TRN-04 | P1: Avançar no funil — transição inválida (400 + mensagem, sem efeito) | Tasks | Verified |
+| TRN-05 | P1: Avançar no funil — botões por status, confirmação, recarga e erro na UI | Tasks | Verified |
+| TRN-06 | P1: Atalhos — `status` fora de `POST`/`PATCH /obras` | Tasks | Verified |
+| TRN-07 | P1: Atalhos — transição concorrente aplicada uma vez | Tasks | Verified |
+| TRN-08 | P1: Atalhos — remoção de gesseiro permitida em obra aberta, inclusive o último de `ANDAMENTO` | Tasks | Verified |
+| TRN-09 | P2: Cancelar — API com motivo, sem lançamentos | Tasks | Verified |
+| TRN-10 | P2: Cancelar — formulário de motivo no card e exibição do motivo | Tasks | Verified |
+| TRN-11 | P1: Avançar no funil — confirmação do "Concluir obra" lista quem recebe crédito | Tasks | Verified |
+| TRN-12 | P1: Atalhos — 404 ao remover gesseiro não alocado | Tasks | Verified |
+| TRN-13 | P1 AC9/AC11 + P2 Cancelar AC7/AC9 — erro HTTP recarrega a lista; falha de rede mostra `SEM_CONEXAO_ENVIO` sem reenviar | Tasks | Verified |
+| TRN-14 | P2: Ações de status no celular — estados novos na `audit:responsive` (RSP-01/07/08) | Tasks | Verified |
 
 **ID format:** `TRN-NN`
 

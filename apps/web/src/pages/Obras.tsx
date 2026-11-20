@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import AcoesStatusObra from '../components/AcoesStatusObra';
 import AlocarGesseiroForm from '../components/forms/AlocarGesseiroForm';
 import MateriaisPrevistosForm from '../components/forms/MateriaisPrevistosForm';
 import NovaObraForm from '../components/forms/NovaObraForm';
@@ -68,6 +69,17 @@ export default function Obras() {
     carregarGesseiros();
   });
 
+  /**
+   * Erro de fechar/iniciar/concluir (AD-014): com resposta HTTP recarrega antes, para o card
+   * mostrar o status real (o `carregar` limpa o erro); sem rede, só mostra a mensagem.
+   */
+  async function falhaTransicao(mensagem: string, recarregar: boolean) {
+    if (recarregar) {
+      await carregar();
+    }
+    setErro(mensagem);
+  }
+
   async function obraCriada() {
     setMostrarForm(false);
     // A obra nova nasce ORCAMENTO; com outro filtro ativo ela sumiria da lista.
@@ -76,15 +88,6 @@ export default function Obras() {
       await carregar();
     } else {
       setFiltro('TODAS');
-    }
-  }
-
-  async function concluir(id: string) {
-    try {
-      await api.patch(`/obras/${id}/concluir`);
-      await carregar();
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Erro ao concluir obra');
     }
   }
 
@@ -164,17 +167,13 @@ export default function Obras() {
               </a>
             )}
 
-            {obra.status !== 'CONCLUIDA' && obra.status !== 'CANCELADA' && (
-              <div className="card-acoes">
-                <button
-                  type="button"
-                  className="btn btn-secundario"
-                  onClick={() => concluir(obra.id)}
-                >
-                  Concluir obra
-                </button>
-              </div>
+            {obra.status === 'CANCELADA' && obra.motivoCancelamento && (
+              <p className="motivo-cancelamento">
+                Motivo do cancelamento: {obra.motivoCancelamento}
+              </p>
             )}
+
+            <AcoesStatusObra obra={obra} onAlterada={carregar} onErro={falhaTransicao} />
 
             {aceitaAlocacao.includes(obra.status) && (
               <details>

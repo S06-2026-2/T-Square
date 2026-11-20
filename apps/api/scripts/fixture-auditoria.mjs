@@ -1,12 +1,15 @@
 // Fixture da auditoria de responsividade (apps/web/scripts/audit-responsive.mjs).
-// Monta os dados dos estados do agente de estoque que a auditoria mede e apaga tudo depois.
+// Monta os dados dos estados do agente de estoque e a obra CANCELADA com motivo longo
+// (obras-transicoes-status, story "Ações de status no celular") que a auditoria mede, e apaga
+// tudo depois.
 //
 // Uso (dentro do container da API, que tem o Prisma Client gerado):
-//   docker exec gesso_api node scripts/fixture-auditoria.mjs preparar   -> imprime { alertaId, materialId, quantidade }
+//   docker exec gesso_api node scripts/fixture-auditoria.mjs preparar   -> imprime { alertaId, materialId, quantidade, obraCanceladaId }
 //   docker exec gesso_api node scripts/fixture-auditoria.mjs limpar
 //   docker exec gesso_api node scripts/fixture-auditoria.mjs contar     -> imprime { restos }
 //
-// Tudo que a fixture cria leva o marcador "[audit]": o nome dos materiais e o `modelo` da análise.
+// Tudo que a fixture cria leva o marcador "[audit]": o nome dos materiais, o `modelo` da análise
+// e o título da obra.
 // A análise é datada de 2000-01-01, então nunca vira a "última análise" (as consultas ordenam por
 // iniciadoEm desc) nem muda o catch-up do agendador. O agente LLM não é chamado.
 // Não rodar durante uma análise real nem perto de uma demonstração do agente.
@@ -57,6 +60,18 @@ for (const sinal of ['SIGINT', 'SIGTERM']) {
 
 const filtroMateriais = { nome: { startsWith: MARCADOR } };
 const filtroAnalises = { modelo: MARCADOR };
+const filtroObras = { titulo: { startsWith: MARCADOR } };
+
+/**
+ * Motivo de 500 caracteres (o máximo do CancelarObraDto) com um trecho de 120 sem espaço:
+ * prova que o card quebra o texto em vez de alargar a página a 320px.
+ */
+const MOTIVO_LONGO = (
+  'Cliente desistiu depois de ver o orçamento revisado ' +
+  'x'.repeat(120) +
+  ' ' +
+  'e pediu para guardar o projeto para o ano que vem. '.repeat(10)
+).slice(0, 500);
 
 async function limpar() {
   // Os alertas apontam para material e análise; saem primeiro (a análise não tem cascade).
@@ -65,17 +80,19 @@ async function limpar() {
   });
   await prisma.analiseEstoque.deleteMany({ where: filtroAnalises });
   await prisma.material.deleteMany({ where: filtroMateriais });
+  await prisma.obra.deleteMany({ where: filtroObras });
 }
 
 async function contar() {
-  const [materiais, analises, alertas] = await Promise.all([
+  const [materiais, analises, alertas, obras] = await Promise.all([
     prisma.material.count({ where: filtroMateriais }),
     prisma.analiseEstoque.count({ where: filtroAnalises }),
     prisma.alertaEstoque.count({
       where: { OR: [{ material: filtroMateriais }, { analise: filtroAnalises }] },
     }),
+    prisma.obra.count({ where: filtroObras }),
   ]);
-  return materiais + analises + alertas;
+  return materiais + analises + alertas + obras;
 }
 
 async function preparar() {
@@ -123,7 +140,21 @@ async function preparar() {
         justificativa: `${MARCADOR} Alerta dispensado pelo operador.`,
       },
     });
-    return { alertaId: alerta.id, materialId: ativo.id, quantidade: QUANTIDADE };
+    const cancelada = await tx.obra.create({
+      data: {
+        titulo: `${MARCADOR} Cancelada`,
+        clienteNome: 'Cliente auditoria',
+        valorTotal: 1000,
+        status: 'CANCELADA',
+        motivoCancelamento: MOTIVO_LONGO,
+      },
+    });
+    return {
+      alertaId: alerta.id,
+      materialId: ativo.id,
+      quantidade: QUANTIDADE,
+      obraCanceladaId: cancelada.id,
+    };
   });
 }
 

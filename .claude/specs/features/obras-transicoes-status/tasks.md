@@ -11,7 +11,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: `.claude/specs/features/obras-transicoes-status/design.md`
-**Status**: Approved (2026-10-29) — Execute adiado pelo usuário. Revalidado em 2026-11-19 depois do merge do PWA (PR #11): T16 nova, TRN-13/TRN-14, refs de linha e gates atualizados
+**Status**: Approved (2026-10-29) — Execute adiado pelo usuário. Revalidado em 2026-11-19 depois do merge do PWA (PR #11): T16 nova, TRN-13/TRN-14, refs de linha e gates atualizados. **Execute concluído em 2026-11-19** (T1–T16; API 397 testes, web 371, e2e 19, `audit:responsive` 126/126, `audit:pwa` 14/14; validação em `validation.md`: PASS)
 
 ---
 
@@ -88,6 +88,8 @@ T12 → T13 → T14 → T15 → T16
 
 #### T1: Tabela de transições e mensagem padrão
 
+**Status**: ✅ Concluída (2026-11-19)
+
 **What**: Criar `TRANSICOES` (`fechar`: `ORCAMENTO → FECHADA`; `iniciar`: `FECHADA → ANDAMENTO`; `concluir`: `ANDAMENTO → CONCLUIDA`; `cancelar`: `ORCAMENTO|FECHADA|ANDAMENTO → CANCELADA`), `type AcaoObra` e `mensagemTransicaoInvalida(acao, status)` → `Não é possível <acao> uma obra com status <STATUS>`.
 **Where**: `apps/api/src/obras/transicoes-obra.ts`
 **Depends on**: None
@@ -101,10 +103,10 @@ T12 → T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `transicoes-obra.spec.ts` cobre as 4 ações × 5 status: origem aceita só onde a spec manda, e destino certo
-- [ ] Mensagem exata com acento, para cada ação (ex.: `Não é possível concluir uma obra com status CONCLUIDA`)
-- [ ] Gate check passes: `npm run test --workspace apps/api`
-- [ ] Test count: API ≥ 321 + novos, nenhum removido
+- [x] `transicoes-obra.spec.ts` cobre as 4 ações × 5 status: origem aceita só onde a spec manda, e destino certo
+- [x] Mensagem exata com acento, para cada ação (ex.: `Não é possível concluir uma obra com status CONCLUIDA`)
+- [x] Gate check passes: `npm run test --workspace apps/api`
+- [x] Test count: API ≥ 321 + novos, nenhum removido
 
 **Tests**: unit
 **Gate**: quick
@@ -114,6 +116,8 @@ T12 → T13 → T14 → T15 → T16
 ---
 
 #### T2: Campo `motivoCancelamento` na obra
+
+**Status**: ✅ Concluída (2026-11-19)
 
 **What**: Acrescentar `motivoCancelamento String?` ao model `Obra` e gerar a migration `obra_motivo_cancelamento` (só `ADD COLUMN`, nullable).
 **Where**: `apps/api/prisma/schema.prisma`
@@ -128,9 +132,9 @@ T12 → T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] Migration criada em `apps/api/prisma/migrations/` **depois** da `20261109142058_chaves_idempotencia` (a pasta nova tem timestamp maior), com o SQL contendo só o `ADD COLUMN`, e aplicada no banco local, sem perder dados (obras do seed e "Moldura - Bairro Centro" continuam lá)
-- [ ] Prisma Client regenerado no container (`gesso_api` reiniciado e `/api/health` 200)
-- [ ] Gate check passes: `npm run build && npm test`
+- [x] Migration criada em `apps/api/prisma/migrations/` **depois** da `20261109142058_chaves_idempotencia` (a pasta nova tem timestamp maior), com o SQL contendo só o `ADD COLUMN`, e aplicada no banco local, sem perder dados (obras do seed e "Moldura - Bairro Centro" continuam lá)
+- [x] Prisma Client regenerado no container (`gesso_api` reiniciado e `/api/health` 200)
+- [x] Gate check passes: `npm run build && npm test`
 
 **Tests**: none
 **Gate**: build
@@ -140,6 +144,8 @@ T12 → T13 → T14 → T15 → T16
 ---
 
 #### T3: `status` fora do `CreateObraDto` (e do `UpdateObraDto`)
+
+**Status**: ✅ Concluída (2026-11-19)
 
 **What**: Remover o campo `status` do `CreateObraDto`; o `UpdateObraDto` herda a remoção. Obra nova nasce com o default `ORCAMENTO` do schema.
 **Where**: `apps/api/src/obras/dto/create-obra.dto.ts`
@@ -154,10 +160,10 @@ T12 → T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `dto/obra-status.dto.spec.ts`: `validate()` com `whitelist` + `forbidNonWhitelisted` dá erro em `status` para `CreateObraDto` e `UpdateObraDto`; corpo válido sem `status` passa nos dois (P1 Atalhos AC1–4)
-- [ ] Teste de service: `create` sem `status` não grava `status` explícito (o default do schema vale)
-- [ ] Gate check passes: `npm run test --workspace apps/api`
-- [ ] Test count: nenhum removido
+- [x] `dto/obra-status.dto.spec.ts`: `validate()` com `whitelist` + `forbidNonWhitelisted` dá erro em `status` para `CreateObraDto` e `UpdateObraDto`; corpo válido sem `status` passa nos dois (P1 Atalhos AC1–4)
+- [x] Teste de service: `create` sem `status` não grava `status` explícito (o default do schema vale)
+- [x] Gate check passes: `npm run test --workspace apps/api`
+- [x] Test count: nenhum removido
 
 **Tests**: unit
 **Gate**: quick
@@ -167,6 +173,8 @@ T12 → T13 → T14 → T15 → T16
 ---
 
 #### T4: `CancelarObraDto`
+
+**Status**: ✅ Concluída (2026-11-19)
 
 **What**: DTO com `motivo: string`: `@Transform` de trim, `@IsString()`, `@Length(3, 500)`, com `@ApiProperty`.
 **Where**: `apps/api/src/obras/dto/cancelar-obra.dto.ts`
@@ -181,8 +189,8 @@ T12 → T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `dto/cancelar-obra.dto.spec.ts`: motivo ausente, `"  ab  "` (2 depois do trim) e 501 caracteres falham; 3 e 500 passam; `"  Cliente desistiu  "` vira `"Cliente desistiu"` (P2 AC1, AC3)
-- [ ] Gate check passes: `npm run test --workspace apps/api`
+- [x] `dto/cancelar-obra.dto.spec.ts`: motivo ausente, `"  ab  "` (2 depois do trim) e 501 caracteres falham; 3 e 500 passam; `"  Cliente desistiu  "` vira `"Cliente desistiu"` (P2 AC1, AC3)
+- [x] Gate check passes: `npm run test --workspace apps/api`
 
 **Tests**: unit
 **Gate**: quick
@@ -194,6 +202,8 @@ T12 → T13 → T14 → T15 → T16
 ### Phase 2: Transições no service, rotas e e2e
 
 #### T5: `transicionar()` e `concluir()` sobre ele
+
+**Status**: ✅ Concluída (2026-11-19)
 
 **What**: Método privado `transicionar(acao, id, { dados?, validar?, depois? })` com o fluxo do design (lê na `$transaction` → 404 → origem inválida 400 → `validar` → `updateMany` condicional → `count === 0` relê e 400 → `depois(tx, obra)` → devolve a obra com o `include` padrão). `concluir()` passa a usá-lo: grava `dataConclusao` e cria um `CREDITO` por gesseiro, lendo a equipe dentro da transação.
 **Where**: `apps/api/src/obras/obras.service.ts`
@@ -208,15 +218,15 @@ T12 → T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `obras.service.spec.ts` (mock ganha `updateMany` e `obraGesseiro`): concluir `ANDAMENTO` com 2 gesseiros → `updateMany` com `where: { id, status: { in: ['ANDAMENTO'] } }`, `dataConclusao`, 2 `CREDITO` com o `valorCombinado` (P1 AC4)
-- [ ] Concluir a partir de `ORCAMENTO`, `FECHADA`, `CONCLUIDA` e `CANCELADA` → 400 com a mensagem exata, sem `updateMany` e sem `createMany` (P1 AC5, edge de repetição)
-- [ ] Corrida: `updateMany` devolve `count: 0` e a releitura mostra `CONCLUIDA` → 400 `Não é possível concluir uma obra com status CONCLUIDA`, sem `createMany`
-- [ ] `createMany` rejeita → o erro propaga pela transação (rollback, edge case)
-- [ ] `ANDAMENTO` sem equipe → conclui sem `createMany` (edge case)
-- [ ] Obra inexistente → 404 `Obra <id> nao encontrada`
-- [ ] Os testes antigos de `concluir` passam com a mensagem nova (o "nao credita duas vezes" passa a esperar `Não é possível concluir uma obra com status CONCLUIDA`)
-- [ ] Gate check passes: `npm run test --workspace apps/api`
-- [ ] Test count: nenhum removido
+- [x] `obras.service.spec.ts` (mock ganha `updateMany` e `obraGesseiro`): concluir `ANDAMENTO` com 2 gesseiros → `updateMany` com `where: { id, status: { in: ['ANDAMENTO'] } }`, `dataConclusao`, 2 `CREDITO` com o `valorCombinado` (P1 AC4)
+- [x] Concluir a partir de `ORCAMENTO`, `FECHADA`, `CONCLUIDA` e `CANCELADA` → 400 com a mensagem exata, sem `updateMany` e sem `createMany` (P1 AC5, edge de repetição)
+- [x] Corrida: `updateMany` devolve `count: 0` e a releitura mostra `CONCLUIDA` → 400 `Não é possível concluir uma obra com status CONCLUIDA`, sem `createMany`
+- [x] `createMany` rejeita → o erro propaga pela transação (rollback, edge case)
+- [x] `ANDAMENTO` sem equipe → conclui sem `createMany` (edge case)
+- [x] Obra inexistente → 404 `Obra <id> nao encontrada`
+- [x] Os testes antigos de `concluir` passam com a mensagem nova (o "nao credita duas vezes" passa a esperar `Não é possível concluir uma obra com status CONCLUIDA`)
+- [x] Gate check passes: `npm run test --workspace apps/api`
+- [x] Test count: nenhum removido
 
 **Tests**: unit
 **Gate**: quick
@@ -226,6 +236,8 @@ T12 → T13 → T14 → T15 → T16
 ---
 
 #### T6: `fechar()`
+
+**Status**: ✅ Concluída (2026-11-19)
 
 **What**: `fechar(id)` = `transicionar('fechar', id)`.
 **Where**: `apps/api/src/obras/obras.service.ts`
@@ -240,9 +252,9 @@ T12 → T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `ORCAMENTO` → `updateMany` para `FECHADA` e devolve a obra (P1 AC1)
-- [ ] `FECHADA`, `ANDAMENTO`, `CONCLUIDA`, `CANCELADA` → 400 `Não é possível fechar uma obra com status <STATUS>`, sem `updateMany`
-- [ ] Gate check passes: `npm run test --workspace apps/api`
+- [x] `ORCAMENTO` → `updateMany` para `FECHADA` e devolve a obra (P1 AC1)
+- [x] `FECHADA`, `ANDAMENTO`, `CONCLUIDA`, `CANCELADA` → 400 `Não é possível fechar uma obra com status <STATUS>`, sem `updateMany`
+- [x] Gate check passes: `npm run test --workspace apps/api`
 
 **Tests**: unit
 **Gate**: quick
@@ -252,6 +264,8 @@ T12 → T13 → T14 → T15 → T16
 ---
 
 #### T7: `iniciar()`
+
+**Status**: ✅ Concluída (2026-11-19)
 
 **What**: `iniciar(id)` = `transicionar('iniciar', id, { dados: { dataInicio: agora }, validar: exige ≥ 1 gesseiro })`.
 **Where**: `apps/api/src/obras/obras.service.ts`
@@ -266,11 +280,11 @@ T12 → T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `FECHADA` com 1 gesseiro → `ANDAMENTO` com `dataInicio` igual ao instante da chamada (relógio fixo no teste) (P1 AC2)
-- [ ] `FECHADA` sem gesseiro → 400 `A obra precisa de pelo menos um gesseiro alocado para ser iniciada`, sem `updateMany` (P1 AC3)
-- [ ] `ORCAMENTO` sem gesseiro → 400 de transição inválida (a origem vem antes da equipe)
-- [ ] Demais status → 400 `Não é possível iniciar uma obra com status <STATUS>`
-- [ ] Gate check passes: `npm run test --workspace apps/api`
+- [x] `FECHADA` com 1 gesseiro → `ANDAMENTO` com `dataInicio` igual ao instante da chamada (relógio fixo no teste) (P1 AC2)
+- [x] `FECHADA` sem gesseiro → 400 `A obra precisa de pelo menos um gesseiro alocado para ser iniciada`, sem `updateMany` (P1 AC3)
+- [x] `ORCAMENTO` sem gesseiro → 400 de transição inválida (a origem vem antes da equipe)
+- [x] Demais status → 400 `Não é possível iniciar uma obra com status <STATUS>`
+- [x] Gate check passes: `npm run test --workspace apps/api`
 
 **Tests**: unit
 **Gate**: quick
@@ -280,6 +294,8 @@ T12 → T13 → T14 → T15 → T16
 ---
 
 #### T8: `cancelar()`
+
+**Status**: ✅ Concluída (2026-11-19)
 
 **What**: `cancelar(id, motivo)` = `transicionar('cancelar', id, { dados: { motivoCancelamento: motivo } })`, sem criar lançamento.
 **Where**: `apps/api/src/obras/obras.service.ts`
@@ -294,10 +310,10 @@ T12 → T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `ORCAMENTO`, `FECHADA` e `ANDAMENTO` → `CANCELADA` com `motivoCancelamento` gravado (P2 AC1)
-- [ ] Nenhum `lancamento.createMany`/`create`/`update`/`delete` chamado (P2 AC2)
-- [ ] `CONCLUIDA` e `CANCELADA` → 400 `Não é possível cancelar uma obra com status <STATUS>` (P2 AC4)
-- [ ] Gate check passes: `npm run test --workspace apps/api`
+- [x] `ORCAMENTO`, `FECHADA` e `ANDAMENTO` → `CANCELADA` com `motivoCancelamento` gravado (P2 AC1)
+- [x] Nenhum `lancamento.createMany`/`create`/`update`/`delete` chamado (P2 AC2)
+- [x] `CONCLUIDA` e `CANCELADA` → 400 `Não é possível cancelar uma obra com status <STATUS>` (P2 AC4)
+- [x] Gate check passes: `npm run test --workspace apps/api`
 
 **Tests**: unit
 **Gate**: quick
@@ -307,6 +323,8 @@ T12 → T13 → T14 → T15 → T16
 ---
 
 #### T9: `removerGesseiro()` com 404 e remoção livre em obra aberta
+
+**Status**: ✅ Concluída (2026-11-19)
 
 **What**: Ler a obra (`findOne`, 404) e a alocação antes de apagar; alocação inexistente → 404 `Gesseiro <gesseiroId> não está alocado nesta obra`. Nenhuma regra de status nova: remover o último gesseiro de obra `ANDAMENTO` continua permitido.
 **Where**: `apps/api/src/obras/obras.service.ts`
@@ -321,11 +339,11 @@ T12 → T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] Último gesseiro de obra `ANDAMENTO` é removido (`delete` chamado) — regressão da decisão do usuário (P1 Atalhos AC6)
-- [ ] Remoção em `ORCAMENTO` e `FECHADA` continua funcionando
-- [ ] Gesseiro não alocado → 404 com a mensagem exata, sem `delete` (P1 Atalhos AC7)
-- [ ] Obra inexistente → 404 `Obra <id> nao encontrada`
-- [ ] Gate check passes: `npm run test --workspace apps/api`
+- [x] Último gesseiro de obra `ANDAMENTO` é removido (`delete` chamado) — regressão da decisão do usuário (P1 Atalhos AC6)
+- [x] Remoção em `ORCAMENTO` e `FECHADA` continua funcionando
+- [x] Gesseiro não alocado → 404 com a mensagem exata, sem `delete` (P1 Atalhos AC7)
+- [x] Obra inexistente → 404 `Obra <id> nao encontrada`
+- [x] Gate check passes: `npm run test --workspace apps/api`
 
 **Tests**: unit
 **Gate**: quick
@@ -335,6 +353,8 @@ T12 → T13 → T14 → T15 → T16
 ---
 
 #### T10: Rotas `/fechar`, `/iniciar` e `/cancelar`
+
+**Status**: ✅ Concluída (2026-11-19)
 
 **What**: `PATCH :id/fechar`, `PATCH :id/iniciar` e `PATCH :id/cancelar` (corpo `CancelarObraDto`), com `@ApiOperation`; só delegam ao service.
 **Where**: `apps/api/src/obras/obras.controller.ts`
@@ -349,8 +369,8 @@ T12 → T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] As três rotas aparecem no Swagger (`/docs`) depois de `docker restart gesso_api`
-- [ ] Gate check passes: `npm run build && npm test`
+- [x] As três rotas aparecem no Swagger (`/docs`) depois de `docker restart gesso_api`
+- [x] Gate check passes: `npm run build && npm test`
 
 **Tests**: none
 **Gate**: build
@@ -360,6 +380,8 @@ T12 → T13 → T14 → T15 → T16
 ---
 
 #### T11: e2e de concorrência e de `status` no corpo
+
+**Status**: ✅ Concluída (2026-11-19)
 
 **What**: `obras-transicoes.e2e-spec.ts`: faz login com o admin do seed, cria um gesseiro e uma obra `[e2e]`, leva a obra até `ANDAMENTO` pelas rotas, dispara dois `PATCH /concluir` em paralelo e confere um 200 + um 400 e exatamente 1 `CREDITO` por gesseiro no banco. Também confere 400 em `POST /obras` com `status` e em `PATCH /obras/:id` com `status`. Limpeza num `afterAll` que roda mesmo com falha, apagando só registros com prefixo `[e2e]` (lançamentos → obras → gesseiros), no mesmo padrão do `idempotencia.e2e-spec.ts` (`MARCADOR`). A trava `trava-banco-local.ts` já vem do `setupFiles`: não importar de novo.
 **Where**: `apps/api/test/obras-transicoes.e2e-spec.ts`
@@ -374,9 +396,9 @@ T12 → T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `docker exec gesso_api npm run test:e2e -- --runInBand` passa (inclui os e2e que já existem: `app` e `idempotencia`)
-- [ ] Depois de rodar: zero obras, gesseiros e lançamentos com `[e2e]` no banco (conferido por `psql`)
-- [ ] Gate check passes: `npm run test --workspace apps/api && docker exec gesso_api npm run test:e2e -- --runInBand`
+- [x] `docker exec gesso_api npm run test:e2e -- --runInBand` passa (inclui os e2e que já existem: `app` e `idempotencia`)
+- [x] Depois de rodar: zero obras, gesseiros e lançamentos com `[e2e]` no banco (conferido por `psql`)
+- [x] Gate check passes: `npm run test --workspace apps/api && docker exec gesso_api npm run test:e2e -- --runInBand`
 
 **Tests**: e2e
 **Gate**: full
@@ -388,6 +410,8 @@ T12 → T13 → T14 → T15 → T16
 ### Phase 3: Front
 
 #### T12: Tipo da obra e helpers de status
+
+**Status**: ✅ Concluída (2026-11-19)
 
 **What**: `Obra.motivoCancelamento?: string | null` em `types.ts`; em `lib/status.ts`, `acaoDeAvanco` (`ORCAMENTO` → `fechar`/"Cliente aprovou", `FECHADA` → `iniciar`/"Iniciar obra", `ANDAMENTO` → `concluir`/"Concluir obra") e `textoConfirmacaoConclusao(obra)` (uma linha `<nome> — <moeda(valorCombinado)>` por gesseiro, ou `Nenhum gesseiro alocado: nenhum crédito será gerado.`).
 **Where**: `apps/web/src/lib/status.ts`
@@ -402,9 +426,9 @@ T12 → T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `lib/status.test.ts`: ação de cada status (nenhuma em `CONCLUIDA`/`CANCELADA`); texto com 2 gesseiros (nomes e valores em BRL) e texto exato sem equipe (P1 AC10)
-- [ ] `types.ts` atualizado (mudança de tipo, coberta pelo build)
-- [ ] Gate check passes: `npm run test --workspace apps/web`
+- [x] `lib/status.test.ts`: ação de cada status (nenhuma em `CONCLUIDA`/`CANCELADA`); texto com 2 gesseiros (nomes e valores em BRL) e texto exato sem equipe (P1 AC10)
+- [x] `types.ts` atualizado (mudança de tipo, coberta pelo build)
+- [x] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit
 **Gate**: quick
@@ -414,6 +438,8 @@ T12 → T13 → T14 → T15 → T16
 ---
 
 #### T13: `AcoesStatusObra` — avanço no funil
+
+**Status**: ✅ Concluída (2026-11-19)
 
 **What**: Componente com o botão de avanço do status atual; "Iniciar obra" desabilitado sem equipe, com "Aloque pelo menos um gesseiro para iniciar" abaixo; "Concluir obra" com `window.confirm(textoConfirmacaoConclusao(obra))`; botões desabilitados durante a chamada; sucesso → `onAlterada()`; erro HTTP (`ApiError.status > 0`) → `onErro(mensagem, true)`; falha de rede (`status === 0`) → `onErro(SEM_CONEXAO_ENVIO, false)` (AD-014).
 **Where**: `apps/web/src/components/AcoesStatusObra.tsx`
@@ -428,13 +454,13 @@ T12 → T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `AcoesStatusObra.test.tsx`: rótulo certo por status e nenhum em `CONCLUIDA`/`CANCELADA` (P1 AC6)
-- [ ] `FECHADA` sem gesseiro: botão desabilitado + texto exato; com gesseiro: habilitado e chama `PATCH /obras/:id/iniciar` (P1 AC6)
-- [ ] "Concluir obra": `confirm` recebe o texto com nomes e valores; recusado → nenhuma chamada; aceito → `PATCH /obras/:id/concluir` (P1 AC7, AC10)
-- [ ] Durante a chamada os botões ficam desabilitados (edge case); sucesso chama `onAlterada` (P1 AC8)
-- [ ] `api.patch` rejeita com `ApiError("Não é possível concluir uma obra com status CONCLUIDA", 400)` → `onErro(mensagem, true)` (P1 AC9)
-- [ ] `api.patch` rejeita com `ApiError(SEM_CONEXAO_ENVIO, 0)` → `onErro` com o texto exato da spec e `false`; `api.patch` chamado uma vez só, mesmo depois de esperar (P1 AC11)
-- [ ] Gate check passes: `npm run test --workspace apps/web`
+- [x] `AcoesStatusObra.test.tsx`: rótulo certo por status e nenhum em `CONCLUIDA`/`CANCELADA` (P1 AC6)
+- [x] `FECHADA` sem gesseiro: botão desabilitado + texto exato; com gesseiro: habilitado e chama `PATCH /obras/:id/iniciar` (P1 AC6)
+- [x] "Concluir obra": `confirm` recebe o texto com nomes e valores; recusado → nenhuma chamada; aceito → `PATCH /obras/:id/concluir` (P1 AC7, AC10)
+- [x] Durante a chamada os botões ficam desabilitados (edge case); sucesso chama `onAlterada` (P1 AC8)
+- [x] `api.patch` rejeita com `ApiError("Não é possível concluir uma obra com status CONCLUIDA", 400)` → `onErro(mensagem, true)` (P1 AC9)
+- [x] `api.patch` rejeita com `ApiError(SEM_CONEXAO_ENVIO, 0)` → `onErro` com o texto exato da spec e `false`; `api.patch` chamado uma vez só, mesmo depois de esperar (P1 AC11)
+- [x] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit
 **Gate**: quick
@@ -444,6 +470,8 @@ T12 → T13 → T14 → T15 → T16
 ---
 
 #### T14: `AcoesStatusObra` — cancelar com motivo
+
+**Status**: ✅ Concluída (2026-11-19)
 
 **What**: Ação "Cancelar obra" em `ORCAMENTO`/`FECHADA`/`ANDAMENTO` que abre no card um formulário com "Motivo" obrigatório; envia `PATCH /obras/:id/cancelar` com `{ motivo }`; erro aparece no formulário e o motivo digitado fica. Erro HTTP também chama `onAlterada()`; falha de rede mostra `SEM_CONEXAO_ENVIO` no formulário, sem recarregar nem reenviar (AD-014, OFF-08).
 **Where**: `apps/web/src/components/AcoesStatusObra.tsx`
@@ -458,12 +486,12 @@ T12 → T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] "Cancelar obra" só aparece nos 3 status em aberto e abre o formulário (P2 AC5)
-- [ ] Motivo válido → `PATCH /obras/:id/cancelar` com `{ motivo }` e `onAlterada` (P2 AC6)
-- [ ] Erro HTTP da API → mensagem dentro do formulário, motivo preservado, `onAlterada` chamado e `onErro` não (P2 AC7)
-- [ ] Falha de rede (`ApiError(SEM_CONEXAO_ENVIO, 0)`) → texto exato da spec no formulário, motivo preservado, `onAlterada` e `onErro` não chamados, `api.patch` chamado uma vez só (P2 AC9)
-- [ ] Re-render com a mesma `obra` (simula a recarga do `useAoReconectar`) mantém o formulário aberto e o motivo (edge case)
-- [ ] Gate check passes: `npm run test --workspace apps/web`
+- [x] "Cancelar obra" só aparece nos 3 status em aberto e abre o formulário (P2 AC5)
+- [x] Motivo válido → `PATCH /obras/:id/cancelar` com `{ motivo }` e `onAlterada` (P2 AC6)
+- [x] Erro HTTP da API → mensagem dentro do formulário, motivo preservado, `onAlterada` chamado e `onErro` não (P2 AC7)
+- [x] Falha de rede (`ApiError(SEM_CONEXAO_ENVIO, 0)`) → texto exato da spec no formulário, motivo preservado, `onAlterada` e `onErro` não chamados, `api.patch` chamado uma vez só (P2 AC9)
+- [x] Re-render com a mesma `obra` (simula a recarga do `useAoReconectar`) mantém o formulário aberto e o motivo (edge case)
+- [x] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit
 **Gate**: quick
@@ -473,6 +501,8 @@ T12 → T13 → T14 → T15 → T16
 ---
 
 #### T15: `Obras.tsx` usa `AcoesStatusObra` e mostra o motivo
+
+**Status**: ✅ Concluída (2026-11-19) — teste manual pela UI pendente do usuário
 
 **What**: Com o handler de erro da página na ordem `if (recarregar) await carregar(); setErro(mensagem)` (o `carregar()` limpa o `erro` em `Obras.tsx:37`), trocar o bloco do "Concluir obra" (`Obras.tsx:167-177`) e a função `concluir()` (`Obras.tsx:82-89`) por `<AcoesStatusObra obra onAlterada={carregar} onErro={falhaTransicao} />` e mostrar "Motivo do cancelamento: …" no card `CANCELADA`.
 **Where**: `apps/web/src/pages/Obras.tsx`
@@ -487,13 +517,13 @@ T12 → T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `Obras.test.tsx`: transição com sucesso recarrega com o filtro atual (`GET /obras?status=...`) (P1 AC8)
-- [ ] Erro HTTP de transição: a lista é recarregada com o filtro atual e a mensagem da API continua visível no `erro` da página depois da recarga; o card mostra o status que o `GET` devolveu (P1 AC9)
-- [ ] Falha de rede: mensagem de sem conexão no `erro` da página, nenhum `GET /obras` novo, card como estava (P1 AC11)
-- [ ] O `useAoReconectar` continua recarregando obras e gesseiros (os testes de OFF-15 do PWA em `Obras.test.tsx` passam sem mudança)
-- [ ] Card `CANCELADA` mostra o motivo (P2 AC8)
-- [ ] Gate check passes: `npm run build && npm test`
-- [ ] Teste manual: o Independent Test da P1 e da P2 pela UI (`gesso_web` reiniciado), inclusive o cancelamento com o DevTools em "Offline"
+- [x] `Obras.test.tsx`: transição com sucesso recarrega com o filtro atual (`GET /obras?status=...`) (P1 AC8)
+- [x] Erro HTTP de transição: a lista é recarregada com o filtro atual e a mensagem da API continua visível no `erro` da página depois da recarga; o card mostra o status que o `GET` devolveu (P1 AC9)
+- [x] Falha de rede: mensagem de sem conexão no `erro` da página, nenhum `GET /obras` novo, card como estava (P1 AC11)
+- [x] O `useAoReconectar` continua recarregando obras e gesseiros (os testes de OFF-15 do PWA em `Obras.test.tsx` passam sem mudança)
+- [x] Card `CANCELADA` mostra o motivo (P2 AC8)
+- [x] Gate check passes: `npm run build && npm test`
+- [ ] **Pendente do usuário** — Teste manual: o Independent Test da P1 e da P2 pela UI (`gesso_web` reiniciado), inclusive o cancelamento com o DevTools em "Offline"
 
 **Tests**: unit
 **Gate**: build
@@ -503,6 +533,8 @@ T12 → T13 → T14 → T15 → T16
 ---
 
 #### T16: Estados de status das obras na `audit:responsive`
+
+**Status**: ✅ Concluída (2026-11-19)
 
 **What**: Na fixture, criar uma obra `[audit] Cancelada` (`status: CANCELADA` gravado direto pelo Prisma) com motivo de 500 caracteres, incluindo um trecho de 120 sem espaço; `limpar` e `contar` passam a incluir obras com `titulo` começando por `[audit]`. Na auditoria, estado novo `obras-cancelar` (clica em "Cancelar obra" e confere que o formulário com "Motivo" abriu) e os seletores `.card-acoes .btn` e os botões do formulário de cancelamento no RSP-08. Se a medida mostrar estouro, o motivo exibido ganha `overflow-wrap: anywhere`.
 **Where**: `apps/web/scripts/audit-responsive.mjs`; `apps/api/scripts/fixture-auditoria.mjs`
@@ -517,11 +549,11 @@ T12 → T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `npm run audit:responsive --workspace apps/web` termina com `medidos: 126/126, nao montados: 0, falhas: 0` (era 118/118) e "fixture limpa: nenhum registro [audit] no banco" (P2 Celular AC1–3)
-- [ ] O card `[audit] Cancelada` aparece no estado `obras` com o motivo, sem estouro em 320px (RSP-01)
-- [ ] Prova de que a medida pega o erro (feita e revertida): com o `min-height` dos botões de `.card-acoes` forçado a 30px, o RSP-08 reprova em ≤ 900px; com o motivo em `white-space: nowrap`, o RSP-01 reprova em 320px
-- [ ] `npm run audit:pwa --workspace apps/web` continua 14/14 (a fixture é compartilhada)
-- [ ] Gate check passes: browser (ver Gate Check Commands) e `npm run build && npm test`
+- [x] `npm run audit:responsive --workspace apps/web` termina com `medidos: 126/126, nao montados: 0, falhas: 0` (era 118/118) e "fixture limpa: nenhum registro [audit] no banco" (P2 Celular AC1–3)
+- [x] O card `[audit] Cancelada` aparece no estado `obras` com o motivo, sem estouro em 320px (RSP-01)
+- [x] Prova de que a medida pega o erro (feita e revertida): com o `min-height` dos botões de `.card-acoes` forçado a 30px, o RSP-08 reprova em ≤ 900px; com o motivo em `white-space: nowrap`, o RSP-01 reprova em 320px
+- [x] `npm run audit:pwa --workspace apps/web` continua 14/14 (a fixture é compartilhada)
+- [x] Gate check passes: browser (ver Gate Check Commands) e `npm run build && npm test`
 
 **Tests**: browser
 **Gate**: browser

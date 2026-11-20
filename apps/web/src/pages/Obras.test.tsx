@@ -10,6 +10,7 @@ jest.mock('../lib/api', () => ({
 
 const get = api.get as jest.Mock;
 const post = api.post as jest.Mock;
+const patch = api.patch as jest.Mock;
 
 const gesseiros: Gesseiro[] = [{ id: 'g-ana', nome: 'Ana', ativo: true }];
 
@@ -79,6 +80,7 @@ async function criarObra() {
 beforeEach(() => {
   get.mockReset();
   post.mockReset();
+  patch.mockReset();
   get.mockImplementation(async (caminho: string) => (caminho === '/gesseiros' ? gesseiros : todas));
 });
 
@@ -240,5 +242,132 @@ describe('Obras: conexão de volta (OFF-15)', () => {
     expect(screen.getByLabelText('Cliente')).toHaveValue('Maria Silva');
     expect(screen.getByRole('button', { name: 'Fechadas' })).toHaveClass('ativo');
     expect(post).not.toHaveBeenCalled();
+  });
+});
+
+/** TRN-05, TRN-10 (exibição do motivo) e TRN-13 (P1 AC9/AC11, reconexão) de obras-transicoes-status. */
+describe('Obras: ações de status', () => {
+  const SEM_CONEXAO =
+    'Sem conexão: não foi possível confirmar o envio. Tente de novo; o mesmo lançamento não será duplicado.';
+
+  it('cada card em aberto mostra o botão de avanço do seu status; os finais, nenhum', async () => {
+    render(<Obras />);
+    await screen.findByText('Obra orc');
+
+    expect(within(card('Obra orc')).getByRole('button', { name: 'Cliente aprovou' })).toBeInTheDocument();
+    expect(within(card('Obra fec')).getByRole('button', { name: 'Iniciar obra' })).toBeInTheDocument();
+    expect(within(card('Obra and')).getByRole('button', { name: 'Concluir obra' })).toBeInTheDocument();
+    for (const titulo of ['Obra con', 'Obra can']) {
+      for (const nome of ['Cliente aprovou', 'Iniciar obra', 'Concluir obra', 'Cancelar obra']) {
+        expect(within(card(titulo)).queryByRole('button', { name: nome })).toBeNull();
+      }
+    }
+  });
+
+  it('transição aplicada: recarrega com o filtro atual e o card mostra o novo status', async () => {
+    patch.mockResolvedValue({});
+    render(<Obras />);
+    await screen.findByText('Obra orc');
+    fireEvent.click(screen.getByRole('button', { name: 'Aguardando cliente' }));
+    await waitFor(() => expect(ultimaChamadaObras()).toBe('/obras?status=ORCAMENTO'));
+    const antes = chamadasObras().length;
+    get.mockImplementation(async (caminho: string) =>
+      caminho === '/gesseiros' ? gesseiros : [obra('orc', 'FECHADA')],
+    );
+
+    fireEvent.click(within(card('Obra orc')).getByRole('button', { name: 'Cliente aprovou' }));
+
+    await waitFor(() => expect(chamadasObras()).toHaveLength(antes + 1));
+    expect(patch).toHaveBeenCalledWith('/obras/orc/fechar');
+    expect(ultimaChamadaObras()).toBe('/obras?status=ORCAMENTO');
+    expect(await within(card('Obra orc')).findByRole('button', { name: 'Iniciar obra' })).toBeInTheDocument();
+  });
+
+  it('erro HTTP: recarrega com o filtro atual e depois mostra a mensagem da API (P1 AC9)', async () => {
+    const mensagem = 'Não é possível fechar uma obra com status FECHADA';
+    patch.mockRejectedValue(Object.assign(new Error(mensagem), { status: 400 }));
+    render(<Obras />);
+    await screen.findByText('Obra orc');
+    const antes = chamadasObras().length;
+    get.mockImplementation(async (caminho: string) =>
+      caminho === '/gesseiros' ? gesseiros : [obra('orc', 'FECHADA')],
+    );
+
+    fireEvent.click(within(card('Obra orc')).getByRole('button', { name: 'Cliente aprovou' }));
+
+    // O carregar() limpa o erro; a mensagem aparece depois dele e fica na tela.
+    expect(await screen.findByText(mensagem)).toHaveClass('erro');
+    expect(chamadasObras()).toHaveLength(antes + 1);
+    expect(ultimaChamadaObras()).toBe('/obras');
+    expect(within(card('Obra orc')).getByRole('button', { name: 'Iniciar obra' })).toBeInTheDocument();
+  });
+
+  it('falha de rede: mostra a mensagem do OFF-08, não recarrega e não reenvia (P1 AC11)', async () => {
+    jest.spyOn(window, 'confirm').mockReturnValue(true);
+    patch.mockRejectedValue(Object.assign(new Error(SEM_CONEXAO), { status: 0 }));
+    render(<Obras />);
+    await screen.findByText('Obra orc');
+    const antes = chamadasObras().length;
+
+    fireEvent.click(within(card('Obra and')).getByRole('button', { name: 'Concluir obra' }));
+
+    expect(await screen.findByText(SEM_CONEXAO)).toHaveClass('erro');
+    expect(chamadasObras()).toHaveLength(antes);
+    expect(patch).toHaveBeenCalledTimes(1);
+    expect(within(card('Obra and')).getByRole('button', { name: 'Concluir obra' })).toBeInTheDocument();
+    (window.confirm as jest.Mock).mockRestore();
+  });
+
+  it('obra CANCELADA mostra "Motivo do cancelamento: <motivo>"', async () => {
+    get.mockImplementation(async (caminho: string) =>
+      caminho === '/gesseiros'
+        ? gesseiros
+        : [{ ...obra('can', 'CANCELADA'), motivoCancelamento: 'Cliente desistiu' }, obra('orc', 'ORCAMENTO')],
+    );
+    render(<Obras />);
+    await screen.findByText('Obra can');
+
+    expect(within(card('Obra can')).getByText('Motivo do cancelamento: Cliente desistiu')).toBeInTheDocument();
+    expect(within(card('Obra orc')).queryByText(/Motivo do cancelamento/)).toBeNull();
+  });
+
+  it('cancelar com 400 e a recarga trazendo a obra CONCLUIDA: a mensagem da API continua no card (P2 AC7)', async () => {
+    const mensagem = 'Não é possível cancelar uma obra com status CONCLUIDA';
+    patch.mockRejectedValue(Object.assign(new Error(mensagem), { status: 400 }));
+    render(<Obras />);
+    await screen.findByText('Obra orc');
+    fireEvent.click(within(card('Obra and')).getByRole('button', { name: 'Cancelar obra' }));
+    fireEvent.change(within(card('Obra and')).getByLabelText('Motivo'), {
+      target: { value: 'Cliente desistiu' },
+    });
+    const antes = chamadasObras().length;
+    get.mockImplementation(async (caminho: string) =>
+      caminho === '/gesseiros' ? gesseiros : todas.map((o) => (o.id === 'and' ? obra('and', 'CONCLUIDA') : o)),
+    );
+
+    fireEvent.click(within(card('Obra and')).getByRole('button', { name: 'Confirmar cancelamento' }));
+
+    await waitFor(() => expect(chamadasObras()).toHaveLength(antes + 1));
+    await waitFor(() => expect(within(card('Obra and')).getByText('Concluida')).toBeInTheDocument());
+    expect(within(card('Obra and')).getByText(mensagem)).toHaveClass('erro');
+    expect(within(card('Obra and')).getByLabelText('Motivo')).toHaveValue('Cliente desistiu');
+  });
+
+  it('o formulário de cancelamento preenchido sobrevive à reconexão (OFF-15)', async () => {
+    render(<Obras />);
+    await screen.findByText('Obra orc');
+    fireEvent.click(within(card('Obra fec')).getByRole('button', { name: 'Cancelar obra' }));
+    fireEvent.change(within(card('Obra fec')).getByLabelText('Motivo'), {
+      target: { value: 'Cliente desistiu' },
+    });
+    const antes = chamadasObras().length;
+
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+
+    await waitFor(() => expect(chamadasObras()).toHaveLength(antes + 1));
+    expect(within(card('Obra fec')).getByLabelText('Motivo')).toHaveValue('Cliente desistiu');
+    expect(patch).not.toHaveBeenCalled();
   });
 });

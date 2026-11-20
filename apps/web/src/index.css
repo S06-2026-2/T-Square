@@ -420,7 +420,8 @@ h1 {
 .card h2,
 .card h4,
 .cliente,
-.pessoa {
+.pessoa,
+.motivo-cancelamento {
   overflow-wrap: anywhere;
 }
 
@@ -506,6 +507,18 @@ h1 {
   gap: 8px;
   margin-top: auto;
   padding-top: 14px;
+}
+
+/* Ações de status do card (obras-transicoes-status). */
+.aviso-acao,
+.motivo-cancelamento {
+  color: var(--secundario);
+  font-size: 13px;
+  margin: 6px 0 0;
+}
+
+.form-cancelamento .card-acoes {
+  padding-top: 0;
 }
 
 .card-obra details {
@@ -1370,7 +1383,8 @@ textarea {
   .btn-detalhes,
   .btn-icone,
   .card-obra summary,
-  .linha-form .btn-texto {
+  .linha-form .btn-texto,
+  .card-acoes .btn {
     min-height: 44px;
     min-width: 44px;
   }

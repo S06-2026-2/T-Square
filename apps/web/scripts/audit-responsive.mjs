@@ -1,7 +1,7 @@
 // Auditoria de responsividade (spec pwa-instalavel-responsivo, RSP-01..RSP-10).
 //
-// Percorre 15 telas/estados em 6 larguras com o UA do Safari da Apple (90 combinações) e, de novo,
-// 14 estados em 1024/1366 com o Chrome de desktop sem toque (28), num total de 118, e mede o layout.
+// Percorre 16 telas/estados em 6 larguras com o UA do Safari da Apple (96 combinações) e, de novo,
+// 15 estados em 1024/1366 com o Chrome de desktop sem toque (30), num total de 126, e mede o layout.
 // Sai com código 1 se qualquer medida falhar, se algum estado não montar (NAO_MONTADO) ou se
 // sobrar dado "[audit]" no banco. Não existe estado "pulado".
 //
@@ -12,7 +12,7 @@
 // para `pointer: coarse`.
 //
 // Pré-requisitos: o front servido em AUDIT_BASE_URL (padrão: `vite preview`, porta 4173) e a API
-// no Docker (container gesso_api), que roda a fixture dos alertas:
+// no Docker (container gesso_api), que roda a fixture dos alertas e da obra cancelada:
 //   docker exec gesso_api node scripts/fixture-auditoria.mjs preparar|limpar|contar
 // Não rodar durante uma análise real do agente nem perto de uma demonstração.
 //
@@ -168,6 +168,12 @@ function formularioAberto() {
 const ALERTA = '[audit] Alerta ativo';
 const INSTRUCAO_IOS = 'Toque em Compartilhar e depois em Adicionar à Tela de Início';
 const SILENCIADO = '[audit] Silenciado';
+/**
+ * Trecho de 120 caracteres sem espaço do motivo da obra "[audit] Cancelada" (fixture-auditoria.mjs).
+ * O card é achado por ele e não pelo título: a troca do nome longo renomeia a primeira obra da
+ * lista, que é justamente a da fixture (a mais nova).
+ */
+const TRECHO_MOTIVO = 'x'.repeat(120);
 
 /**
  * Cada estado: rota, se precisa de login, a ação que o monta e a conferência de que montou.
@@ -278,6 +284,37 @@ const ESTADOS = [
           [...document.querySelectorAll('.card-obra details')].every((d) => d.open) &&
           document.querySelectorAll('.card-obra details[open] .form-card').length > 0 &&
           document.querySelectorAll('.card-obra details[open] .carregando').length === 0,
+      );
+    },
+  },
+  {
+    // obras-transicoes-status, story "Ações de status no celular": formulário de cancelamento
+    // aberto e preenchido (nunca confirma) e o card da obra [audit] CANCELADA com motivo de 500
+    // caracteres, um trecho de 120 sem espaço.
+    id: 'obras-cancelar',
+    rota: '/obras',
+    precisaFixture: true,
+    montar: async (p) => {
+      const pronto = await esperar(
+        p,
+        (trecho) =>
+          [...document.querySelectorAll('.card-obra[data-status="CANCELADA"] .motivo-cancelamento')].some(
+            (m) => m.getBoundingClientRect().height > 0 && m.textContent.includes(trecho),
+          ) && document.querySelectorAll('.card-acoes .btn-secundario').length > 0,
+        TRECHO_MOTIVO,
+      );
+      if (!pronto) return false;
+      await clicar(p, '.card-acoes .btn-secundario', 'Cancelar obra');
+      if (!(await esperar(p, visivelComTexto, '.form-cancelamento textarea', ''))) return false;
+      await p.type('.form-cancelamento textarea', 'Cliente desistiu da obra');
+      return esperar(
+        p,
+        () =>
+          document.querySelector('.form-cancelamento textarea')?.value ===
+            'Cliente desistiu da obra' &&
+          [...document.querySelectorAll('.form-cancelamento .btn')].every(
+            (b) => b.getBoundingClientRect().height > 0,
+          ),
       );
     },
   },
@@ -528,6 +565,8 @@ async function medir(page, logado, largura) {
       const alvos = [
         '.nav-link', '.btn-sair', '.btn-instalar', '.chip', '.btn-detalhes', '.btn-icone',
         '.card-obra summary', '.linha-form .btn-texto',
+        // obras-transicoes-status: avanço, "Cancelar obra" e os botões do formulário de cancelar.
+        '.card-acoes .btn',
       ];
       const pequenosAlvo = [...document.querySelectorAll(alvos.join(','))]
         .filter(visivel)
