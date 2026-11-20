@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
+import { QueryArquivadosDto } from '../comum/arquivados';
 import { ApiIdempotencia } from '../idempotencia/api-idempotencia.decorator';
 import { ContextoIdempotencia } from '../idempotencia/contexto-idempotencia.decorator';
 import { IdempotenciaService } from '../idempotencia/idempotencia.service';
@@ -19,8 +20,8 @@ export class GesseirosController {
   ) {}
 
   @Get()
-  findAll() {
-    return this.gesseirosService.findAll();
+  findAll(@Query() query: QueryArquivadosDto) {
+    return this.gesseirosService.findAll(query.arquivados);
   }
 
   @Get(':id')
@@ -45,9 +46,18 @@ export class GesseirosController {
     return this.gesseirosService.update(id, dto);
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.gesseirosService.remove(id);
+  @Patch(':id/arquivar')
+  @ApiOperation({
+    summary: 'Arquiva o gesseiro com saldo 0 e sem obra em aberto (apagado depois de 7 dias)',
+  })
+  arquivar(@Param('id') id: string) {
+    return this.gesseirosService.arquivar(id);
+  }
+
+  @Patch(':id/restaurar')
+  @ApiOperation({ summary: 'Tira o gesseiro do arquivo' })
+  restaurar(@Param('id') id: string) {
+    return this.gesseirosService.restaurar(id);
   }
 
   @Post(':id/lancamentos')

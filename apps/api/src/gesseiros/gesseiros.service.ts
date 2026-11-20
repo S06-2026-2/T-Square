@@ -1,17 +1,16 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { StatusObra, TipoLancamento } from '@prisma/client';
 
+import { filtroArquivados } from '../comum/arquivados';
+import { reais } from '../comum/moeda';
 import { ClientePrisma } from '../idempotencia/tipos';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateGesseiroDto } from './dto/create-gesseiro.dto';
 import { CreateLancamentoDto } from './dto/create-lancamento.dto';
 import { UpdateGesseiroDto } from './dto/update-gesseiro.dto';
+import { saldosPorGesseiro, totaisDe } from './saldo';
 
-/** Obra nesses status ainda nao terminou — alocacao aqui bloqueia a desativacao. */
+/** Obra nesses status ainda nao terminou — alocacao aqui bloqueia o arquivamento (ARQ-09). */
 const STATUS_EM_ABERTO: StatusObra[] = [
   StatusObra.ORCAMENTO,
   StatusObra.FECHADA,
@@ -23,14 +22,20 @@ const STATUS_EM_ABERTO: StatusObra[] = [
  *   - findAll, findOne
  *   - extrato / calculo de saldo (contraparte da regra de credito automatico)
  *   - create, registrarLancamento (vale e pagamento)
- *   - update, remove (soft delete: nunca apaga a linha)
+ *   - update
+ *   - arquivar/restaurar (AD-015: arquivado some das listas; a limpeza apaga depois de 7 dias)
  */
 @Injectable()
 export class GesseirosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
-    return this.prisma.gesseiro.findMany({ orderBy: { nome: 'asc' } });
+  /** ARQ-06/ARQ-10: a lista normal esconde os arquivados; com a flag, só eles. */
+  async findAll(arquivados?: boolean) {
+    const arquivo = filtroArquivados(arquivados);
+    return this.prisma.gesseiro.findMany({
+      where: arquivo.where,
+      orderBy: arquivo.orderBy ?? { nome: 'asc' },
+    });
   }
 
   async findOne(id: string, tx: ClientePrisma = this.prisma) {
@@ -62,19 +67,14 @@ export class GesseirosService {
       _sum: { valor: true },
     });
 
-    const total = (tipo: TipoLancamento) =>
-      Number(somaPorTipo.find((linha) => linha.tipo === tipo)?._sum.valor ?? 0);
-
-    const creditos = total(TipoLancamento.CREDITO);
-    const vales = total(TipoLancamento.VALE);
-    const pagamentos = total(TipoLancamento.PAGAMENTO);
+    const { creditos, vales, pagamentos, saldo } = totaisDe(somaPorTipo);
 
     return {
       gesseiro: { id: gesseiro.id, nome: gesseiro.nome },
       creditos,
       vales,
       pagamentos,
-      saldoAReceber: creditos - vales - pagamentos,
+      saldoAReceber: saldo,
       lancamentos: gesseiro.lancamentos,
     };
   }
@@ -126,36 +126,59 @@ export class GesseirosService {
 
     return this.prisma.gesseiro.update({
       where: { id },
-      data: dto
+      data: dto,
     });
   }
 
-  async remove(id: string) {
-    const gesseiro = await this.findOne(id);
+  /**
+   * ARQ-09: arquiva o gesseiro com saldo exatamente 0 e sem obra em aberto. Grava também
+   * `ativo = false`, que é o filtro dos selects de alocação (AD-004). Update condicional.
+   */
+  async arquivar(id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const gesseiro = await this.findOne(id, tx);
+      if (gesseiro.arquivadoEm) {
+        throw new BadRequestException('O gesseiro já está arquivado');
+      }
 
-    // Separa o cadastro das listas que vieram pelo include, para que os dois
-    // caminhos de sucesso devolvam exatamente o mesmo formato.
-    const { alocacoes, lancamentos, ...cadastro } = gesseiro;
+      const saldo = (await saldosPorGesseiro(tx, [id])).get(id) ?? 0;
+      if (saldo !== 0) {
+        throw new BadRequestException(
+          `O gesseiro ainda tem saldo de ${reais(saldo)}; zere o saldo antes de arquivar`,
+        );
+      }
 
-    if (!gesseiro.ativo) {
-      return cadastro;
-    }
-
-    const emAberto = alocacoes.filter((alocacao) =>
-      STATUS_EM_ABERTO.includes(alocacao.obra.status),
-    );
-
-    if (emAberto.length > 0) {
-      const titulos = emAberto.map((alocacao) => alocacao.obra.titulo).join(', ');
-      throw new BadRequestException(
-        `Não é possível desativar: o gesseiro ainda está alocado em ${titulos}. ` +
-          'Remova-o dessas obras antes de desativar.',
+      const emAberto = gesseiro.alocacoes.filter((alocacao) =>
+        STATUS_EM_ABERTO.includes(alocacao.obra.status),
       );
-    }
+      if (emAberto.length > 0) {
+        const titulos = emAberto.map((alocacao) => alocacao.obra.titulo).join(', ');
+        throw new BadRequestException(
+          `O gesseiro está alocado em ${titulos}; remova-o dessas obras antes de arquivar`,
+        );
+      }
 
-    return this.prisma.gesseiro.update({
-      where: { id },
-      data: { ativo: false },
+      const { count } = await tx.gesseiro.updateMany({
+        where: { id, arquivadoEm: null },
+        data: { arquivadoEm: new Date(), ativo: false },
+      });
+      if (count === 0) {
+        throw new BadRequestException('O gesseiro já está arquivado');
+      }
+      return tx.gesseiro.findUniqueOrThrow({ where: { id } });
     });
+  }
+
+  /** ARQ-07: volta para a lista e para os selects de alocação. */
+  async restaurar(id: string) {
+    const { count } = await this.prisma.gesseiro.updateMany({
+      where: { id, arquivadoEm: { not: null } },
+      data: { arquivadoEm: null, ativo: true },
+    });
+    if (count === 0) {
+      await this.findOne(id);
+      throw new BadRequestException('O gesseiro não está arquivado');
+    }
+    return this.prisma.gesseiro.findUniqueOrThrow({ where: { id } });
   }
 }

@@ -11,6 +11,7 @@ import { GesseirosModule } from './gesseiros/gesseiros.module';
 import { EstoqueModule } from './estoque/estoque.module';
 import { AgenteEstoqueModule } from './agente-estoque/agente-estoque.module';
 import { IdempotenciaModule } from './idempotencia/idempotencia.module';
+import { LimpezaModule } from './limpeza/limpeza.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -24,6 +25,7 @@ import { AppController } from './app.controller';
     GesseirosModule,
     EstoqueModule,
     AgenteEstoqueModule,
+    LimpezaModule,
   ],
   controllers: [AppController],
   providers: [

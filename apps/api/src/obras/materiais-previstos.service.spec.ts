@@ -34,7 +34,11 @@ describe('MateriaisPrevistosService', () => {
     prisma = {
       obra: { findUnique: jest.fn() },
       material: { findMany: jest.fn() },
-      materialPrevistoObra: { deleteMany: jest.fn(), createMany: jest.fn(), findMany: jest.fn() },
+      materialPrevistoObra: {
+        deleteMany: jest.fn(),
+        createMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       movimentacaoEstoque: { findMany: jest.fn() },
       // Executa o callback da transacao passando o proprio mock como "tx".
       $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),

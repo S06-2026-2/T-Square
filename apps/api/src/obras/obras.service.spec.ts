@@ -26,7 +26,10 @@ describe('ObrasService', () => {
   let tx: {
     obra: { findUnique: jest.Mock; updateMany: jest.Mock; findUniqueOrThrow: jest.Mock };
     obraGesseiro: { findMany: jest.Mock };
-    lancamento: Record<'create' | 'createMany' | 'update' | 'updateMany' | 'delete' | 'deleteMany', jest.Mock>;
+    lancamento: Record<
+      'create' | 'createMany' | 'update' | 'updateMany' | 'delete' | 'deleteMany',
+      jest.Mock
+    >;
   };
 
   beforeEach(async () => {
@@ -109,7 +112,10 @@ describe('ObrasService', () => {
     it('sem materiais previstos mantem a criacao atual', async () => {
       prisma.obra.create.mockResolvedValue({ id: 'obra-nova' });
 
-      await service.create({ ...dadosObra, gesseiros: [{ gesseiroId: 'g-1', valorCombinado: 900 }] });
+      await service.create({
+        ...dadosObra,
+        gesseiros: [{ gesseiroId: 'g-1', valorCombinado: 900 }],
+      });
 
       expect(prisma.material.findMany).not.toHaveBeenCalled();
       const { data } = prisma.obra.create.mock.calls[0][0];
@@ -160,6 +166,78 @@ describe('ObrasService', () => {
       await expect(promessa).rejects.toBeInstanceOf(NotFoundException);
       await expect(promessa).rejects.toThrow('Material mat-fantasma não encontrado');
       expect(prisma.obra.create).not.toHaveBeenCalled();
+    });
+  });
+
+  /** ARQ-01 (P1: Registrar quanto o cliente pagou) de arquivar-e-limpar-registros. */
+  describe('update: valorRecebido', () => {
+    const atual = {
+      id: 'obra-1',
+      status: StatusObra.ANDAMENTO,
+      valorTotal: '8500.00',
+      valorRecebido: '1000.00',
+    };
+
+    beforeEach(() => {
+      prisma.obra.findUnique.mockResolvedValue(atual);
+      prisma.obra.update.mockResolvedValue({ ...atual });
+    });
+
+    it.each([0, 4250.5, 8500])('grava %p (até o total)', async (valorRecebido) => {
+      await service.update('obra-1', { valorRecebido });
+
+      expect(prisma.obra.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'obra-1' },
+          data: expect.objectContaining({ valorRecebido }),
+        }),
+      );
+    });
+
+    it('acima do total: 400 com a mensagem exata, sem gravar', async () => {
+      const promessa = service.update('obra-1', { valorRecebido: 8500.01 });
+
+      await expect(promessa).rejects.toBeInstanceOf(BadRequestException);
+      await expect(promessa).rejects.toThrow(
+        'O valor recebido não pode passar do valor total (R$ 8.500,00)',
+      );
+      expect(prisma.obra.update).not.toHaveBeenCalled();
+    });
+
+    // Auditor #3/#4: o 0 enviado vale (`??`, não `||`), tanto no recebido quanto no total.
+    it('valorRecebido 0 junto com um total menor que o recebido gravado: grava', async () => {
+      await service.update('obra-1', { valorTotal: 500, valorRecebido: 0 });
+
+      expect(prisma.obra.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('valorTotal 0 com recebido gravado de 1000: 400 com "(R$ 0,00)"', async () => {
+      await expect(service.update('obra-1', { valorTotal: 0 })).rejects.toThrow(
+        'O valor recebido não pode passar do valor total (R$ 0,00)',
+      );
+      expect(prisma.obra.update).not.toHaveBeenCalled();
+    });
+
+    it('usa o valorTotal do mesmo PATCH quando ele vem junto', async () => {
+      await service.update('obra-1', { valorTotal: 9000, valorRecebido: 9000 });
+      expect(prisma.obra.update).toHaveBeenCalledTimes(1);
+
+      await expect(
+        service.update('obra-1', { valorTotal: 5000, valorRecebido: 6000 }),
+      ).rejects.toThrow('O valor recebido não pode passar do valor total (R$ 5.000,00)');
+    });
+
+    it('diminuir só o total para baixo do recebido gravado: 400, sem gravar', async () => {
+      await expect(service.update('obra-1', { valorTotal: 999.99 })).rejects.toThrow(
+        'O valor recebido não pode passar do valor total (R$ 999,99)',
+      );
+      expect(prisma.obra.update).not.toHaveBeenCalled();
+    });
+
+    it('PATCH sem valores (ex.: só o cliente) continua gravando', async () => {
+      await service.update('obra-1', { clienteNome: 'Outro' });
+
+      expect(prisma.obra.update).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -241,21 +319,23 @@ describe('ObrasService', () => {
         expect(resultado).toEqual({ id: 'obra-1', status: StatusObra.CONCLUIDA });
       });
 
-      it.each([StatusObra.ORCAMENTO, StatusObra.FECHADA, StatusObra.CONCLUIDA, StatusObra.CANCELADA])(
-        'a partir de %s: 400 com a mensagem exata, sem update e sem credito',
-        async (status) => {
-          prepararObra(status, equipe);
+      it.each([
+        StatusObra.ORCAMENTO,
+        StatusObra.FECHADA,
+        StatusObra.CONCLUIDA,
+        StatusObra.CANCELADA,
+      ])('a partir de %s: 400 com a mensagem exata, sem update e sem credito', async (status) => {
+        prepararObra(status, equipe);
 
-          const promessa = service.concluir('obra-1');
+        const promessa = service.concluir('obra-1');
 
-          await expect(promessa).rejects.toBeInstanceOf(BadRequestException);
-          await expect(promessa).rejects.toThrow(
-            `Não é possível concluir uma obra com status ${status}`,
-          );
-          expect(tx.obra.updateMany).not.toHaveBeenCalled();
-          naoTocouLancamentos();
-        },
-      );
+        await expect(promessa).rejects.toBeInstanceOf(BadRequestException);
+        await expect(promessa).rejects.toThrow(
+          `Não é possível concluir uma obra com status ${status}`,
+        );
+        expect(tx.obra.updateMany).not.toHaveBeenCalled();
+        naoTocouLancamentos();
+      });
 
       it('nao credita duas vezes se a obra ja estiver concluida', async () => {
         prepararObra(StatusObra.CONCLUIDA);
@@ -352,22 +432,26 @@ describe('ObrasService', () => {
         expect(resultado).toEqual({ id: 'obra-1', status: StatusObra.FECHADA });
       });
 
-      it.each([StatusObra.FECHADA, StatusObra.ANDAMENTO, StatusObra.CONCLUIDA, StatusObra.CANCELADA])(
-        'a partir de %s: 400 com a mensagem exata, sem update',
-        async (status) => {
-          prepararObra(status);
+      it.each([
+        StatusObra.FECHADA,
+        StatusObra.ANDAMENTO,
+        StatusObra.CONCLUIDA,
+        StatusObra.CANCELADA,
+      ])('a partir de %s: 400 com a mensagem exata, sem update', async (status) => {
+        prepararObra(status);
 
-          await expect(service.fechar('obra-1')).rejects.toThrow(
-            `Não é possível fechar uma obra com status ${status}`,
-          );
-          expect(tx.obra.updateMany).not.toHaveBeenCalled();
-        },
-      );
+        await expect(service.fechar('obra-1')).rejects.toThrow(
+          `Não é possível fechar uma obra com status ${status}`,
+        );
+        expect(tx.obra.updateMany).not.toHaveBeenCalled();
+      });
 
       it('obra inexistente: 404', async () => {
         tx.obra.findUnique.mockResolvedValue(null);
 
-        await expect(service.fechar('nao-existe')).rejects.toThrow('Obra nao-existe nao encontrada');
+        await expect(service.fechar('nao-existe')).rejects.toThrow(
+          'Obra nao-existe nao encontrada',
+        );
       });
     });
 

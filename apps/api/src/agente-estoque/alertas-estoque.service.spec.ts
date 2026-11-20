@@ -61,8 +61,7 @@ describe('AlertasEstoqueService', () => {
       materialId: string,
       tipo: TipoAlertaEstoque,
       fechamento:
-        | { status: 'DISPENSADO'; em: Date }
-        | { status: 'RESOLVIDO'; em: Date; por: ResolvidoPor },
+        { status: 'DISPENSADO'; em: Date } | { status: 'RESOLVIDO'; em: Date; por: ResolvidoPor },
     ) => ({
       id,
       materialId,
@@ -91,6 +90,7 @@ describe('AlertasEstoqueService', () => {
       const resultado = await service.listarSilenciados();
 
       const consulta = prisma.alertaEstoque.findMany.mock.calls[0][0];
+      expect(consulta.where).toEqual({ material: { arquivadoEm: null } });
       expect(consulta.distinct).toEqual(['materialId', 'tipo']);
       expect(consulta.orderBy).toEqual({ atualizadoEm: 'desc' });
       expect(resultado).toEqual([
@@ -165,7 +165,11 @@ describe('AlertasEstoqueService', () => {
       const resultado = await service.listarAtivos();
 
       const consulta = prisma.alertaEstoque.findMany.mock.calls[0][0];
-      expect(consulta.where).toEqual({ status: StatusAlertaEstoque.ATIVO });
+      // ARQ-11 (arquivar-e-limpar-registros): alerta de material arquivado fica de fora.
+      expect(consulta.where).toEqual({
+        status: StatusAlertaEstoque.ATIVO,
+        material: { arquivadoEm: null },
+      });
       expect(consulta.include).toEqual({ material: true });
       expect(consulta.orderBy).toEqual({ criadoEm: 'asc' });
       expect(resultado.alertas).toEqual([{ ...ativos[0], motivo: 'ABAIXO_DO_MINIMO' }]);

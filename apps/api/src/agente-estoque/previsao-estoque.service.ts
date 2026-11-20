@@ -83,7 +83,8 @@ export class PrevisaoEstoqueService {
     const inicioJanelaMaxima = new Date(agora.getTime() - JANELA_MAX_DIAS * DIA_MS);
 
     const [materiais, previstos, movimentacoes, alertas] = await Promise.all([
-      this.prisma.material.findMany({ orderBy: { nome: 'asc' } }),
+      // ARQ-11: material arquivado sai da análise do agente (e os alertas dele também).
+      this.prisma.material.findMany({ where: { arquivadoEm: null }, orderBy: { nome: 'asc' } }),
       this.prisma.materialPrevistoObra.findMany({
         include: { obra: { select: { id: true, titulo: true, status: true } } },
       }),
@@ -100,6 +101,7 @@ export class PrevisaoEstoqueService {
         },
       }),
       this.prisma.alertaEstoque.findMany({
+        where: { material: { arquivadoEm: null } },
         distinct: ['materialId', 'tipo'],
         orderBy: { atualizadoEm: 'desc' },
       }),

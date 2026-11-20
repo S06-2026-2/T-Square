@@ -2,7 +2,9 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { StatusObra } from '@prisma/client';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 
-export class QueryObraDto {
+import { QueryArquivadosDto } from '../../comum/arquivados';
+
+export class QueryObraDto extends QueryArquivadosDto {
   @ApiPropertyOptional({ enum: StatusObra, description: 'Filtra o funil por status' })
   @IsOptional()
   @IsEnum(StatusObra)

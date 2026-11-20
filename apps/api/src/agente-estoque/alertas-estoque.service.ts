@@ -65,7 +65,8 @@ export class AlertasEstoqueService {
   async listarAtivos() {
     const [alertas, ultimaAnalise] = await Promise.all([
       this.prisma.alertaEstoque.findMany({
-        where: { status: StatusAlertaEstoque.ATIVO },
+        // ARQ-11: alerta de material arquivado não aparece (continua no banco até a limpeza).
+        where: { status: StatusAlertaEstoque.ATIVO, material: { arquivadoEm: null } },
         include: { material: true },
         orderBy: { criadoEm: 'asc' },
       }),
@@ -90,6 +91,7 @@ export class AlertasEstoqueService {
   async listarSilenciados() {
     const agora = new Date();
     const ultimos = await this.prisma.alertaEstoque.findMany({
+      where: { material: { arquivadoEm: null } },
       distinct: ['materialId', 'tipo'],
       orderBy: { atualizadoEm: 'desc' },
       include: { material: { select: { nome: true, unidade: true } } },

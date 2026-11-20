@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
+import { QueryArquivadosDto } from '../comum/arquivados';
 import { ApiIdempotencia } from '../idempotencia/api-idempotencia.decorator';
 import { ContextoIdempotencia } from '../idempotencia/contexto-idempotencia.decorator';
 import { IdempotenciaService } from '../idempotencia/idempotencia.service';
@@ -18,8 +19,20 @@ export class EstoqueController {
   ) {}
 
   @Get('materiais')
-  listarMateriais() {
-    return this.estoqueService.listarMateriais();
+  listarMateriais(@Query() query: QueryArquivadosDto) {
+    return this.estoqueService.listarMateriais(query.arquivados);
+  }
+
+  @Patch('materiais/:id/arquivar')
+  @ApiOperation({ summary: 'Arquiva o material, com qualquer saldo (apagado depois de 7 dias)' })
+  arquivarMaterial(@Param('id') id: string) {
+    return this.estoqueService.arquivarMaterial(id);
+  }
+
+  @Patch('materiais/:id/restaurar')
+  @ApiOperation({ summary: 'Tira o material do arquivo' })
+  restaurarMaterial(@Param('id') id: string) {
+    return this.estoqueService.restaurarMaterial(id);
   }
 
   @Post('materiais')
@@ -36,7 +49,10 @@ export class EstoqueController {
   @Post('movimentacoes')
   @ApiOperation({ summary: 'Registra entrada ou saida de material e atualiza o saldo' })
   @ApiIdempotencia()
-  movimentar(@Body() dto: CreateMovimentacaoDto, @ContextoIdempotencia() ctx: ContextoIdempotencia) {
+  movimentar(
+    @Body() dto: CreateMovimentacaoDto,
+    @ContextoIdempotencia() ctx: ContextoIdempotencia,
+  ) {
     return this.idempotencia.executar(ctx, (tx) => this.estoqueService.movimentar(dto, tx));
   }
 
