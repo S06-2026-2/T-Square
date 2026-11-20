@@ -160,21 +160,21 @@ quanto o cliente já pagou, então não dá para saber se uma obra está quitada
 
 | Requirement ID | Story | Tasks | Status |
 | --- | --- | --- | --- |
-| ARQ-01 | P1: Valor recebido — campo, validação e default | T3 | In Tasks |
-| ARQ-02 | P1: Valor recebido — exibição e edição no card | T12 | In Tasks |
-| ARQ-03 | P1: Arquivar obra — checagens (concluída, cliente quitou, gesseiros com saldo ≤ 0) | T4, T10 | In Tasks |
-| ARQ-04 | P1: Arquivar obra — listas e resumo sem arquivadas | T5 | In Tasks |
-| ARQ-05 | P1: Arquivar obra — botão, diálogo com as duas confirmações e erros na UI | T13 | In Tasks |
-| ARQ-06 | P1: Arquivados — listar com `?arquivados=true` (3 entidades) | T5, T6, T7 | In Tasks |
-| ARQ-07 | P1: Arquivados — restaurar (3 entidades) | T4, T6, T7, T14 | In Tasks |
-| ARQ-08 | P1: Arquivados — telas "Ver arquivados" com data de limpeza e Restaurar | T14, T15, T16 | In Tasks |
-| ARQ-09 | P2: Gesseiro — arquivar com saldo 0 e sem obra aberta | T6 | In Tasks |
-| ARQ-10 | P2: Gesseiro — botão na tela e filtro das listas | T6, T15 | In Tasks |
-| ARQ-11 | P2: Material — arquivar, filtros (estoque, alertas, agente) e bloqueio de uso | T7, T8 | In Tasks |
-| ARQ-12 | P2: Material — 409 de nome arquivado e botão na tela | T7, T16 | In Tasks |
-| ARQ-13 | P2: Limpeza — job diário de 7 dias, regras por entidade, uma transação por registro | T9, T10 | In Tasks |
-| ARQ-14 | P2: Arquivados e diálogo na `audit:responsive` | T17 | In Tasks |
-| ARQ-15 | Edge: arquivar concorrente e restaurar durante a limpeza | T4, T9, T10 | In Tasks |
+| ARQ-01 | P1: Valor recebido — campo, validação e default | T3 | Verified |
+| ARQ-02 | P1: Valor recebido — exibição e edição no card | T12 | Verified |
+| ARQ-03 | P1: Arquivar obra — checagens (concluída, cliente quitou, gesseiros com saldo ≤ 0) | T4, T10 | Verified |
+| ARQ-04 | P1: Arquivar obra — listas e resumo sem arquivadas | T5 | Verified |
+| ARQ-05 | P1: Arquivar obra — botão, diálogo com as duas confirmações e erros na UI | T13 | Verified |
+| ARQ-06 | P1: Arquivados — listar com `?arquivados=true` (3 entidades) | T5, T6, T7 | Verified |
+| ARQ-07 | P1: Arquivados — restaurar (3 entidades) | T4, T6, T7, T14 | Verified |
+| ARQ-08 | P1: Arquivados — telas "Ver arquivados" com data de limpeza e Restaurar | T14, T15, T16 | Verified |
+| ARQ-09 | P2: Gesseiro — arquivar com saldo 0 e sem obra aberta | T6 | Verified |
+| ARQ-10 | P2: Gesseiro — botão na tela e filtro das listas | T6, T15 | Verified |
+| ARQ-11 | P2: Material — arquivar, filtros (estoque, alertas, agente) e bloqueio de uso | T7, T8 | Verified |
+| ARQ-12 | P2: Material — 409 de nome arquivado e botão na tela | T7, T16 | Verified |
+| ARQ-13 | P2: Limpeza — job diário de 7 dias, regras por entidade, uma transação por registro | T9, T10 | Verified |
+| ARQ-14 | P2: Arquivados e diálogo na `audit:responsive` | T17 | Verified |
+| ARQ-15 | Edge: arquivar concorrente e restaurar durante a limpeza | T4, T9, T10 | Verified |
 
 **Coverage:** 15 total, 15 mapped to tasks (17 tasks em `tasks.md`), 0 unmapped.
 

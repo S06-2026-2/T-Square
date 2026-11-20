@@ -1,6 +1,6 @@
 # Arquivar e Limpar Registros Tasks
 
-**Spec**: `spec.md` · **Design**: `design.md` · **Status**: Draft (2026-11-20), aguarda aprovação
+**Spec**: `spec.md` · **Design**: `design.md` · **Status**: Approved (2026-11-20)
 
 **Base**: branch `feat/obras-transicoes-status` depois dos commits de 2026-11-19. API 397 testes,
 web 371, e2e 19, `audit:responsive` 126/126, `audit:pwa` 14/14.
@@ -33,9 +33,9 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-01, ARQ-03, ARQ-09, ARQ-11 (base)
 
 **Done when**:
-- [ ] Migration aplicada no banco local, sem perder dados (seed e "Moldura - Bairro Centro" continuam lá); obras existentes com `valorRecebido = 0`
-- [ ] `gesso_api` reiniciado, `/api/health` 200
-- [ ] Gate check passes: `npm run build && npm test`
+- [x] Migration aplicada no banco local, sem perder dados (seed e "Moldura - Bairro Centro" continuam lá); obras existentes com `valorRecebido = 0`
+- [x] `gesso_api` reiniciado, `/api/health` 200
+- [x] Gate check passes: `npm run build && npm test`
 
 **Tests**: none (schema; coberto pelo build e pelos testes das tasks seguintes) · **Gate**: build
 
@@ -47,9 +47,9 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-03, ARQ-09 (base)
 
 **Done when**:
-- [ ] `saldo.spec.ts`: créditos − vales − pagamentos por id; id sem lançamento → 0; vários ids num `groupBy` só
-- [ ] Testes de `extrato` existentes passam sem mudança
-- [ ] Gate check passes: `npm run test --workspace apps/api`
+- [x] `saldo.spec.ts`: créditos − vales − pagamentos por id; id sem lançamento → 0; vários ids num `groupBy` só
+- [x] Testes de `extrato` existentes passam sem mudança
+- [x] Gate check passes: `npm run test --workspace apps/api`
 
 **Tests**: unit · **Gate**: quick
 
@@ -61,9 +61,9 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-01
 
 **Done when**:
-- [ ] DTO: negativo, não numérico e mais de 2 casas → erro; 0 e 1500.50 passam; `CreateObraDto` com `valorRecebido` → `whitelistValidation`
-- [ ] Service: valor ≤ total grava; > total → 400 com a mensagem exata; diminuir `valorTotal` para baixo do recebido → 400; sem alteração no banco nos 400
-- [ ] Gate check passes: `npm run test --workspace apps/api`
+- [x] DTO: negativo, não numérico e mais de 2 casas → erro; 0 e 1500.50 passam; `CreateObraDto` com `valorRecebido` → `whitelistValidation`
+- [x] Service: valor ≤ total grava; > total → 400 com a mensagem exata; diminuir `valorTotal` para baixo do recebido → 400; sem alteração no banco nos 400
+- [x] Gate check passes: `npm run test --workspace apps/api`
 
 **Tests**: unit · **Gate**: quick
 
@@ -77,10 +77,10 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-03, ARQ-07 (obra), ARQ-15
 
 **Done when**:
-- [ ] Situação: concluída/quitada/sem pendente → `podeArquivar: true`; cada condição falhando sozinha → `false` com o campo certo; o pendente traz `nome` e `saldo`; equipe vazia passa
-- [ ] Arquivar: as 3 mensagens exatas, na ordem concluída → cliente → gesseiros; sucesso faz `updateMany` com `where { id, status: CONCLUIDA, arquivadoEm: null }` no `tx` (não no `prisma`); `count 0` → `A obra já está arquivada`; 404
-- [ ] Restaurar: condicional; não arquivada → 400 com a mensagem exata; inexistente → 404
-- [ ] Gate check passes: `npm run test --workspace apps/api`
+- [x] Situação: concluída/quitada/sem pendente → `podeArquivar: true`; cada condição falhando sozinha → `false` com o campo certo; o pendente traz `nome` e `saldo`; equipe vazia passa
+- [x] Arquivar: as 3 mensagens exatas, na ordem concluída → cliente → gesseiros; sucesso faz `updateMany` com `where { id, status: CONCLUIDA, arquivadoEm: null }` no `tx` (não no `prisma`); `count 0` → `A obra já está arquivada`; 404
+- [x] Restaurar: condicional; não arquivada → 400 com a mensagem exata; inexistente → 404
+- [x] Gate check passes: `npm run test --workspace apps/api`
 
 **Tests**: unit · **Gate**: quick
 
@@ -92,10 +92,10 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-04, ARQ-06 (obra)
 
 **Done when**:
-- [ ] `findAll` sem flag → `arquivadoEm: null`; com flag → `{ not: null }`, ordenado por `arquivadoEm desc`; combinado com `status`
-- [ ] `resumo` sem arquivadas; `QueryObraDto` aceita `arquivados=true|false`
-- [ ] Swagger com as rotas novas e sem `DELETE /obras/{id}` (depois de `docker restart gesso_api`)
-- [ ] Gate check passes: `npm run build && npm test`
+- [x] `findAll` sem flag → `arquivadoEm: null`; com flag → `{ not: null }`, ordenado por `arquivadoEm desc`; combinado com `status`
+- [x] `resumo` sem arquivadas; `QueryObraDto` aceita `arquivados=true|false`
+- [x] Swagger com as rotas novas e sem `DELETE /obras/{id}` (depois de `docker restart gesso_api`)
+- [x] Gate check passes: `npm run build && npm test`
 
 **Tests**: unit · **Gate**: build
 
@@ -107,10 +107,10 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-06, ARQ-07, ARQ-09, ARQ-10 (API)
 
 **Done when**:
-- [ ] Saldo positivo e negativo → 400 com o valor em BRL; obra aberta → 400 com os títulos; sucesso grava `arquivadoEm` e `ativo=false` condicional; repetir → 400
-- [ ] Restaurar volta `ativo=true`; listas filtradas; alocar arquivado → 400 com a mensagem exata
-- [ ] Testes antigos do `desativar` removidos junto com o método (o motivo vai no commit)
-- [ ] Gate check passes: `npm run build && npm test`
+- [x] Saldo positivo e negativo → 400 com o valor em BRL; obra aberta → 400 com os títulos; sucesso grava `arquivadoEm` e `ativo=false` condicional; repetir → 400
+- [x] Restaurar volta `ativo=true`; listas filtradas; alocar arquivado → 400 com a mensagem exata
+- [x] Testes antigos do `desativar` removidos junto com o método (o motivo vai no commit)
+- [x] Gate check passes: `npm run build && npm test`
 
 **Tests**: unit · **Gate**: build
 
@@ -122,11 +122,11 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-06, ARQ-07, ARQ-11 (AC1, AC3), ARQ-12 (AC4)
 
 **Done when**:
-- [ ] Arquivar com qualquer saldo; repetir → 400; restaurar condicional
-- [ ] `listarMateriais` e `abaixoDoMinimo` sem arquivados
-- [ ] Movimentação e previsto com material arquivado → 400 `O material <nome> está arquivado`, sem gravar
-- [ ] `POST /estoque/materiais` com nome de arquivado → 409 com a mensagem exata; nome de ativo → comportamento atual
-- [ ] Gate check passes: `npm run build && npm test`
+- [x] Arquivar com qualquer saldo; repetir → 400; restaurar condicional
+- [x] `listarMateriais` e `abaixoDoMinimo` sem arquivados
+- [x] Movimentação e previsto com material arquivado → 400 `O material <nome> está arquivado`, sem gravar
+- [x] `POST /estoque/materiais` com nome de arquivado → 409 com a mensagem exata; nome de ativo → comportamento atual
+- [x] Gate check passes: `npm run build && npm test`
 
 **Tests**: unit · **Gate**: build
 
@@ -138,9 +138,9 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-11 (AC2)
 
 **Done when**:
-- [ ] Specs do agente e dos alertas conferem o `where` com o filtro (mesma técnica de `consulta = findMany.mock.calls[0][0]` já usada)
-- [ ] Nenhuma análise real do agente é disparada (regra do usuário)
-- [ ] Gate check passes: `npm run test --workspace apps/api`
+- [x] Specs do agente e dos alertas conferem o `where` com o filtro (mesma técnica de `consulta = findMany.mock.calls[0][0]` já usada)
+- [x] Nenhuma análise real do agente é disparada (regra do usuário)
+- [x] Gate check passes: `npm run test --workspace apps/api`
 
 **Tests**: unit · **Gate**: quick
 
@@ -152,13 +152,13 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-13, ARQ-15 (restaurar durante a limpeza)
 
 **Done when**:
-- [ ] `limite = agora − 7 dias` (teste com relógio fixo: 7 dias exatos entra, 6d23h não)
-- [ ] Obra: `obraId → null` em lançamentos e movimentações **antes** do delete, no mesmo `tx`
-- [ ] Gesseiro: alocações apagadas antes; material: previstos apagados antes
-- [ ] Reconferência com `count 0` → pula sem apagar nada
-- [ ] Erro numa transação → log e segue; o retorno conta as falhas
-- [ ] Ordem obras → gesseiros → materiais
-- [ ] Gate check passes: `npm run build && npm test`
+- [x] `limite = agora − 7 dias` (teste com relógio fixo: 7 dias exatos entra, 6d23h não)
+- [x] Obra: `obraId → null` em lançamentos e movimentações **antes** do delete, no mesmo `tx`
+- [x] Gesseiro: alocações apagadas antes; material: previstos apagados antes
+- [x] Reconferência com `count 0` → pula sem apagar nada
+- [x] Erro numa transação → log e segue; o retorno conta as falhas
+- [x] Ordem obras → gesseiros → materiais
+- [x] Gate check passes: `npm run build && npm test`
 
 **Tests**: unit · **Gate**: build
 
@@ -170,13 +170,13 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-03, ARQ-13, ARQ-15
 
 **Done when**:
-- [ ] Fluxo pelas rotas: obra concluída com 1 gesseiro, PAGAMENTO do crédito, `valorRecebido` total, `GET :id/arquivamento` com `podeArquivar`
-- [ ] Dois `arquivar` em paralelo → `[200, 400]`
-- [ ] `arquivadoEm` recuado 8 dias + `limpar()` → obra apagada, lançamentos do gesseiro com `obraId null`, saldo e soma de créditos iguais aos de antes
-- [ ] Obra com 6 dias não é apagada; restaurada antes do job continua lá
-- [ ] Gesseiro arquivado com 8 dias é apagado junto com os lançamentos
-- [ ] Zero `[e2e]` no banco depois (psql)
-- [ ] Gate check passes: Full
+- [x] Fluxo pelas rotas: obra concluída com 1 gesseiro, PAGAMENTO do crédito, `valorRecebido` total, `GET :id/arquivamento` com `podeArquivar`
+- [x] Dois `arquivar` em paralelo → `[200, 400]`
+- [x] `arquivadoEm` recuado 8 dias + `limpar()` → obra apagada, lançamentos do gesseiro com `obraId null`, saldo e soma de créditos iguais aos de antes
+- [x] Obra com 6 dias não é apagada; restaurada antes do job continua lá
+- [x] Gesseiro arquivado com 8 dias é apagado junto com os lançamentos
+- [x] Zero `[e2e]` no banco depois (psql)
+- [x] Gate check passes: Full
 
 **Tests**: e2e · **Gate**: full
 
@@ -189,8 +189,8 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-08 (base)
 
 **Done when**:
-- [ ] `formato.test.ts`: `dataLimpeza('2026-11-20T15:00:00Z')` → `27/11/2026`; `null` → `-`
-- [ ] Gate check passes: `npm run test --workspace apps/web`
+- [x] `formato.test.ts`: `dataLimpeza('2026-11-20T15:00:00Z')` → `27/11/2026`; `null` → `-`
+- [x] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit · **Gate**: quick
 
@@ -202,8 +202,8 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-02
 
 **Done when**:
-- [ ] Mostra "Recebido R$ X de R$ Y"; salvar → `PATCH /obras/:id` com `{ valorRecebido }` e recarrega; erro da API no form; campo com `min=0`, `max=valorTotal`, `step=0.01`
-- [ ] Gate check passes: `npm run test --workspace apps/web`
+- [x] Mostra "Recebido R$ X de R$ Y"; salvar → `PATCH /obras/:id` com `{ valorRecebido }` e recarrega; erro da API no form; campo com `min=0`, `max=valorTotal`, `step=0.01`
+- [x] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit · **Gate**: quick
 
@@ -215,10 +215,10 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-05
 
 **Done when**:
-- [ ] Só em `CONCLUIDA`; abrir busca `GET /obras/:id/arquivamento`
-- [ ] "Gesseiros pagos" ✔ ou `<nome> — <saldo>`; "Cliente pagou R$ X de R$ Y"; "Arquivar" só com `podeArquivar`
-- [ ] Sucesso → card sai da lista (recarga); HTTP → mensagem no painel + recarga; rede → `SEM_CONEXAO_ENVIO`, 1 PATCH só depois de esperar
-- [ ] Gate check passes: `npm run test --workspace apps/web`
+- [x] Só em `CONCLUIDA`; abrir busca `GET /obras/:id/arquivamento`
+- [x] "Gesseiros pagos" ✔ ou `<nome> — <saldo>`; "Cliente pagou R$ X de R$ Y"; "Arquivar" só com `podeArquivar`
+- [x] Sucesso → card sai da lista (recarga); HTTP → mensagem no painel + recarga; rede → `SEM_CONEXAO_ENVIO`, 1 PATCH só depois de esperar
+- [x] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit · **Gate**: quick
 
@@ -230,10 +230,10 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-08 (obras), ARQ-07 (UI)
 
 **Done when**:
-- [ ] Busca `<caminho>?arquivados=true`; cada item com rótulo, "Será apagado em <data>" e "Restaurar"; lista vazia → "Nada arquivado."
-- [ ] Restaurar → `PATCH <caminho>/:id/restaurar`, sai dos arquivados e a lista principal recarrega; erro HTTP/rede seguem a AD-014
-- [ ] Os testes de OFF-15 em `Obras.test.tsx` passam sem mudança
-- [ ] Gate check passes: `npm run test --workspace apps/web`
+- [x] Busca `<caminho>?arquivados=true`; cada item com rótulo, "Será apagado em <data>" e "Restaurar"; lista vazia → "Nada arquivado."
+- [x] Restaurar → `PATCH <caminho>/:id/restaurar`, sai dos arquivados e a lista principal recarrega; erro HTTP/rede seguem a AD-014
+- [x] Os testes de OFF-15 em `Obras.test.tsx` passam sem mudança
+- [x] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit · **Gate**: quick
 
@@ -245,9 +245,9 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-10, ARQ-08 (gesseiros)
 
 **Done when**:
-- [ ] Saldo ≠ 0 → botão desabilitado com "Zere o saldo para arquivar"; saldo 0 → `window.confirm` → `PATCH /gesseiros/:id/arquivar` → some da lista; erro da API visível
-- [ ] "Ver arquivados" lista e restaura
-- [ ] Gate check passes: `npm run test --workspace apps/web`
+- [x] Saldo ≠ 0 → botão desabilitado com "Zere o saldo para arquivar"; saldo 0 → `window.confirm` → `PATCH /gesseiros/:id/arquivar` → some da lista; erro da API visível
+- [x] "Ver arquivados" lista e restaura
+- [x] Gate check passes: `npm run test --workspace apps/web`
 
 **Tests**: unit · **Gate**: quick
 
@@ -259,9 +259,9 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-12 (UI), ARQ-08 (estoque)
 
 **Done when**:
-- [ ] `window.confirm` com o aviso do saldo quando ≠ 0 (texto exato no teste); recusado → nenhuma chamada; aceito → some da tabela
-- [ ] "Ver arquivados" lista e restaura
-- [ ] Gate check passes: `npm run build && npm test`
+- [x] `window.confirm` com o aviso do saldo quando ≠ 0 (texto exato no teste); recusado → nenhuma chamada; aceito → some da tabela
+- [x] "Ver arquivados" lista e restaura
+- [x] Gate check passes: `npm run build && npm test`
 
 **Tests**: unit · **Gate**: build
 
@@ -273,10 +273,10 @@ Phase 3 (Web):             T11 → T12 → T13 → T14 → T15 → T16 → T17
 **Requirement**: ARQ-14
 
 **Done when**:
-- [ ] `limpar`/`contar` incluem gesseiros `[audit]`; `contar` volta 0 no fim
-- [ ] `medidos: 158/158, nao montados: 0, falhas: 0`, `audit:pwa` 14/14
-- [ ] Prova de mutação: `.lista-arquivados .btn` sem 44px → RSP-08 falha
-- [ ] Teste manual pela UI (pendente do usuário): arquivar, ver arquivados, restaurar nas 3 telas
-- [ ] Gate check passes: Browser
+- [x] `limpar`/`contar` incluem gesseiros `[audit]`; `contar` volta 0 no fim
+- [x] `medidos: 158/158, nao montados: 0, falhas: 0`, `audit:pwa` 14/14
+- [x] Prova de mutação: `.lista-arquivados .btn` sem 44px → RSP-08 falha
+- [~] Teste manual pela UI (pendente do usuário): arquivar, ver arquivados, restaurar nas 3 telas
+- [x] Gate check passes: Browser
 
 **Tests**: browser · **Gate**: browser
