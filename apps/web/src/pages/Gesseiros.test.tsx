@@ -1,15 +1,16 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { api } from '../lib/api';
 import type { Extrato, Gesseiro } from '../types';
 import Gesseiros from './Gesseiros';
 
 jest.mock('../lib/api', () => ({
-  api: { get: jest.fn(), post: jest.fn() },
+  api: { get: jest.fn(), post: jest.fn(), patch: jest.fn() },
 }));
 
 const get = api.get as jest.Mock;
 const post = api.post as jest.Mock;
+const patch = api.patch as jest.Mock;
 
 const ana: Gesseiro = { id: 'g-ana', nome: 'Ana', ativo: true };
 
@@ -57,7 +58,11 @@ describe('Gesseiros', () => {
 
     expect(await screen.findByRole('button', { name: 'Joao Ferreira' })).toBeInTheDocument();
     expect(chamadas('/gesseiros')).toBe(2);
-    expect(post).toHaveBeenCalledWith('/gesseiros', { nome: 'Joao Ferreira' }, { idempotencyKey: expect.any(String) });
+    expect(post).toHaveBeenCalledWith(
+      '/gesseiros',
+      { nome: 'Joao Ferreira' },
+      { idempotencyKey: expect.any(String) },
+    );
   });
 
   it('so mostra o formulario de lancamento com um extrato aberto (FRM-07 AC3)', async () => {
@@ -102,7 +107,12 @@ describe('Gesseiros', () => {
   });
 
   describe('linha clicável e rolagem até o extrato', () => {
-    const anaComTelefone: Gesseiro = { id: 'g-ana', nome: 'Ana', telefone: '35 99999-0000', ativo: true };
+    const anaComTelefone: Gesseiro = {
+      id: 'g-ana',
+      nome: 'Ana',
+      telefone: '35 99999-0000',
+      ativo: true,
+    };
 
     function montar() {
       get.mockImplementation(async (caminho: string) =>
@@ -198,5 +208,163 @@ describe('Gesseiros: conexão de volta (OFF-15)', () => {
     // Recarregar o extrato não é uma seleção: a tela não rola de novo.
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     expect(post).not.toHaveBeenCalled();
+  });
+});
+
+/** ARQ-08 e ARQ-10 (UI) de arquivar-e-limpar-registros. */
+describe('Gesseiros: arquivamento', () => {
+  const CONFIRMACAO =
+    'Arquivar Ana? Ele some da lista e é apagado de vez em 7 dias; até lá dá para restaurar em "Ver arquivados".';
+  const caio: Gesseiro = {
+    id: 'g-caio',
+    nome: 'Caio',
+    ativo: false,
+    arquivadoEm: '2026-11-20T15:00:00.000Z',
+  };
+  let confirmar: jest.SpyInstance;
+  let saldo = 0;
+
+  beforeEach(() => {
+    patch.mockReset();
+    saldo = 0;
+    confirmar = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    get.mockImplementation(async (caminho: string) => {
+      if (caminho === '/gesseiros') return [ana];
+      if (caminho === '/gesseiros?arquivados=true') return [caio];
+      if (caminho === '/gesseiros/g-ana/extrato') return extrato(0, saldo);
+      throw new Error(`GET inesperado ${caminho}`);
+    });
+  });
+
+  afterEach(() => confirmar.mockRestore());
+
+  async function abrirAna() {
+    render(<Gesseiros />);
+    fireEvent.click(await screen.findByText('Ana'));
+    return screen.findByRole('button', { name: 'Arquivar gesseiro' });
+  }
+
+  it.each([350.5, -20])(
+    'saldo %p: botão desabilitado com "Zere o saldo para arquivar"',
+    async (valor) => {
+      saldo = valor;
+
+      const botao = await abrirAna();
+
+      expect(botao).toBeDisabled();
+      expect(screen.getByText('Zere o saldo para arquivar')).toBeInTheDocument();
+    },
+  );
+
+  it('saldo 0: confirma, PATCH arquivar, fecha o extrato e recarrega a lista', async () => {
+    patch.mockResolvedValue({});
+    const botao = await abrirAna();
+    expect(botao).toBeEnabled();
+    expect(screen.queryByText('Zere o saldo para arquivar')).not.toBeInTheDocument();
+    const antes = chamadas('/gesseiros');
+
+    fireEvent.click(botao);
+
+    await waitFor(() => expect(chamadas('/gesseiros')).toBe(antes + 1));
+    expect(confirmar).toHaveBeenCalledWith(CONFIRMACAO);
+    expect(patch).toHaveBeenCalledWith('/gesseiros/g-ana/arquivar');
+    expect(screen.queryByRole('heading', { name: 'Ana' })).not.toBeInTheDocument();
+  });
+
+  it('confirmação recusada: nenhuma chamada', async () => {
+    confirmar.mockReturnValue(false);
+    const botao = await abrirAna();
+
+    fireEvent.click(botao);
+
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it('dois cliques com o PATCH pendente: um PATCH só (auditor web #20)', async () => {
+    patch.mockReturnValue(new Promise(() => undefined));
+    const botao = await abrirAna();
+
+    fireEvent.click(botao);
+    await waitFor(() => expect(botao).toBeDisabled());
+    fireEvent.click(botao);
+
+    expect(patch).toHaveBeenCalledTimes(1);
+  });
+
+  it('erro HTTP: mensagem e busca lista e extrato de novo (AD-014, auditor web #22)', async () => {
+    patch.mockRejectedValue(
+      Object.assign(new Error('O gesseiro já está arquivado'), { status: 400 }),
+    );
+    const botao = await abrirAna();
+    const lista = chamadas('/gesseiros');
+    const extratos = chamadas('/gesseiros/g-ana/extrato');
+
+    fireEvent.click(botao);
+
+    expect(await screen.findByText('O gesseiro já está arquivado')).toHaveClass('erro');
+    expect(chamadas('/gesseiros')).toBe(lista + 1);
+    expect(chamadas('/gesseiros/g-ana/extrato')).toBe(extratos + 1);
+  });
+
+  it('sem rede: mensagem e nenhuma busca nova (AD-014, auditor web #22)', async () => {
+    const SEM_CONEXAO =
+      'Sem conexão: não foi possível confirmar o envio. Tente de novo; o mesmo lançamento não será duplicado.';
+    patch.mockRejectedValue(Object.assign(new Error(SEM_CONEXAO), { status: 0 }));
+    const botao = await abrirAna();
+    const antes = get.mock.calls.length;
+
+    fireEvent.click(botao);
+
+    expect(await screen.findByText(SEM_CONEXAO)).toHaveClass('erro');
+    expect(get.mock.calls.length).toBe(antes);
+    expect(patch).toHaveBeenCalledTimes(1);
+  });
+
+  it('com "Ver arquivados" aberto, arquivar busca os arquivados de novo (auditor web #25)', async () => {
+    patch.mockResolvedValue({});
+    const botao = await abrirAna();
+    fireEvent.click(screen.getByRole('button', { name: 'Ver arquivados' }));
+    await within(await screen.findByLabelText('Arquivados')).findByText('Caio');
+    expect(chamadas('/gesseiros?arquivados=true')).toBe(1);
+
+    fireEvent.click(botao);
+
+    await waitFor(() => expect(chamadas('/gesseiros?arquivados=true')).toBe(2));
+  });
+
+  it('erro da API fica visível', async () => {
+    patch.mockRejectedValue(
+      Object.assign(
+        new Error('O gesseiro está alocado em Forro; remova-o dessas obras antes de arquivar'),
+        {
+          status: 400,
+        },
+      ),
+    );
+    const botao = await abrirAna();
+
+    fireEvent.click(botao);
+
+    expect(
+      await screen.findByText(
+        'O gesseiro está alocado em Forro; remova-o dessas obras antes de arquivar',
+      ),
+    ).toHaveClass('erro');
+  });
+
+  it('"Ver arquivados" lista e restaura', async () => {
+    patch.mockResolvedValue({});
+    render(<Gesseiros />);
+    await screen.findByText('Ana');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ver arquivados' }));
+    const lista = await screen.findByLabelText('Arquivados');
+    expect(await within(lista).findByText('Caio')).toBeInTheDocument();
+    const antes = chamadas('/gesseiros');
+
+    fireEvent.click(within(lista).getByRole('button', { name: 'Restaurar' }));
+
+    await waitFor(() => expect(chamadas('/gesseiros')).toBe(antes + 1));
+    expect(patch).toHaveBeenCalledWith('/gesseiros/g-caio/restaurar');
   });
 });

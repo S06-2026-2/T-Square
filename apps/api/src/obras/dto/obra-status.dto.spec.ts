@@ -11,9 +11,13 @@ import { UpdateObraDto } from './update-obra.dto';
  */
 describe('status fora dos DTOs de obra', () => {
   const opcoes = { whitelist: true, forbidNonWhitelisted: true };
-  const corpoValido = { titulo: 'Forro Residencia Teste', clienteNome: 'Cliente Teste', valorTotal: 8500 };
+  const corpoValido = {
+    titulo: 'Forro Residencia Teste',
+    clienteNome: 'Cliente Teste',
+    valorTotal: 8500,
+  };
 
-  const errosDe = async (classe: typeof CreateObraDto | typeof UpdateObraDto, corpo: object) =>
+  const errosDe = async (classe: new () => object, corpo: object) =>
     validate(plainToInstance(classe, corpo) as object, opcoes);
 
   it('POST com status: CreateObraDto recusa a propriedade status (AC2)', async () => {

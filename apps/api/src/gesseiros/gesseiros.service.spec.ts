@@ -188,121 +188,6 @@ describe('GesseirosService', () => {
 
   // GES-08 ------------------------------------------------------------------
 
-  describe('remove', () => {
-    it('desativa o gesseiro sem apagar a linha', async () => {
-      prisma.gesseiro.findUnique.mockResolvedValue({
-        id: 'g-1',
-        nome: 'Joao Ferreira',
-        ativo: true,
-        alocacoes: [],
-        lancamentos: [],
-      });
-      prisma.gesseiro.update.mockResolvedValue({ id: 'g-1', nome: 'Joao Ferreira', ativo: false });
-
-      const resultado = await service.remove('g-1');
-
-      expect(prisma.gesseiro.update).toHaveBeenCalledWith({
-        where: { id: 'g-1' },
-        data: { ativo: false },
-      });
-      // o historico financeiro depende da linha continuar existindo
-      expect(prisma.gesseiro.delete).not.toHaveBeenCalled();
-      expect(resultado.ativo).toBe(false);
-    });
-
-    it('nao falha ao desativar quem ja esta inativo', async () => {
-      prisma.gesseiro.findUnique.mockResolvedValue({
-        id: 'g-1',
-        nome: 'Joao Ferreira',
-        ativo: false,
-        // mesmo com obra em aberto: quem ja esta inativo nao esta sendo desativado agora
-        alocacoes: [{ obra: { titulo: 'Forro Residencia Silva', status: StatusObra.ANDAMENTO } }],
-        lancamentos: [],
-      });
-
-      const resultado = await service.remove('g-1');
-
-      expect(prisma.gesseiro.update).not.toHaveBeenCalled();
-      expect(resultado.ativo).toBe(false);
-      // mesmo formato do caminho que desativa: sem as listas do include
-      expect(resultado).not.toHaveProperty('alocacoes');
-      expect(resultado).not.toHaveProperty('lancamentos');
-    });
-
-    it('recusa enquanto houver alocacao em obra nao terminada', async () => {
-      prisma.gesseiro.findUnique.mockResolvedValue({
-        id: 'g-1',
-        nome: 'Joao Ferreira',
-        ativo: true,
-        alocacoes: [
-          { obra: { titulo: 'Forro Residencia Silva', status: StatusObra.CONCLUIDA } },
-          { obra: { titulo: 'Drywall Escritorio Centro', status: StatusObra.ANDAMENTO } },
-        ],
-        lancamentos: [],
-      });
-
-      await expect(service.remove('g-1')).rejects.toBeInstanceOf(BadRequestException);
-
-      // a mensagem cita so a obra que impede, nao a que ja terminou
-      await expect(service.remove('g-1')).rejects.toThrow('Drywall Escritorio Centro');
-      await expect(service.remove('g-1')).rejects.not.toThrow('Forro Residencia Silva');
-
-      expect(prisma.gesseiro.update).not.toHaveBeenCalled();
-      expect(prisma.gesseiro.delete).not.toHaveBeenCalled();
-    });
-
-    it('lanca 404 quando o gesseiro nao existe', async () => {
-      prisma.gesseiro.findUnique.mockResolvedValue(null);
-
-      await expect(service.remove('nao-existe')).rejects.toBeInstanceOf(NotFoundException);
-
-      expect(prisma.gesseiro.update).not.toHaveBeenCalled();
-      expect(prisma.gesseiro.delete).not.toHaveBeenCalled();
-    });
-
-    it('bloqueia tambem por obra em ORCAMENTO ou FECHADA, nao so ANDAMENTO', async () => {
-      prisma.gesseiro.findUnique.mockResolvedValue({
-        id: 'g-1',
-        nome: 'Joao Ferreira',
-        ativo: true,
-        alocacoes: [
-          { obra: { titulo: 'Sanca Apto 302', status: StatusObra.ORCAMENTO } },
-          { obra: { titulo: 'Forro Loja Centro', status: StatusObra.FECHADA } },
-        ],
-        lancamentos: [],
-      });
-
-      const chamada = service.remove('g-1');
-
-      await expect(chamada).rejects.toBeInstanceOf(BadRequestException);
-      await expect(chamada).rejects.toThrow('Sanca Apto 302');
-      await expect(chamada).rejects.toThrow('Forro Loja Centro');
-
-      expect(prisma.gesseiro.update).not.toHaveBeenCalled();
-    });
-
-    it('nao bloqueia por obra CANCELADA', async () => {
-      prisma.gesseiro.findUnique.mockResolvedValue({
-        id: 'g-1',
-        nome: 'Joao Ferreira',
-        ativo: true,
-        alocacoes: [{ obra: { titulo: 'Obra Cancelada', status: StatusObra.CANCELADA } }],
-        lancamentos: [],
-      });
-      prisma.gesseiro.update.mockResolvedValue({ id: 'g-1', nome: 'Joao Ferreira', ativo: false });
-
-      const resultado = await service.remove('g-1');
-
-      expect(resultado.ativo).toBe(false);
-      expect(prisma.gesseiro.update).toHaveBeenCalledWith({
-        where: { id: 'g-1' },
-        data: { ativo: false },
-      });
-    });
-  });
-
-    // extrato -----------------------------------------------------------------
-
   describe('extrato', () => {
     it('calcula creditos, vales, pagamentos e o saldo a receber', async () => {
       prisma.gesseiro.findUnique.mockResolvedValue({
@@ -360,11 +245,11 @@ describe('GesseirosService', () => {
     });
 
     it('lanca 404 quando o gesseiro nao existe, sem consultar os lancamentos', async () => {
-    prisma.gesseiro.findUnique.mockResolvedValue(null);
+      prisma.gesseiro.findUnique.mockResolvedValue(null);
 
-    await expect(service.extrato('nao-existe')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.extrato('nao-existe')).rejects.toBeInstanceOf(NotFoundException);
 
-    expect(prisma.lancamento.groupBy).not.toHaveBeenCalled();
+      expect(prisma.lancamento.groupBy).not.toHaveBeenCalled();
     });
   });
 
@@ -433,7 +318,11 @@ describe('GesseirosService', () => {
       tx.gesseiro.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.registrarLancamento('nao-existe', { tipo: TipoLancamento.VALE, valor: 100 }, tx as never),
+        service.registrarLancamento(
+          'nao-existe',
+          { tipo: TipoLancamento.VALE, valor: 100 },
+          tx as never,
+        ),
       ).rejects.toBeInstanceOf(NotFoundException);
 
       expect(tx.lancamento.create).not.toHaveBeenCalled();

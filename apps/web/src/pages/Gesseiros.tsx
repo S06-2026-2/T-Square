@@ -3,7 +3,14 @@ import { useEffect, useRef, useState } from 'react';
 import LancamentoForm from '../components/forms/LancamentoForm';
 import NovoGesseiroForm from '../components/forms/NovoGesseiroForm';
 import Icone from '../components/Icone';
+import ListaArquivados from '../components/ListaArquivados';
 import { api } from '../lib/api';
+import {
+  ZERE_O_SALDO,
+  confirmacaoArquivarGesseiro,
+  ehFalhaDeRede,
+  mensagemDe,
+} from '../lib/arquivamento';
 import { useAoReconectar } from '../lib/conexao';
 import { iniciais, moeda } from '../lib/formato';
 import type { Extrato, Gesseiro } from '../types';
@@ -13,6 +20,11 @@ export default function Gesseiros() {
   const [extrato, setExtrato] = useState<Extrato | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [mostrarForm, setMostrarForm] = useState(false);
+  /** "Ver arquivados" aberto (ARQ-08). */
+  const [verArquivados, setVerArquivados] = useState(false);
+  /** Muda a cada gesseiro arquivado: a lista de arquivados aberta remonta e busca de novo. */
+  const [versaoArquivo, setVersaoArquivo] = useState(0);
+  const [arquivando, setArquivando] = useState(false);
   const refExtrato = useRef<HTMLDivElement>(null);
   /** true entre o clique num gesseiro e o extrato dele aparecer (RSP-10). */
   const rolarAoAbrir = useRef(false);
@@ -52,6 +64,32 @@ export default function Gesseiros() {
     }
   }
 
+  /**
+   * ARQ-10: só com saldo 0 (o botão fica desabilitado antes) e confirmação. A API confere de novo
+   * o saldo e as obras abertas. Erro com resposta HTTP recarrega lista e extrato (AD-014).
+   */
+  async function arquivar() {
+    if (!extrato || !window.confirm(confirmacaoArquivarGesseiro(extrato.gesseiro.nome))) return;
+    const id = extrato.gesseiro.id;
+    setArquivando(true);
+    setErro(null);
+    try {
+      await api.patch(`/gesseiros/${id}/arquivar`);
+      setExtrato(null);
+      setVersaoArquivo((versao) => versao + 1);
+      await carregar();
+    } catch (e) {
+      const mensagem = mensagemDe(e);
+      if (!ehFalhaDeRede(e)) {
+        await carregar();
+        await abrirExtrato(id);
+      }
+      setErro(mensagem);
+    } finally {
+      setArquivando(false);
+    }
+  }
+
   function selecionar(id: string) {
     rolarAoAbrir.current = true;
     void abrirExtrato(id);
@@ -72,19 +110,40 @@ export default function Gesseiros() {
       <div className="cabecalho-pagina">
         <div>
           <h1>Gesseiros</h1>
-          <p className="subtitulo-pagina">Equipe, vales, pagamentos e saldo a receber de cada um.</p>
+          <p className="subtitulo-pagina">
+            Equipe, vales, pagamentos e saldo a receber de cada um.
+          </p>
         </div>
-        <button
-          type="button"
-          className={mostrarForm ? 'btn btn-secundario' : 'btn'}
-          onClick={() => setMostrarForm((aberto) => !aberto)}
-        >
-          {!mostrarForm && <Icone nome="mais" />}
-          {mostrarForm ? 'Fechar' : 'Novo gesseiro'}
-        </button>
+        <div className="acoes">
+          <button
+            type="button"
+            className="btn btn-secundario"
+            aria-pressed={verArquivados}
+            onClick={() => setVerArquivados((aberto) => !aberto)}
+          >
+            {verArquivados ? 'Fechar arquivados' : 'Ver arquivados'}
+          </button>
+          <button
+            type="button"
+            className={mostrarForm ? 'btn btn-secundario' : 'btn'}
+            onClick={() => setMostrarForm((aberto) => !aberto)}
+          >
+            {!mostrarForm && <Icone nome="mais" />}
+            {mostrarForm ? 'Fechar' : 'Novo gesseiro'}
+          </button>
+        </div>
       </div>
 
       {mostrarForm && <NovoGesseiroForm onSalvo={gesseiroCriado} />}
+
+      {verArquivados && (
+        <ListaArquivados<Gesseiro>
+          key={versaoArquivo}
+          caminho="/gesseiros"
+          rotulo={(gesseiro) => gesseiro.nome}
+          onRestaurado={carregar}
+        />
+      )}
 
       {erro && <p className="erro">{erro}</p>}
 
@@ -139,6 +198,18 @@ export default function Gesseiros() {
                   <dd>{moeda(extrato.saldoAReceber)}</dd>
                 </div>
               </dl>
+
+              <div className="card-acoes acoes-arquivar">
+                <button
+                  type="button"
+                  className="btn btn-secundario"
+                  disabled={extrato.saldoAReceber !== 0 || arquivando}
+                  onClick={() => void arquivar()}
+                >
+                  Arquivar gesseiro
+                </button>
+                {extrato.saldoAReceber !== 0 && <span className="aviso-acao">{ZERE_O_SALDO}</span>}
+              </div>
 
               <h3>Registrar vale ou pagamento</h3>
               <LancamentoForm

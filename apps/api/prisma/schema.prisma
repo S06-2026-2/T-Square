@@ -114,6 +114,8 @@ model Gesseiro {
   telefone String?
   chavePix String?
   ativo    Boolean  @default(true)
+  /// Arquivado (some das listas); a limpeza apaga depois de 7 dias (AD-015)
+  arquivadoEm DateTime?
   criadoEm DateTime @default(now())
 
   alocacoes   ObraGesseiro[]
@@ -176,6 +178,10 @@ model Obra {
   dataConclusao   DateTime?
   /// Motivo informado ao cancelar (3 a 500 caracteres, sem espaços nas pontas)
   motivoCancelamento String?
+  /// Quanto o cliente ja pagou (0 ate valorTotal); arquivar exige valorRecebido = valorTotal
+  valorRecebido   Decimal    @default(0) @db.Decimal(12, 2)
+  /// Arquivada (some das listas); a limpeza apaga depois de 7 dias (AD-015)
+  arquivadoEm     DateTime?
   criadoEm        DateTime   @default(now())
   atualizadoEm    DateTime   @updatedAt
 
@@ -214,6 +220,8 @@ model Material {
   unidade       String // saco, m2, un, kg...
   saldoAtual    Decimal  @default(0) @db.Decimal(12, 2)
   estoqueMinimo Decimal  @default(0) @db.Decimal(12, 2)
+  /// Arquivado (some do estoque e do agente); a limpeza apaga depois de 7 dias (AD-015)
+  arquivadoEm   DateTime?
   criadoEm      DateTime @default(now())
 
   movimentacoes MovimentacaoEstoque[]

@@ -22,7 +22,15 @@ export class MateriaisPrevistosService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Material repetido → 400; material inexistente → 404. Nao grava nada. */
-  async validarItens(itens: MaterialPrevistoDto[], tx: ClientePrisma = this.prisma) {
+  /**
+   * `jaPrevistos`: materiais que a obra já prevê. Um material arquivado só é recusado quando entra
+   * na lista agora (ARQ-11 AC3); o que já estava previsto pode continuar até a limpeza.
+   */
+  async validarItens(
+    itens: MaterialPrevistoDto[],
+    tx: ClientePrisma = this.prisma,
+    jaPrevistos: string[] = [],
+  ) {
     const ids = itens.map((item) => item.materialId);
 
     const repetido = ids.find((id, indice) => ids.indexOf(id) !== indice);
@@ -36,12 +44,17 @@ export class MateriaisPrevistosService {
 
     const existentes = await tx.material.findMany({
       where: { id: { in: ids } },
-      select: { id: true },
+      select: { id: true, nome: true, arquivadoEm: true },
     });
     const encontrados = new Set(existentes.map((m) => m.id));
     const inexistente = ids.find((id) => !encontrados.has(id));
     if (inexistente) {
       throw new NotFoundException(`Material ${inexistente} não encontrado`);
+    }
+
+    const arquivado = existentes.find((m) => m.arquivadoEm && !jaPrevistos.includes(m.id));
+    if (arquivado) {
+      throw new BadRequestException(`O material ${arquivado.nome} está arquivado`);
     }
   }
 
@@ -55,7 +68,15 @@ export class MateriaisPrevistosService {
       );
     }
 
-    await this.validarItens(itens);
+    const atuais = await this.prisma.materialPrevistoObra.findMany({
+      where: { obraId },
+      select: { materialId: true },
+    });
+    await this.validarItens(
+      itens,
+      this.prisma,
+      atuais.map((previsto) => previsto.materialId),
+    );
 
     return this.prisma.$transaction(async (tx) => {
       await tx.materialPrevistoObra.deleteMany({ where: { obraId } });

@@ -1,4 +1,4 @@
-import { dataHora, numero, situacaoAlerta, situacaoPrevisto } from './formato';
+import { dataHora, dataLimpeza, numero, situacaoAlerta, situacaoPrevisto } from './formato';
 
 /**
  * ISO (UTC, como a API devolve) de um instante dado em hora local.
@@ -42,11 +42,15 @@ describe('situacaoAlerta (EAP-28)', () => {
   const base = { tipo: 'REPOSICAO' as const, motivo: 'PREVISAO' as const, diasAteMinimo: '5' };
 
   it('ABAIXO_DO_MINIMO: "abaixo do mínimo"', () => {
-    expect(situacaoAlerta({ ...base, motivo: 'ABAIXO_DO_MINIMO', diasAteMinimo: '0' })).toBe('abaixo do mínimo');
+    expect(situacaoAlerta({ ...base, motivo: 'ABAIXO_DO_MINIMO', diasAteMinimo: '0' })).toBe(
+      'abaixo do mínimo',
+    );
   });
 
   it('NO_MINIMO_COM_CONSUMO: "no mínimo"', () => {
-    expect(situacaoAlerta({ ...base, motivo: 'NO_MINIMO_COM_CONSUMO', diasAteMinimo: '0' })).toBe('no mínimo');
+    expect(situacaoAlerta({ ...base, motivo: 'NO_MINIMO_COM_CONSUMO', diasAteMinimo: '0' })).toBe(
+      'no mínimo',
+    );
   });
 
   it('PREVISAO com N = 0 (parte inteira de diasAteMinimo): "cruza o mínimo hoje"', () => {
@@ -65,7 +69,9 @@ describe('situacaoAlerta (EAP-28)', () => {
   });
 
   it('REPOSICAO sem motivo (ritmo 0): "sem consumo recente"', () => {
-    expect(situacaoAlerta({ ...base, motivo: null, diasAteMinimo: null })).toBe('sem consumo recente');
+    expect(situacaoAlerta({ ...base, motivo: null, diasAteMinimo: null })).toBe(
+      'sem consumo recente',
+    );
   });
 
   it('INFORMATIVO (motivo null): "observação do agente"', () => {
@@ -84,9 +90,7 @@ describe('situacaoPrevisto (EAP-56)', () => {
 
   it('excedente > 0: "excedente: N"', () => {
     expect(situacaoPrevisto({ pendente: '0', excedente: '5' })).toBe('excedente: 5');
-    expect(situacaoPrevisto({ pendente: '0.00', excedente: '1250.5' })).toBe(
-      'excedente: 1.250,5',
-    );
+    expect(situacaoPrevisto({ pendente: '0.00', excedente: '1250.5' })).toBe('excedente: 1.250,5');
   });
 
   it('os dois 0: "conforme previsto"', () => {
@@ -101,5 +105,20 @@ describe('situacaoPrevisto (EAP-56)', () => {
   it('decimal só abaixo de 1 ainda conta como maior que zero', () => {
     expect(situacaoPrevisto({ pendente: '0.01', excedente: '0' })).toBe('pendente: 0,01');
     expect(situacaoPrevisto({ pendente: '0', excedente: '0.5' })).toBe('excedente: 0,5');
+  });
+});
+
+/** ARQ-08 (arquivar-e-limpar-registros): "Será apagado em <arquivadoEm + 7 dias>". */
+describe('dataLimpeza', () => {
+  it('soma 7 dias à data do arquivamento, em dd/mm/aaaa local', () => {
+    expect(dataLimpeza(isoLocal(2026, 11, 20, 15, 0))).toBe('27/11/2026');
+  });
+
+  it('vira o mês e o ano', () => {
+    expect(dataLimpeza(isoLocal(2026, 12, 28, 10, 0))).toBe('04/01/2027');
+  });
+
+  it.each([null, undefined, ''])('sem data (%p): "-"', (valor) => {
+    expect(dataLimpeza(valor)).toBe('-');
   });
 });

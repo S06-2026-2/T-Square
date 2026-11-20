@@ -1,6 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Obra, ObraGesseiro, Prisma, TipoLancamento } from '@prisma/client';
+import { Obra, ObraGesseiro, Prisma, StatusObra, TipoLancamento } from '@prisma/client';
 
+import { filtroArquivados } from '../comum/arquivados';
+import { reais } from '../comum/moeda';
+import { saldosPorGesseiro } from '../gesseiros/saldo';
 import { ClientePrisma } from '../idempotencia/tipos';
 import { PrismaService } from '../prisma/prisma.service';
 import { AlocacaoGesseiroDto, CreateObraDto } from './dto/create-obra.dto';
@@ -64,8 +67,11 @@ export class ObrasService {
   }
 
   async findAll(query: QueryObraDto) {
+    // ARQ-04/ARQ-06: a lista normal esconde as arquivadas; ?arquivados=true mostra só elas.
+    const arquivo = filtroArquivados(query.arquivados);
     return this.prisma.obra.findMany({
       where: {
+        ...arquivo.where,
         status: query.status,
         ...(query.busca
           ? {
@@ -77,7 +83,7 @@ export class ObrasService {
           : {}),
       },
       include: this.include,
-      orderBy: { criadoEm: 'desc' },
+      orderBy: arquivo.orderBy ?? { criadoEm: 'desc' },
     });
   }
 
@@ -99,8 +105,17 @@ export class ObrasService {
   }
 
   async update(id: string, dto: UpdateObraDto) {
-    await this.findOne(id);
+    const atual = await this.findOne(id);
     const { pagamento, ...dadosObra } = dto;
+
+    // ARQ-01: o recebido nunca passa do total, nem quando o PATCH so diminui o total.
+    const total = new Prisma.Decimal(dto.valorTotal ?? atual.valorTotal);
+    const recebido = new Prisma.Decimal(dto.valorRecebido ?? atual.valorRecebido);
+    if (recebido.greaterThan(total)) {
+      throw new BadRequestException(
+        `O valor recebido não pode passar do valor total (${reais(total)})`,
+      );
+    }
 
     return this.prisma.obra.update({
       where: { id },
@@ -110,12 +125,6 @@ export class ObrasService {
       },
       include: this.include,
     });
-  }
-
-  async remove(id: string) {
-    await this.findOne(id);
-    await this.prisma.obra.delete({ where: { id } });
-    return { removido: true, id };
   }
 
   // -------------------------------------------------------------------------
@@ -128,6 +137,9 @@ export class ObrasService {
     const gesseiro = await this.prisma.gesseiro.findUnique({ where: { id: dto.gesseiroId } });
     if (!gesseiro) {
       throw new NotFoundException(`Gesseiro ${dto.gesseiroId} nao encontrado`);
+    }
+    if (gesseiro.arquivadoEm) {
+      throw new BadRequestException(`O gesseiro ${gesseiro.nome} está arquivado`);
     }
 
     return this.prisma.obraGesseiro.upsert({
@@ -249,10 +261,102 @@ export class ObrasService {
     });
   }
 
+  // -------------------------------------------------------------------------
+  // Arquivamento (arquivar-e-limpar-registros, AD-015)
+  // -------------------------------------------------------------------------
+
+  /**
+   * ARQ-03: as três condições para arquivar, numa fonte só. O `arquivar` chama dentro da
+   * transação, e o diálogo do front lê por GET /obras/:id/arquivamento. "Gesseiro pago" é o saldo
+   * geral ≤ 0, porque vale e pagamento não levam a obra (decisão do usuário, 2026-11-20).
+   */
+  async situacaoArquivamento(id: string, cliente: ClientePrisma = this.prisma) {
+    const obra = await cliente.obra.findUnique({
+      where: { id },
+      include: { gesseiros: { include: { gesseiro: true } } },
+    });
+    if (!obra) {
+      throw new NotFoundException(`Obra ${id} nao encontrada`);
+    }
+
+    const saldos = await saldosPorGesseiro(
+      cliente,
+      obra.gesseiros.map((alocacao) => alocacao.gesseiroId),
+    );
+    const gesseirosPendentes = obra.gesseiros
+      .map((alocacao) => ({
+        id: alocacao.gesseiroId,
+        nome: alocacao.gesseiro.nome,
+        saldo: saldos.get(alocacao.gesseiroId) ?? 0,
+      }))
+      .filter((pendente) => pendente.saldo > 0);
+
+    const concluida = obra.status === StatusObra.CONCLUIDA;
+    const clienteQuitado = new Prisma.Decimal(obra.valorRecebido).equals(obra.valorTotal);
+
+    return {
+      concluida,
+      arquivada: obra.arquivadoEm !== null,
+      valorRecebido: Number(obra.valorRecebido),
+      valorTotal: Number(obra.valorTotal),
+      clienteQuitado,
+      gesseirosPendentes,
+      podeArquivar:
+        concluida && clienteQuitado && gesseirosPendentes.length === 0 && obra.arquivadoEm === null,
+    };
+  }
+
+  /** ARQ-03/ARQ-15: arquiva a obra concluída e quitada; o update é condicional (sem duplo efeito). */
+  async arquivar(id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const situacao = await this.situacaoArquivamento(id, tx);
+      if (situacao.arquivada) {
+        throw new BadRequestException('A obra já está arquivada');
+      }
+      if (!situacao.concluida) {
+        throw new BadRequestException('Só é possível arquivar uma obra concluída');
+      }
+      if (!situacao.clienteQuitado) {
+        throw new BadRequestException(
+          `O cliente ainda não pagou tudo: recebido ${reais(situacao.valorRecebido)} de ${reais(situacao.valorTotal)}`,
+        );
+      }
+      if (situacao.gesseirosPendentes.length > 0) {
+        const lista = situacao.gesseirosPendentes
+          .map((pendente) => `${pendente.nome} (${reais(pendente.saldo)})`)
+          .join(', ');
+        throw new BadRequestException(`Ainda há gesseiros a pagar: ${lista}`);
+      }
+
+      const { count } = await tx.obra.updateMany({
+        where: { id, status: StatusObra.CONCLUIDA, arquivadoEm: null },
+        data: { arquivadoEm: new Date() },
+      });
+      if (count === 0) {
+        throw new BadRequestException('A obra já está arquivada');
+      }
+      return tx.obra.findUniqueOrThrow({ where: { id }, include: this.include });
+    });
+  }
+
+  /** ARQ-07: a obra volta para a lista como CONCLUIDA (o status nunca mudou). */
+  async restaurar(id: string) {
+    const { count } = await this.prisma.obra.updateMany({
+      where: { id, arquivadoEm: { not: null } },
+      data: { arquivadoEm: null },
+    });
+    if (count === 0) {
+      await this.findOne(id);
+      throw new BadRequestException('A obra não está arquivada');
+    }
+    return this.prisma.obra.findUniqueOrThrow({ where: { id }, include: this.include });
+  }
+
   /** Resumo do funil para o dashboard: quantidade e valor por status. */
   async resumo() {
     const agrupado = await this.prisma.obra.groupBy({
       by: ['status'],
+      where: { arquivadoEm: null },
       _count: { _all: true },
       _sum: { valorTotal: true },
     });

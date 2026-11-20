@@ -51,11 +51,6 @@ export class ObrasController {
     return this.obrasService.update(id, dto);
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.obrasService.remove(id);
-  }
-
   @Post(':id/gesseiros')
   @ApiOperation({ summary: 'Aloca (ou atualiza) um gesseiro na obra' })
   alocarGesseiro(@Param('id') id: string, @Body() dto: AlocacaoGesseiroDto) {
@@ -104,10 +99,33 @@ export class ObrasController {
 
   @Patch(':id/concluir')
   @ApiOperation({
-    summary: 'Conclui a obra (ANDAMENTO -> CONCLUIDA) e credita automaticamente os gesseiros alocados',
+    summary:
+      'Conclui a obra (ANDAMENTO -> CONCLUIDA) e credita automaticamente os gesseiros alocados',
   })
   concluir(@Param('id') id: string) {
     return this.obrasService.concluir(id);
+  }
+
+  // Arquivamento (arquivar-e-limpar-registros, AD-015)
+
+  @Get(':id/arquivamento')
+  @ApiOperation({
+    summary: 'Condições para arquivar: concluída, cliente quitado e gesseiros pagos',
+  })
+  situacaoArquivamento(@Param('id') id: string) {
+    return this.obrasService.situacaoArquivamento(id);
+  }
+
+  @Patch(':id/arquivar')
+  @ApiOperation({ summary: 'Arquiva a obra concluída e quitada (apagada de vez depois de 7 dias)' })
+  arquivar(@Param('id') id: string) {
+    return this.obrasService.arquivar(id);
+  }
+
+  @Patch(':id/restaurar')
+  @ApiOperation({ summary: 'Tira a obra do arquivo; ela volta como CONCLUIDA' })
+  restaurar(@Param('id') id: string) {
+    return this.obrasService.restaurar(id);
   }
 
   @Patch(':id/cancelar')

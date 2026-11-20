@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Material, Prisma, StatusObra, TipoMovimentacao } from '@prisma/client';
 
+import { filtroArquivados } from '../comum/arquivados';
 import { ClientePrisma } from '../idempotencia/tipos';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMaterialDto } from './dto/create-material.dto';
@@ -21,8 +22,13 @@ const OBRA_ENCERRADA: StatusObra[] = [StatusObra.CONCLUIDA, StatusObra.CANCELADA
 export class EstoqueService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listarMateriais() {
-    return this.prisma.material.findMany({ orderBy: { nome: 'asc' } });
+  /** ARQ-06/ARQ-11: a lista normal (e o abaixoDoMinimo) esconde os arquivados; com a flag, só eles. */
+  async listarMateriais(arquivados?: boolean) {
+    const arquivo = filtroArquivados(arquivados);
+    return this.prisma.material.findMany({
+      where: arquivo.where,
+      orderBy: arquivo.orderBy ?? { nome: 'asc' },
+    });
   }
 
   async listarMovimentacoes(materialId?: string) {
@@ -36,6 +42,13 @@ export class EstoqueService {
 
   // EST-01 / EST-02: cadastro de material
   async criarMaterial(dto: CreateMaterialDto, tx: ClientePrisma = this.prisma) {
+    // ARQ-12: o nome é único; se o dono do nome está arquivado, o caminho é restaurar.
+    const mesmoNome = await tx.material.findUnique({ where: { nome: dto.nome } });
+    if (mesmoNome?.arquivadoEm) {
+      throw new ConflictException(
+        'Existe um material arquivado com esse nome. Restaure-o em "Ver arquivados".',
+      );
+    }
     try {
       return await tx.material.create({
         data: {
@@ -61,6 +74,9 @@ export class EstoqueService {
     const material = await cliente.material.findUnique({ where: { id: dto.materialId } });
     if (!material) {
       throw new NotFoundException(`Material ${dto.materialId} nao encontrado`);
+    }
+    if (material.arquivadoEm) {
+      throw new BadRequestException(`O material ${material.nome} está arquivado`);
     }
 
     if (dto.obraId) {
@@ -128,6 +144,40 @@ export class EstoqueService {
   async abaixoDoMinimo() {
     const materiais = await this.listarMateriais();
     return materiais.filter((m) => Number(m.saldoAtual) <= Number(m.estoqueMinimo));
+  }
+
+  /** ARQ-11: arquiva com qualquer saldo; o update é condicional. */
+  async arquivarMaterial(id: string) {
+    const { count } = await this.prisma.material.updateMany({
+      where: { id, arquivadoEm: null },
+      data: { arquivadoEm: new Date() },
+    });
+    if (count === 0) {
+      await this.buscarMaterial(id);
+      throw new BadRequestException('O material já está arquivado');
+    }
+    return this.prisma.material.findUniqueOrThrow({ where: { id } });
+  }
+
+  /** ARQ-07: volta para o estoque, os selects e o agente. */
+  async restaurarMaterial(id: string) {
+    const { count } = await this.prisma.material.updateMany({
+      where: { id, arquivadoEm: { not: null } },
+      data: { arquivadoEm: null },
+    });
+    if (count === 0) {
+      await this.buscarMaterial(id);
+      throw new BadRequestException('O material não está arquivado');
+    }
+    return this.prisma.material.findUniqueOrThrow({ where: { id } });
+  }
+
+  private async buscarMaterial(id: string) {
+    const material = await this.prisma.material.findUnique({ where: { id } });
+    if (!material) {
+      throw new NotFoundException(`Material ${id} nao encontrado`);
+    }
+    return material;
   }
 
   private saldoInsuficiente(nome: string, disponivel: number, solicitado: number) {

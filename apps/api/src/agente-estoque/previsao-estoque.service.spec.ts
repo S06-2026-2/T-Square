@@ -115,6 +115,21 @@ describe('PrevisaoEstoqueService', () => {
     service = modulo.get<PrevisaoEstoqueService>(PrevisaoEstoqueService);
   });
 
+  // ARQ-11 (arquivar-e-limpar-registros): material arquivado não entra na análise do agente.
+  it('o snapshot lê só materiais não arquivados e os alertas deles', async () => {
+    dados({});
+
+    await service.montarSnapshot(agora);
+
+    expect(prisma.material.findMany).toHaveBeenCalledWith({
+      where: { arquivadoEm: null },
+      orderBy: { nome: 'asc' },
+    });
+    expect(prisma.alertaEstoque.findMany.mock.calls[0][0].where).toEqual({
+      material: { arquivadoEm: null },
+    });
+  });
+
   describe('consumo solto (EAP-02)', () => {
     it('SAIDA sem obra dentro da janela conta no ritmo', async () => {
       dados({ materiais: [material('cal', 40, 10)], movimentacoes: [saida('cal', 30, 5)] });

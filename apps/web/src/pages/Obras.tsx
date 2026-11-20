@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 
 import AcoesStatusObra from '../components/AcoesStatusObra';
+import ArquivarObra from '../components/ArquivarObra';
 import AlocarGesseiroForm from '../components/forms/AlocarGesseiroForm';
 import MateriaisPrevistosForm from '../components/forms/MateriaisPrevistosForm';
 import NovaObraForm from '../components/forms/NovaObraForm';
+import ValorRecebidoForm from '../components/forms/ValorRecebidoForm';
 import Icone from '../components/Icone';
+import ListaArquivados from '../components/ListaArquivados';
 import StatusBadge from '../components/StatusBadge';
 import { api } from '../lib/api';
 import { useAoReconectar } from '../lib/conexao';
@@ -30,6 +33,10 @@ export default function Obras() {
   const [carregando, setCarregando] = useState(true);
   const [gesseiros, setGesseiros] = useState<Gesseiro[]>([]);
   const [mostrarForm, setMostrarForm] = useState(false);
+  /** "Ver arquivados" aberto (ARQ-08). */
+  const [verArquivados, setVerArquivados] = useState(false);
+  /** Muda a cada obra arquivada: a lista de arquivados aberta remonta e busca de novo. */
+  const [versaoArquivo, setVersaoArquivo] = useState(0);
   /** Obras com "Materiais previstos" aberto: o formulário só monta (e busca na API) quando abre. */
   const [previstosAbertos, setPrevistosAbertos] = useState<Record<string, boolean>>({});
 
@@ -80,6 +87,11 @@ export default function Obras() {
     setErro(mensagem);
   }
 
+  async function obraArquivada() {
+    setVersaoArquivo((versao) => versao + 1);
+    await carregar();
+  }
+
   async function obraCriada() {
     setMostrarForm(false);
     // A obra nova nasce ORCAMENTO; com outro filtro ativo ela sumiria da lista.
@@ -98,17 +110,36 @@ export default function Obras() {
           <h1>Obras</h1>
           <p className="subtitulo-pagina">Acompanhe o funil, do orcamento a conclusao.</p>
         </div>
-        <button
-          type="button"
-          className={mostrarForm ? 'btn btn-secundario' : 'btn'}
-          onClick={() => setMostrarForm((aberto) => !aberto)}
-        >
-          {!mostrarForm && <Icone nome="mais" />}
-          {mostrarForm ? 'Fechar' : 'Nova obra'}
-        </button>
+        <div className="acoes">
+          <button
+            type="button"
+            className="btn btn-secundario"
+            aria-pressed={verArquivados}
+            onClick={() => setVerArquivados((aberto) => !aberto)}
+          >
+            {verArquivados ? 'Fechar arquivados' : 'Ver arquivados'}
+          </button>
+          <button
+            type="button"
+            className={mostrarForm ? 'btn btn-secundario' : 'btn'}
+            onClick={() => setMostrarForm((aberto) => !aberto)}
+          >
+            {!mostrarForm && <Icone nome="mais" />}
+            {mostrarForm ? 'Fechar' : 'Nova obra'}
+          </button>
+        </div>
       </div>
 
       {mostrarForm && <NovaObraForm gesseiros={gesseiros} onSalvo={obraCriada} />}
+
+      {verArquivados && (
+        <ListaArquivados<Obra>
+          key={versaoArquivo}
+          caminho="/obras"
+          rotulo={(obra) => `${obra.titulo} (${obra.clienteNome})`}
+          onRestaurado={carregar}
+        />
+      )}
 
       <div className="filtros">
         {filtros.map((opcao) => (
@@ -150,6 +181,8 @@ export default function Obras() {
               </p>
             )}
 
+            <ValorRecebidoForm obra={obra} onSalvo={carregar} />
+
             {obra.gesseiros && obra.gesseiros.length > 0 && (
               <ul className="lista-gesseiros">
                 {obra.gesseiros.map((alocacao) => (
@@ -174,6 +207,7 @@ export default function Obras() {
             )}
 
             <AcoesStatusObra obra={obra} onAlterada={carregar} onErro={falhaTransicao} />
+            <ArquivarObra obra={obra} onAlterada={obraArquivada} />
 
             {aceitaAlocacao.includes(obra.status) && (
               <details>

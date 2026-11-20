@@ -12,6 +12,16 @@ export function data(valor: string | null | undefined): string {
   return new Date(valor).toLocaleDateString('pt-BR');
 }
 
+/** Dias que um registro arquivado espera antes de ser apagado de vez (AD-015). */
+export const DIAS_NO_ARQUIVO = 7;
+
+/** Data em que o registro arquivado será apagado: `arquivadoEm` + 7 dias, em `dd/mm/aaaa`. */
+export function dataLimpeza(arquivadoEm: string | null | undefined): string {
+  if (!arquivadoEm) return '-';
+  const limpeza = new Date(new Date(arquivadoEm).getTime() + DIAS_NO_ARQUIVO * 24 * 60 * 60 * 1000);
+  return data(limpeza.toISOString());
+}
+
 /** Data e hora no fuso local, no formato `dd/mm/aaaa hh:mm`. */
 export function dataHora(valor: string | null | undefined): string {
   if (!valor) return '-';
@@ -44,7 +54,9 @@ function parteInteira(valor: string): string {
  * já devolve calculado. Não compara nem converte números: só escolhe o texto.
  * N = parte inteira de diasAteMinimo: 0 -> "hoje", 1 -> "~1 dia", 2+ -> "~N dias".
  */
-export function situacaoAlerta(alerta: Pick<AlertaEstoque, 'tipo' | 'motivo' | 'diasAteMinimo'>): string {
+export function situacaoAlerta(
+  alerta: Pick<AlertaEstoque, 'tipo' | 'motivo' | 'diasAteMinimo'>,
+): string {
   if (alerta.tipo === 'INFORMATIVO') return 'observação do agente';
   if (alerta.motivo === 'ABAIXO_DO_MINIMO') return 'abaixo do mínimo';
   if (alerta.motivo === 'NO_MINIMO_COM_CONSUMO') return 'no mínimo';
@@ -67,7 +79,9 @@ function ehZero(valor: string): boolean {
  * que a API já devolve calculados. A API garante os dois >= 0 (pendente e excedente com piso 0),
  * então "> 0" equivale a "diferente de zero", conferido no texto, sem converter nem fazer contas.
  */
-export function situacaoPrevisto(linha: Pick<LinhaPrevistoUtilizado, 'pendente' | 'excedente'>): string {
+export function situacaoPrevisto(
+  linha: Pick<LinhaPrevistoUtilizado, 'pendente' | 'excedente'>,
+): string {
   if (!ehZero(linha.pendente)) return `pendente: ${numero(linha.pendente)}`;
   if (!ehZero(linha.excedente)) return `excedente: ${numero(linha.excedente)}`;
   return 'conforme previsto';

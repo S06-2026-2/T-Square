@@ -1,15 +1,17 @@
 // Fixture da auditoria de responsividade (apps/web/scripts/audit-responsive.mjs).
-// Monta os dados dos estados do agente de estoque e a obra CANCELADA com motivo longo
-// (obras-transicoes-status, story "Ações de status no celular") que a auditoria mede, e apaga
-// tudo depois.
+// Monta os dados dos estados do agente de estoque, a obra CANCELADA com motivo longo
+// (obras-transicoes-status, story "Ações de status no celular") e os registros do arquivamento
+// (arquivar-e-limpar-registros, ARQ-14: obra quitada, obra/gesseiro/material arquivados) que a
+// auditoria mede, e apaga tudo depois.
 //
 // Uso (dentro do container da API, que tem o Prisma Client gerado):
-//   docker exec gesso_api node scripts/fixture-auditoria.mjs preparar   -> imprime { alertaId, materialId, quantidade, obraCanceladaId }
+//   docker exec gesso_api node scripts/fixture-auditoria.mjs preparar   -> imprime { alertaId, materialId, quantidade, obraCanceladaId, obraQuitadaId }
 //   docker exec gesso_api node scripts/fixture-auditoria.mjs limpar
 //   docker exec gesso_api node scripts/fixture-auditoria.mjs contar     -> imprime { restos }
 //
 // Tudo que a fixture cria leva o marcador "[audit]": o nome dos materiais, o `modelo` da análise
-// e o título da obra.
+// e o título da obra e o nome do gesseiro. Os arquivados levam a data de agora: o job de limpeza
+// (7 dias) nunca os alcança durante uma auditoria.
 // A análise é datada de 2000-01-01, então nunca vira a "última análise" (as consultas ordenam por
 // iniciadoEm desc) nem muda o catch-up do agendador. O agente LLM não é chamado.
 // Não rodar durante uma análise real nem perto de uma demonstração do agente.
@@ -61,6 +63,7 @@ for (const sinal of ['SIGINT', 'SIGTERM']) {
 const filtroMateriais = { nome: { startsWith: MARCADOR } };
 const filtroAnalises = { modelo: MARCADOR };
 const filtroObras = { titulo: { startsWith: MARCADOR } };
+const filtroGesseiros = { nome: { startsWith: MARCADOR } };
 
 /**
  * Motivo de 500 caracteres (o máximo do CancelarObraDto) com um trecho de 120 sem espaço:
@@ -81,18 +84,21 @@ async function limpar() {
   await prisma.analiseEstoque.deleteMany({ where: filtroAnalises });
   await prisma.material.deleteMany({ where: filtroMateriais });
   await prisma.obra.deleteMany({ where: filtroObras });
+  // Sem alocação nem lançamento: o gesseiro da fixture sai sozinho.
+  await prisma.gesseiro.deleteMany({ where: filtroGesseiros });
 }
 
 async function contar() {
-  const [materiais, analises, alertas, obras] = await Promise.all([
+  const [materiais, analises, alertas, obras, gesseiros] = await Promise.all([
     prisma.material.count({ where: filtroMateriais }),
     prisma.analiseEstoque.count({ where: filtroAnalises }),
     prisma.alertaEstoque.count({
       where: { OR: [{ material: filtroMateriais }, { analise: filtroAnalises }] },
     }),
     prisma.obra.count({ where: filtroObras }),
+    prisma.gesseiro.count({ where: filtroGesseiros }),
   ]);
-  return materiais + analises + alertas + obras;
+  return materiais + analises + alertas + obras + gesseiros;
 }
 
 async function preparar() {
@@ -149,11 +155,44 @@ async function preparar() {
         motivoCancelamento: MOTIVO_LONGO,
       },
     });
+    const agora = new Date();
+    const quitada = await tx.obra.create({
+      data: {
+        titulo: `${MARCADOR} Quitada`,
+        clienteNome: 'Cliente auditoria',
+        valorTotal: 4200,
+        valorRecebido: 4200,
+        status: 'CONCLUIDA',
+      },
+    });
+    await tx.obra.create({
+      data: {
+        titulo: `${MARCADOR} Arquivada com um título bem comprido para testar a quebra de linha`,
+        clienteNome: 'Cliente auditoria',
+        valorTotal: 1500,
+        valorRecebido: 1500,
+        status: 'CONCLUIDA',
+        arquivadoEm: agora,
+      },
+    });
+    await tx.gesseiro.create({
+      data: { nome: `${MARCADOR} Arquivado`, ativo: false, arquivadoEm: agora },
+    });
+    await tx.material.create({
+      data: {
+        nome: `${MARCADOR} Arquivado`,
+        unidade: 'saco',
+        saldoAtual: 3,
+        estoqueMinimo: 0,
+        arquivadoEm: agora,
+      },
+    });
     return {
       alertaId: alerta.id,
       materialId: ativo.id,
       quantidade: QUANTIDADE,
       obraCanceladaId: cancelada.id,
+      obraQuitadaId: quitada.id,
     };
   });
 }

@@ -11,6 +11,8 @@ export interface Gesseiro {
   telefone?: string | null;
   chavePix?: string | null;
   ativo: boolean;
+  /** Arquivado (some das listas); apagado de vez 7 dias depois (AD-015). */
+  arquivadoEm?: string | null;
 }
 
 export interface Pagamento {
@@ -43,6 +45,10 @@ export interface Obra {
   dataConclusao?: string | null;
   /** Preenchido só em obra CANCELADA (PATCH /obras/:id/cancelar). */
   motivoCancelamento?: string | null;
+  /** Quanto o cliente já pagou (0 até valorTotal). */
+  valorRecebido?: string | number;
+  /** Arquivada (some das listas); apagada de vez 7 dias depois (AD-015). */
+  arquivadoEm?: string | null;
   pagamento?: Pagamento | null;
   gesseiros?: AlocacaoGesseiro[];
 }
@@ -78,6 +84,8 @@ export interface Material {
   unidade: string;
   saldoAtual: string | number;
   estoqueMinimo: string | number;
+  /** Arquivado (some do estoque e do agente); apagado de vez 7 dias depois (AD-015). */
+  arquivadoEm?: string | null;
 }
 
 export interface Usuario {
@@ -171,4 +179,15 @@ export interface LinhaPrevistoUtilizado {
   excedente: string;
   /** Material que saiu para a obra sem estar previsto: previsto 0, todo o utilizado e excedente (EAP-70). */
   semPrevisao: boolean;
+}
+
+/** GET /obras/:id/arquivamento: as condições do "Arquivar obra" (ARQ-03). */
+export interface SituacaoArquivamento {
+  concluida: boolean;
+  arquivada: boolean;
+  valorRecebido: number;
+  valorTotal: number;
+  clienteQuitado: boolean;
+  gesseirosPendentes: Array<{ id: string; nome: string; saldo: number }>;
+  podeArquivar: boolean;
 }

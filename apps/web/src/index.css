@@ -1374,6 +1374,67 @@ textarea {
   }
 }
 
+/* Arquivamento (arquivar-e-limpar-registros). */
+.valor-recebido {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.valor-recebido .secundario {
+  margin: 0;
+}
+
+.linha-campo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.linha-campo label {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.painel-arquivar .confirmacoes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+
+.painel-arquivar .secundario,
+.acoes-arquivar .aviso-acao {
+  margin: 0;
+}
+
+.lista-arquivados {
+  margin-bottom: 16px;
+}
+
+.lista-arquivados h2 {
+  margin-top: 0;
+}
+
+.lista-arquivados .rotulo-arquivado {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.lista-arquivados li .btn {
+  flex-shrink: 0;
+}
+
+.btn-tabela {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
 /* Área de toque mínima de 44x44 (RSP-08). */
 @media (max-width: 900px) {
   .nav-link,
@@ -1384,7 +1445,10 @@ textarea {
   .btn-icone,
   .card-obra summary,
   .linha-form .btn-texto,
-  .card-acoes .btn {
+  .card-acoes .btn,
+  .lista-arquivados .btn,
+  .valor-recebido .btn,
+  .btn-tabela {
     min-height: 44px;
     min-width: 44px;
   }

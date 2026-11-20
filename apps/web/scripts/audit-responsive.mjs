@@ -1,7 +1,7 @@
 // Auditoria de responsividade (spec pwa-instalavel-responsivo, RSP-01..RSP-10).
 //
-// Percorre 16 telas/estados em 6 larguras com o UA do Safari da Apple (96 combinações) e, de novo,
-// 15 estados em 1024/1366 com o Chrome de desktop sem toque (30), num total de 126, e mede o layout.
+// Percorre 20 telas/estados em 6 larguras com o UA do Safari da Apple (120 combinações) e, de novo,
+// 19 estados em 1024/1366 com o Chrome de desktop sem toque (38), num total de 158, e mede o layout.
 // Sai com código 1 se qualquer medida falhar, se algum estado não montar (NAO_MONTADO) ou se
 // sobrar dado "[audit]" no banco. Não existe estado "pulado".
 //
@@ -174,6 +174,24 @@ const SILENCIADO = '[audit] Silenciado';
  * lista, que é justamente a da fixture (a mais nova).
  */
 const TRECHO_MOTIVO = 'x'.repeat(120);
+/**
+ * Valor total da obra "[audit] Quitada" (CONCLUIDA, recebido = total). O card é achado por ele,
+ * pelo mesmo motivo do TRECHO_MOTIVO: o título pode ter sido trocado pelo nome longo.
+ */
+const VALOR_QUITADA = '4.200,00';
+
+/** Abre "Ver arquivados" e espera a lista com o item "[audit] Arquivado..." (ARQ-08, ARQ-14). */
+async function abrirArquivados(p) {
+  if (!(await esperar(p, visivelComTexto, '.cabecalho-pagina .btn', 'Ver arquivados'))) return false;
+  await clicar(p, '.cabecalho-pagina .btn', 'Ver arquivados');
+  return esperar(
+    p,
+    () =>
+      [...document.querySelectorAll('.lista-arquivados li')].some(
+        (li) => li.getBoundingClientRect().height > 0 && li.textContent.includes('Será apagado em'),
+      ) && [...document.querySelectorAll('.lista-arquivados .btn')].every((b) => b.getBoundingClientRect().height > 0),
+  );
+}
 
 /**
  * Cada estado: rota, se precisa de login, a ação que o monta e a conferência de que montou.
@@ -319,6 +337,48 @@ const ESTADOS = [
     },
   },
   {
+    // arquivar-e-limpar-registros (ARQ-14): painel "Arquivar obra" aberto na obra [audit] Quitada,
+    // com as duas confirmações carregadas. Só abre: nunca arquiva.
+    id: 'obras-arquivar',
+    rota: '/obras',
+    precisaFixture: true,
+    montar: async (p) => {
+      const pronto = await esperar(
+        p,
+        (valor) =>
+          [...document.querySelectorAll('.card-obra[data-status="CONCLUIDA"]')].some(
+            (c) =>
+              c.querySelector('.valor')?.textContent.includes(valor) &&
+              [...c.querySelectorAll('.card-acoes .btn')].some((b) => b.textContent.includes('Arquivar obra')),
+          ),
+        VALOR_QUITADA,
+      );
+      if (!pronto) return false;
+      await p.evaluate((valor) => {
+        const card = [...document.querySelectorAll('.card-obra[data-status="CONCLUIDA"]')].find((c) =>
+          c.querySelector('.valor')?.textContent.includes(valor),
+        );
+        [...card.querySelectorAll('.card-acoes .btn')].find((b) => b.textContent.includes('Arquivar obra')).click();
+      }, VALOR_QUITADA);
+      return esperar(
+        p,
+        () =>
+          [...document.querySelectorAll('.painel-arquivar')].some(
+            (painel) =>
+              painel.querySelector('[data-testid="gesseiros-pagos"]')?.getBoundingClientRect().height > 0 &&
+              painel.querySelector('[data-testid="cliente-pagou"]')?.textContent.includes('✔') &&
+              [...painel.querySelectorAll('.btn')].some((b) => b.textContent.trim() === 'Arquivar' && !b.disabled),
+          ),
+      );
+    },
+  },
+  {
+    id: 'obras-arquivados',
+    rota: '/obras',
+    precisaFixture: true,
+    montar: abrirArquivados,
+  },
+  {
     id: 'gesseiros',
     rota: '/gesseiros',
     nomeLongo: '.lista-pessoas .btn-texto',
@@ -348,6 +408,12 @@ const ESTADOS = [
     },
   },
   {
+    id: 'gesseiros-arquivados',
+    rota: '/gesseiros',
+    precisaFixture: true,
+    montar: abrirArquivados,
+  },
+  {
     id: 'estoque',
     rota: '/estoque',
     nomeLongo: '.tabela-wrap tbody td',
@@ -370,6 +436,12 @@ const ESTADOS = [
       await clicar(p, '.cabecalho-pagina .btn', 'Novo material');
       return esperar(p, formularioAberto);
     },
+  },
+  {
+    id: 'estoque-arquivados',
+    rota: '/estoque',
+    precisaFixture: true,
+    montar: abrirArquivados,
   },
   {
     // Aberto pelo "Resolver" do alerta [audit] no dashboard. Só abre: nunca salva, para o alerta
@@ -567,6 +639,8 @@ async function medir(page, logado, largura) {
         '.card-obra summary', '.linha-form .btn-texto',
         // obras-transicoes-status: avanço, "Cancelar obra" e os botões do formulário de cancelar.
         '.card-acoes .btn',
+        // arquivar-e-limpar-registros: lista de arquivados, valor recebido e "Arquivar" da tabela.
+        '.lista-arquivados .btn', '.valor-recebido .btn', '.btn-tabela',
       ];
       const pequenosAlvo = [...document.querySelectorAll(alvos.join(','))]
         .filter(visivel)
