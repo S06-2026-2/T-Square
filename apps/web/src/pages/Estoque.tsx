@@ -4,7 +4,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import MovimentacaoForm from '../components/forms/MovimentacaoForm';
 import NovoMaterialForm from '../components/forms/NovoMaterialForm';
 import Icone from '../components/Icone';
+import ListaArquivados from '../components/ListaArquivados';
 import { api } from '../lib/api';
+import { confirmacaoArquivarMaterial, ehFalhaDeRede, mensagemDe } from '../lib/arquivamento';
 import { useAoReconectar } from '../lib/conexao';
 import type { Material, Obra } from '../types';
 
@@ -23,6 +25,11 @@ export default function Estoque() {
   const [obras, setObras] = useState<Obra[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [formAberto, setFormAberto] = useState<FormAberto>(entrada ? 'movimentacao' : null);
+  /** "Ver arquivados" aberto (ARQ-08). */
+  const [verArquivados, setVerArquivados] = useState(false);
+  /** Muda a cada material arquivado: a lista de arquivados aberta remonta e busca de novo. */
+  const [versaoArquivo, setVersaoArquivo] = useState(0);
+  const [arquivando, setArquivando] = useState<string | null>(null);
 
   async function carregar() {
     try {
@@ -74,6 +81,24 @@ export default function Estoque() {
     await carregar();
   }
 
+  /** ARQ-12: com qualquer saldo; a confirmação avisa quando ainda há material em estoque. */
+  async function arquivar(material: Material) {
+    if (!window.confirm(confirmacaoArquivarMaterial(material))) return;
+    setArquivando(material.id);
+    setErro(null);
+    try {
+      await api.patch(`/estoque/materiais/${material.id}/arquivar`);
+      setVersaoArquivo((versao) => versao + 1);
+      await carregar();
+    } catch (e) {
+      const mensagem = mensagemDe(e);
+      if (!ehFalhaDeRede(e)) await carregar();
+      setErro(mensagem);
+    } finally {
+      setArquivando(null);
+    }
+  }
+
   const materialDoAlerta = materiais.find((m) => m.id === entrada?.materialId);
 
   return (
@@ -84,6 +109,14 @@ export default function Estoque() {
           <p className="subtitulo-pagina">Saldo de materiais e alerta de reposicao.</p>
         </div>
         <div className="acoes">
+          <button
+            type="button"
+            className="btn btn-secundario"
+            aria-pressed={verArquivados}
+            onClick={() => setVerArquivados((aberto) => !aberto)}
+          >
+            {verArquivados ? 'Fechar arquivados' : 'Ver arquivados'}
+          </button>
           <button
             type="button"
             className={formAberto === 'movimentacao' ? 'btn' : 'btn btn-secundario'}
@@ -121,6 +154,15 @@ export default function Estoque() {
         />
       )}
 
+      {verArquivados && (
+        <ListaArquivados<Material>
+          key={versaoArquivo}
+          caminho="/estoque/materiais"
+          rotulo={(material) => `${material.nome} (${material.unidade})`}
+          onRestaurado={carregar}
+        />
+      )}
+
       {erro && <p className="erro">{erro}</p>}
 
       <div className="tabela-wrap">
@@ -132,6 +174,7 @@ export default function Estoque() {
               <th className="num">Saldo</th>
               <th className="num">Minimo</th>
               <th>Situacao</th>
+              <th>Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -147,6 +190,17 @@ export default function Estoque() {
                     <span className={abaixo ? 'badge badge-alerta' : 'badge badge-ok'}>
                       {abaixo ? 'Repor' : 'Ok'}
                     </span>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn btn-secundario btn-tabela"
+                      aria-label={`Arquivar ${material.nome}`}
+                      disabled={arquivando !== null}
+                      onClick={() => void arquivar(material)}
+                    >
+                      Arquivar
+                    </button>
                   </td>
                 </tr>
               );

@@ -141,7 +141,13 @@ describe('Estoque: atalho do "Resolver" de um alerta de reposição (EAP-68)', (
   const atalho = '/estoque?alerta=al-1&material=m-placa&quantidade=28';
 
   it('outro alerta com o formulário aberto troca os campos e a chave juntos (IDP-01)', async () => {
-    const fita: Material = { id: 'm-fita', nome: 'Fita', unidade: 'rolo', saldoAtual: 0, estoqueMinimo: 5 };
+    const fita: Material = {
+      id: 'm-fita',
+      nome: 'Fita',
+      unidade: 'rolo',
+      saldoAtual: 0,
+      estoqueMinimo: 5,
+    };
     materiais = [placa, fita];
     post
       .mockRejectedValueOnce(Object.assign(new Error('Sem conexão'), { status: 0 }))
@@ -152,7 +158,10 @@ describe('Estoque: atalho do "Resolver" de um alerta de reposição (EAP-68)', (
     function OutroAlerta() {
       const navigate = useNavigate();
       return (
-        <button type="button" onClick={() => navigate('/estoque?alerta=al-2&material=m-fita&quantidade=7')}>
+        <button
+          type="button"
+          onClick={() => navigate('/estoque?alerta=al-2&material=m-fita&quantidade=7')}
+        >
           outro alerta
         </button>
       );
@@ -205,11 +214,15 @@ describe('Estoque: atalho do "Resolver" de um alerta de reposição (EAP-68)', (
     fireEvent.click(screen.getByRole('button', { name: 'Registrar movimentacao' }));
 
     expect(await screen.findByText('Tela do dashboard')).toBeInTheDocument();
-    expect(post).toHaveBeenCalledWith('/estoque/movimentacoes', {
-      materialId: 'm-placa',
-      tipo: 'ENTRADA',
-      quantidade: 30,
-    }, { idempotencyKey: expect.any(String) });
+    expect(post).toHaveBeenCalledWith(
+      '/estoque/movimentacoes',
+      {
+        materialId: 'm-placa',
+        tipo: 'ENTRADA',
+        quantidade: 30,
+      },
+      { idempotencyKey: expect.any(String) },
+    );
     expect(patch).toHaveBeenCalledWith('/estoque/agente/alertas/al-1/resolver');
     expect(post.mock.invocationCallOrder[0]).toBeLessThan(patch.mock.invocationCallOrder[0]);
   });
@@ -312,5 +325,166 @@ describe('Estoque: conexão de volta (OFF-15)', () => {
     await waitFor(() => expect(chamadasMateriais()).toBe(2));
     expect(screen.getByLabelText('Nome')).toHaveValue('Massa corrida');
     expect(screen.getByLabelText('Unidade')).toHaveValue('saco');
+  });
+});
+
+/** ARQ-08 e ARQ-12 (UI) de arquivar-e-limpar-registros. */
+describe('Estoque: arquivamento', () => {
+  const COM_SALDO =
+    'Arquivar Placa de gesso? Ainda há 50 un em estoque. Ele some do estoque e é apagado de vez em 7 dias; até lá dá para restaurar em "Ver arquivados".';
+  const SEM_SALDO =
+    'Arquivar Cola? Ele some do estoque e é apagado de vez em 7 dias; até lá dá para restaurar em "Ver arquivados".';
+  const cola: Material = {
+    id: 'm-cola',
+    nome: 'Cola',
+    unidade: 'kg',
+    saldoAtual: '0',
+    estoqueMinimo: 0,
+  };
+  const antigo: Material = {
+    id: 'm-antigo',
+    nome: 'Massa velha',
+    unidade: 'saco',
+    saldoAtual: 3,
+    estoqueMinimo: 0,
+    arquivadoEm: '2026-11-20T15:00:00.000Z',
+  };
+  let confirmar: jest.SpyInstance;
+
+  beforeEach(() => {
+    materiais = [placa, cola];
+    confirmar = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    get.mockImplementation(async (caminho: string) => {
+      if (caminho === '/obras') return obras;
+      if (caminho === '/estoque/materiais?arquivados=true') return [antigo];
+      return materiais;
+    });
+  });
+
+  afterEach(() => confirmar.mockRestore());
+
+  it('a tabela tem a coluna "Ações" com "Arquivar" em cada material', async () => {
+    renderizar();
+    await screen.findByRole('cell', { name: 'Placa de gesso' });
+
+    expect(screen.getByRole('columnheader', { name: 'Ações' })).toBeInTheDocument();
+    expect(
+      linha('Placa de gesso').getByRole('button', { name: 'Arquivar Placa de gesso' }),
+    ).toBeEnabled();
+    expect(linha('Cola').getByRole('button', { name: 'Arquivar Cola' })).toBeEnabled();
+  });
+
+  it('com saldo: a confirmação avisa o saldo; aceita → PATCH e o material some da tabela', async () => {
+    patch.mockImplementation(async () => {
+      materiais = [cola];
+      return {};
+    });
+    renderizar();
+    await screen.findByRole('cell', { name: 'Placa de gesso' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Arquivar Placa de gesso' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('cell', { name: 'Placa de gesso' })).not.toBeInTheDocument(),
+    );
+    expect(confirmar).toHaveBeenCalledWith(COM_SALDO);
+    expect(patch).toHaveBeenCalledWith('/estoque/materiais/m-placa/arquivar');
+  });
+
+  it('saldo 0: confirmação sem o aviso', async () => {
+    patch.mockResolvedValue({});
+    renderizar();
+    await screen.findByRole('cell', { name: 'Cola' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Arquivar Cola' }));
+
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+    expect(confirmar).toHaveBeenCalledWith(SEM_SALDO);
+  });
+
+  it('confirmação recusada: nenhuma chamada', async () => {
+    confirmar.mockReturnValue(false);
+    renderizar();
+    await screen.findByRole('cell', { name: 'Placa de gesso' });
+    const antes = chamadasMateriais();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Arquivar Placa de gesso' }));
+
+    expect(patch).not.toHaveBeenCalled();
+    expect(chamadasMateriais()).toBe(antes);
+  });
+
+  it('erro HTTP: mensagem visível e a tabela recarrega', async () => {
+    patch.mockRejectedValue(
+      Object.assign(new Error('O material já está arquivado'), { status: 400 }),
+    );
+    renderizar();
+    await screen.findByRole('cell', { name: 'Placa de gesso' });
+    const antes = chamadasMateriais();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Arquivar Placa de gesso' }));
+
+    expect(await screen.findByText('O material já está arquivado')).toHaveClass('erro');
+    expect(chamadasMateriais()).toBe(antes + 1);
+  });
+
+  it('"Ver arquivados" lista e restaura; a tabela recarrega', async () => {
+    patch.mockResolvedValue({});
+    renderizar();
+    await screen.findByRole('cell', { name: 'Placa de gesso' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ver arquivados' }));
+    const lista = await screen.findByLabelText('Arquivados');
+    expect(await within(lista).findByText('Massa velha (saco)')).toBeInTheDocument();
+    const antes = chamadasMateriais();
+
+    fireEvent.click(within(lista).getByRole('button', { name: 'Restaurar' }));
+
+    await waitFor(() => expect(chamadasMateriais()).toBe(antes + 1));
+    expect(patch).toHaveBeenCalledWith('/estoque/materiais/m-antigo/restaurar');
+  });
+
+  it('sem rede: mensagem e a tabela não recarrega (AD-014, auditor web #23)', async () => {
+    const SEM_CONEXAO =
+      'Sem conexão: não foi possível confirmar o envio. Tente de novo; o mesmo lançamento não será duplicado.';
+    patch.mockRejectedValue(Object.assign(new Error(SEM_CONEXAO), { status: 0 }));
+    renderizar();
+    await screen.findByRole('cell', { name: 'Placa de gesso' });
+    const antes = chamadasMateriais();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Arquivar Placa de gesso' }));
+
+    expect(await screen.findByText(SEM_CONEXAO)).toHaveClass('erro');
+    expect(chamadasMateriais()).toBe(antes);
+    expect(patch).toHaveBeenCalledTimes(1);
+  });
+
+  it('com um arquivar pendente, os outros "Arquivar" ficam desabilitados (auditor web #24)', async () => {
+    patch.mockReturnValue(new Promise(() => undefined));
+    renderizar();
+    await screen.findByRole('cell', { name: 'Placa de gesso' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Arquivar Placa de gesso' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Arquivar Cola' })).toBeDisabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Arquivar Cola' }));
+    expect(patch).toHaveBeenCalledTimes(1);
+  });
+
+  it('com "Ver arquivados" aberto, arquivar busca os arquivados de novo (auditor web #25)', async () => {
+    patch.mockResolvedValue({});
+    renderizar();
+    await screen.findByRole('cell', { name: 'Placa de gesso' });
+    fireEvent.click(screen.getByRole('button', { name: 'Ver arquivados' }));
+    await within(await screen.findByLabelText('Arquivados')).findByText('Massa velha (saco)');
+    const arquivados = () =>
+      get.mock.calls.filter(([c]) => c === '/estoque/materiais?arquivados=true').length;
+    expect(arquivados()).toBe(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Arquivar Cola' }));
+
+    await waitFor(() => expect(arquivados()).toBe(2));
   });
 });

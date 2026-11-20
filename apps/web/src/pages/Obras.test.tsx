@@ -15,7 +15,14 @@ const patch = api.patch as jest.Mock;
 const gesseiros: Gesseiro[] = [{ id: 'g-ana', nome: 'Ana', ativo: true }];
 
 function obra(id: string, status: StatusObra): Obra {
-  return { id, titulo: `Obra ${id}`, clienteNome: 'Cliente', status, valorTotal: 1000, gesseiros: [] };
+  return {
+    id,
+    titulo: `Obra ${id}`,
+    clienteNome: 'Cliente',
+    status,
+    valorTotal: 1000,
+    gesseiros: [],
+  };
 }
 
 const todas: Obra[] = [
@@ -126,7 +133,9 @@ describe('Obras', () => {
       expect(within(card(titulo)).getByRole('button', { name: 'Alocar' })).toBeInTheDocument();
     }
     for (const titulo of ['Obra con', 'Obra can']) {
-      expect(within(card(titulo)).queryByRole('button', { name: 'Alocar' })).not.toBeInTheDocument();
+      expect(
+        within(card(titulo)).queryByRole('button', { name: 'Alocar' }),
+      ).not.toBeInTheDocument();
     }
   });
 
@@ -138,7 +147,9 @@ describe('Obras', () => {
 
     const alvo = within(card('Obra orc'));
     await waitFor(() =>
-      expect(within(alvo.getByLabelText('Gesseiro')).getByRole('option', { name: 'Ana' })).toBeInTheDocument(),
+      expect(
+        within(alvo.getByLabelText('Gesseiro')).getByRole('option', { name: 'Ana' }),
+      ).toBeInTheDocument(),
     );
     get.mockImplementation(async (caminho: string) => {
       if (caminho === '/gesseiros') return gesseiros;
@@ -254,9 +265,15 @@ describe('Obras: ações de status', () => {
     render(<Obras />);
     await screen.findByText('Obra orc');
 
-    expect(within(card('Obra orc')).getByRole('button', { name: 'Cliente aprovou' })).toBeInTheDocument();
-    expect(within(card('Obra fec')).getByRole('button', { name: 'Iniciar obra' })).toBeInTheDocument();
-    expect(within(card('Obra and')).getByRole('button', { name: 'Concluir obra' })).toBeInTheDocument();
+    expect(
+      within(card('Obra orc')).getByRole('button', { name: 'Cliente aprovou' }),
+    ).toBeInTheDocument();
+    expect(
+      within(card('Obra fec')).getByRole('button', { name: 'Iniciar obra' }),
+    ).toBeInTheDocument();
+    expect(
+      within(card('Obra and')).getByRole('button', { name: 'Concluir obra' }),
+    ).toBeInTheDocument();
     for (const titulo of ['Obra con', 'Obra can']) {
       for (const nome of ['Cliente aprovou', 'Iniciar obra', 'Concluir obra', 'Cancelar obra']) {
         expect(within(card(titulo)).queryByRole('button', { name: nome })).toBeNull();
@@ -280,7 +297,9 @@ describe('Obras: ações de status', () => {
     await waitFor(() => expect(chamadasObras()).toHaveLength(antes + 1));
     expect(patch).toHaveBeenCalledWith('/obras/orc/fechar');
     expect(ultimaChamadaObras()).toBe('/obras?status=ORCAMENTO');
-    expect(await within(card('Obra orc')).findByRole('button', { name: 'Iniciar obra' })).toBeInTheDocument();
+    expect(
+      await within(card('Obra orc')).findByRole('button', { name: 'Iniciar obra' }),
+    ).toBeInTheDocument();
   });
 
   it('erro HTTP: recarrega com o filtro atual e depois mostra a mensagem da API (P1 AC9)', async () => {
@@ -299,7 +318,9 @@ describe('Obras: ações de status', () => {
     expect(await screen.findByText(mensagem)).toHaveClass('erro');
     expect(chamadasObras()).toHaveLength(antes + 1);
     expect(ultimaChamadaObras()).toBe('/obras');
-    expect(within(card('Obra orc')).getByRole('button', { name: 'Iniciar obra' })).toBeInTheDocument();
+    expect(
+      within(card('Obra orc')).getByRole('button', { name: 'Iniciar obra' }),
+    ).toBeInTheDocument();
   });
 
   it('falha de rede: mostra a mensagem do OFF-08, não recarrega e não reenvia (P1 AC11)', async () => {
@@ -314,7 +335,9 @@ describe('Obras: ações de status', () => {
     expect(await screen.findByText(SEM_CONEXAO)).toHaveClass('erro');
     expect(chamadasObras()).toHaveLength(antes);
     expect(patch).toHaveBeenCalledTimes(1);
-    expect(within(card('Obra and')).getByRole('button', { name: 'Concluir obra' })).toBeInTheDocument();
+    expect(
+      within(card('Obra and')).getByRole('button', { name: 'Concluir obra' }),
+    ).toBeInTheDocument();
     (window.confirm as jest.Mock).mockRestore();
   });
 
@@ -322,12 +345,17 @@ describe('Obras: ações de status', () => {
     get.mockImplementation(async (caminho: string) =>
       caminho === '/gesseiros'
         ? gesseiros
-        : [{ ...obra('can', 'CANCELADA'), motivoCancelamento: 'Cliente desistiu' }, obra('orc', 'ORCAMENTO')],
+        : [
+            { ...obra('can', 'CANCELADA'), motivoCancelamento: 'Cliente desistiu' },
+            obra('orc', 'ORCAMENTO'),
+          ],
     );
     render(<Obras />);
     await screen.findByText('Obra can');
 
-    expect(within(card('Obra can')).getByText('Motivo do cancelamento: Cliente desistiu')).toBeInTheDocument();
+    expect(
+      within(card('Obra can')).getByText('Motivo do cancelamento: Cliente desistiu'),
+    ).toBeInTheDocument();
     expect(within(card('Obra orc')).queryByText(/Motivo do cancelamento/)).toBeNull();
   });
 
@@ -342,13 +370,19 @@ describe('Obras: ações de status', () => {
     });
     const antes = chamadasObras().length;
     get.mockImplementation(async (caminho: string) =>
-      caminho === '/gesseiros' ? gesseiros : todas.map((o) => (o.id === 'and' ? obra('and', 'CONCLUIDA') : o)),
+      caminho === '/gesseiros'
+        ? gesseiros
+        : todas.map((o) => (o.id === 'and' ? obra('and', 'CONCLUIDA') : o)),
     );
 
-    fireEvent.click(within(card('Obra and')).getByRole('button', { name: 'Confirmar cancelamento' }));
+    fireEvent.click(
+      within(card('Obra and')).getByRole('button', { name: 'Confirmar cancelamento' }),
+    );
 
     await waitFor(() => expect(chamadasObras()).toHaveLength(antes + 1));
-    await waitFor(() => expect(within(card('Obra and')).getByText('Concluida')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(within(card('Obra and')).getByText('Concluida')).toBeInTheDocument(),
+    );
     expect(within(card('Obra and')).getByText(mensagem)).toHaveClass('erro');
     expect(within(card('Obra and')).getByLabelText('Motivo')).toHaveValue('Cliente desistiu');
   });
@@ -369,5 +403,153 @@ describe('Obras: ações de status', () => {
     await waitFor(() => expect(chamadasObras()).toHaveLength(antes + 1));
     expect(within(card('Obra fec')).getByLabelText('Motivo')).toHaveValue('Cliente desistiu');
     expect(patch).not.toHaveBeenCalled();
+  });
+});
+
+/** ARQ-02, ARQ-05, ARQ-07 e ARQ-08 de arquivar-e-limpar-registros, na página. */
+describe('Obras: valor recebido e arquivamento', () => {
+  const arquivada = { ...obra('arq', 'CONCLUIDA'), arquivadoEm: '2026-11-20T15:00:00.000Z' };
+  const situacaoOk = {
+    concluida: true,
+    arquivada: false,
+    valorRecebido: 1000,
+    valorTotal: 1000,
+    clienteQuitado: true,
+    gesseirosPendentes: [],
+    podeArquivar: true,
+  };
+
+  beforeEach(() => {
+    get.mockReset();
+    patch.mockReset();
+    get.mockImplementation(async (caminho: string) => {
+      if (caminho === '/gesseiros') return gesseiros;
+      if (caminho === '/obras?arquivados=true') return [arquivada];
+      if (caminho === '/obras/con/arquivamento') return situacaoOk;
+      return todas;
+    });
+  });
+
+  it('todo card tem o valor recebido; só o CONCLUIDA tem "Arquivar obra"', async () => {
+    render(<Obras />);
+    await screen.findByText('Obra con');
+
+    for (const titulo of ['Obra orc', 'Obra con', 'Obra can']) {
+      expect(within(card(titulo)).getByLabelText('Valor recebido do cliente')).toBeInTheDocument();
+    }
+    expect(screen.getAllByRole('button', { name: 'Arquivar obra' })).toHaveLength(1);
+    expect(
+      within(card('Obra con')).getByRole('button', { name: 'Arquivar obra' }),
+    ).toBeInTheDocument();
+  });
+
+  it('salvar o valor recebido faz o PATCH e recarrega a lista', async () => {
+    patch.mockResolvedValue({});
+    render(<Obras />);
+    await screen.findByText('Obra con');
+    const antes = chamadasObras().length;
+
+    const cartao = card('Obra orc');
+    fireEvent.change(within(cartao).getByLabelText('Valor recebido do cliente'), {
+      target: { value: '400' },
+    });
+    fireEvent.click(within(cartao).getByRole('button', { name: 'Salvar' }));
+
+    await waitFor(() => expect(chamadasObras()).toHaveLength(antes + 1));
+    expect(patch).toHaveBeenCalledWith('/obras/orc', { valorRecebido: 400 });
+  });
+
+  it('arquivar: PATCH e a lista recarrega com o filtro atual', async () => {
+    patch.mockResolvedValue({});
+    render(<Obras />);
+    await screen.findByText('Obra con');
+    fireEvent.click(within(card('Obra con')).getByRole('button', { name: 'Arquivar obra' }));
+    const botao = await within(card('Obra con')).findByRole('button', { name: 'Arquivar' });
+    await waitFor(() => expect(botao).toBeEnabled());
+    const antes = chamadasObras().filter((c) => c === '/obras').length;
+
+    fireEvent.click(botao);
+
+    await waitFor(() =>
+      expect(chamadasObras().filter((c) => c === '/obras')).toHaveLength(antes + 1),
+    );
+    expect(patch).toHaveBeenCalledWith('/obras/con/arquivar');
+  });
+
+  it('"Ver arquivados" lista as arquivadas; restaurar recarrega a lista principal', async () => {
+    patch.mockResolvedValue({});
+    render(<Obras />);
+    await screen.findByText('Obra con');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ver arquivados' }));
+
+    const lista = await screen.findByLabelText('Arquivados');
+    expect(await within(lista).findByText('Obra arq (Cliente)')).toBeInTheDocument();
+    expect(within(lista).getByText('Será apagado em 27/11/2026')).toBeInTheDocument();
+    const antes = chamadasObras().filter((c) => c === '/obras').length;
+
+    fireEvent.click(within(lista).getByRole('button', { name: 'Restaurar' }));
+
+    await waitFor(() =>
+      expect(chamadasObras().filter((c) => c === '/obras')).toHaveLength(antes + 1),
+    );
+    expect(patch).toHaveBeenCalledWith('/obras/arq/restaurar');
+    expect(within(lista).queryByText('Obra arq (Cliente)')).not.toBeInTheDocument();
+  });
+
+  it('"Fechar arquivados" esconde a lista', async () => {
+    render(<Obras />);
+    await screen.findByText('Obra con');
+    fireEvent.click(screen.getByRole('button', { name: 'Ver arquivados' }));
+    await screen.findByLabelText('Arquivados');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar arquivados' }));
+
+    expect(screen.queryByLabelText('Arquivados')).not.toBeInTheDocument();
+  });
+
+  it('arquivar com o filtro "Concluidas": recarrega com ?status=CONCLUIDA e o card sai (ARQ-05)', async () => {
+    let arquivou = false;
+    patch.mockImplementation(async () => {
+      arquivou = true;
+      return {};
+    });
+    get.mockImplementation(async (caminho: string) => {
+      if (caminho === '/gesseiros') return gesseiros;
+      if (caminho === '/obras/con/arquivamento') return situacaoOk;
+      if (caminho === '/obras?status=CONCLUIDA') return arquivou ? [] : [obra('con', 'CONCLUIDA')];
+      return todas;
+    });
+    render(<Obras />);
+    await screen.findByText('Obra orc');
+    fireEvent.click(screen.getByRole('button', { name: 'Concluidas' }));
+    await waitFor(() => expect(ultimaChamadaObras()).toBe('/obras?status=CONCLUIDA'));
+    await waitFor(() => expect(screen.queryByText('Obra orc')).not.toBeInTheDocument());
+    fireEvent.click(within(card('Obra con')).getByRole('button', { name: 'Arquivar obra' }));
+    const botao = await within(card('Obra con')).findByRole('button', { name: 'Arquivar' });
+    await waitFor(() => expect(botao).toBeEnabled());
+
+    fireEvent.click(botao);
+
+    await waitFor(() => expect(screen.queryByText('Obra con')).not.toBeInTheDocument());
+    expect(ultimaChamadaObras()).toBe('/obras?status=CONCLUIDA');
+  });
+
+  it('com "Ver arquivados" aberto, arquivar busca os arquivados de novo (auditor web #25/#26)', async () => {
+    patch.mockResolvedValue({});
+    render(<Obras />);
+    await screen.findByText('Obra con');
+    fireEvent.click(screen.getByRole('button', { name: 'Ver arquivados' }));
+    await within(await screen.findByLabelText('Arquivados')).findByText('Obra arq (Cliente)');
+    expect(chamadasObras().filter((c) => c === '/obras?arquivados=true')).toHaveLength(1);
+    fireEvent.click(within(card('Obra con')).getByRole('button', { name: 'Arquivar obra' }));
+    const botao = await within(card('Obra con')).findByRole('button', { name: 'Arquivar' });
+    await waitFor(() => expect(botao).toBeEnabled());
+
+    fireEvent.click(botao);
+
+    await waitFor(() =>
+      expect(chamadasObras().filter((c) => c === '/obras?arquivados=true')).toHaveLength(2),
+    );
   });
 });
