@@ -115,16 +115,24 @@
 - **Date**: 2026-11-19
 - **Status**: active (confirmada pelo usuário em 2026-11-19)
 
+### AD-015
+- **Decision**: Exceção à AD-003. Obra, gesseiro e material podem ser **arquivados** (`arquivadoEm`), e um job diário apaga de vez o que está arquivado há 7 dias ou mais. Enquanto está arquivado, vale a AD-003: o registro fica no banco e pode ser restaurado. Na limpeza da obra, os `Lancamento` e as `MovimentacaoEstoque` dela ficam com `obraId = null`, e o saldo dos gesseiros não muda. Na limpeza do gesseiro (saldo já 0) e do material, o histórico deles sai junto.
+- **Reason**: Pedido do usuário em 2026-11-20: não guardar no banco o que não serve mais. A janela de 7 dias permite desfazer um arquivamento errado.
+- **Trade-off**: Depois da limpeza não há como recuperar. O extrato perde o vínculo clicável com a obra (fica só a descrição), e as obras perdem a linha do material apagado no previsto x utilizado. "Saldo derivado de lançamentos" continua valendo, porque nenhum lançamento de gesseiro ativo é apagado.
+- **Scope**: `arquivar-e-limpar-registros`.
+- **Date**: 2026-11-20
+- **Status**: active (spec aprovada pelo usuário em 2026-11-20)
+
 ## Handoff
 
 - **PWA fechado (2026-11-19)**: `pwa-instalavel-responsivo` mergeado na `main` (PR #11, `cc61e5f`). Verifier rodada 2 concluída: `validation.md` **PASS**, 48/50 `Verified`. Sensor: `audit:responsive` 8/8 (o RR1 sobreviveu com o `NOME_LONGO` antigo, que só tinha palavras curtas; o teste foi corrigido), `sw.ts` 2/2 pelo roteiro UPD executado num Chrome headless. Auditor de testes (AD-012): 7 mutações viraram teste (idempotência, decorator, `api.ts`) e 5 ficaram aceitas com motivo. Suítes: API 321, web 330, e2e 14, `audit:responsive` 118/118, `audit:pwa` 14/14. **Pendente do usuário**: RSP-11/12 num iPhone com notch (tabela em `validation.md`). Os arquivos da rodada 2 ainda não foram commitados.
-- **Feature ativa**: `obras-transicoes-status` em Tasks (2026-10-29), **revalidada em 2026-11-19** depois do merge do PWA (PR #11). Branch `feat/obras-transicoes-status` avançado (fast-forward) até `cc61e5f` (`origin/main`), sem commit próprio. Revalidação: TRN-13 (erro HTTP recarrega a lista; falha de rede mostra `SEM_CONEXAO_ENVIO` sem reenviar, AD-014) e TRN-14 (estados na `audit:responsive`, 118 → 126); T16 nova; T2 com migration depois da `chaves_idempotencia`; e2e com `--runInBand`; base de testes API 321 / web 330; refs de linha atualizadas. Conflito de merge do `STATE.md` (duas AD-009) resolvido: a regra do auditor virou AD-012.
+- **Feature ativa**: `obras-transicoes-status` **implementada e verificada (2026-11-19)**, executada inline a pedido do usuário. T1–T16 concluídas; `validation.md` **PASS**, TRN-01..14 `Verified`. Suítes: API 397, web 371, e2e 19, `audit:responsive` 126/126, `audit:pwa` 14/14. Sensor: 21 mutantes de código + 2 de CSS, todos mortos. Auditor (AD-012): 9 achados, todos viraram teste ou correção (bug do cancelamento com 400 quando a recarga traz a obra final). Um teste fraco foi aceito com motivo. Migration nova: `20261119170138_obra_motivo_cancelamento` (só `ADD COLUMN`). **Pendente do usuário**: o teste manual pela UI (T15), inclusive o cancelamento com o DevTools em Offline. Os arquivos ainda não foram commitados.
 - **Estoque fechado (2026-11-09)**: `estoque-materiais-movimentacao` com EST-01..09 `Verified` pela AD-012 (ver `validation.md`). Só testes mudaram: `estoque.service.spec.ts` (mock de transação com `tx` próprio) e duas specs de DTO novas; código de produção intacto. Não commitado.
-- **Phase / Task**: Spec, Design e Tasks aprovados (2026-10-29) e revalidados (2026-11-19). Nenhum código escrito. Ao retomar, começar pela T1. AD-014 confirmada pelo usuário (2026-11-19).
+- **Phase / Task**: Execute e verificação concluídos (2026-11-19). AD-014 confirmada pelo usuário (2026-11-19).
 - **Decisões do usuário (2026-10-29)**: endpoint por ação; confirmação só no concluir (lista quem recebe crédito) e no cancelar; remover gesseiro permitido em obra aberta, inclusive o último de `ANDAMENTO`; "Iniciar obra" sem equipe desabilitado com "Aloque pelo menos um gesseiro para iniciar"; mensagens novas com acento; 404 ao remover gesseiro não alocado; crédito de gesseiro removido fica para a spec futura "remanejamento de gesseiros".
 - **Ajuste no agente de estoque (2026-10-29, fora da feature atual)**: T30–T32 / EAP-70..73: materiais usados numa obra sem previsão aparecem na tabela da obra ("não previsto") e o agente sabe de onde veio esse consumo. API 244 testes, web 140. Rastreabilidade em `Implementing` até um novo Verifier.
-- **In-progress**: none
-- **Next step**: quando o usuário pedir: perguntar se executa direto ou com sub-agentes por fase (3 lotes: 4, 7 e 5 tasks) → Execute (tasks > 8: oferecer sub-agentes por lote de fases) → Verifier independente → `validation.md`.
+- **In-progress**: `arquivar-e-limpar-registros`: spec aprovada pelo usuário em 2026-11-20 (AD-015 ativa); design e tasks (T1–T17) escritos e aguardando aprovação. Base: API 397, web 371, e2e 19, `audit:responsive` 126.
+- **Next step**: o usuário commita o pacote e faz o teste manual da T15. Depois, PR de `feat/obras-transicoes-status` para a `main`.
 - **Regras do usuário**: sub-agentes em sequência; sem commit/push/`git add` pelo agente (o usuário commita; entregar pacote com `git add` por arquivo e mensagem em here-string do PowerShell); nenhuma dependência nova sem perguntar; `ANTHROPIC_API_KEY` só no `.env`; nunca mais de uma análise real do agente sem perguntar.
 - **Teste e2e no banco de dev (`obras-transicoes-status`)**: cria registros com prefixo `[e2e]` e os apaga num `afterAll`. **Não rodar perto de uma demonstração do agente de estoque**: se a limpeza falhar ou o teste rodar durante uma análise, as obras/gesseiros `[e2e]` entram no snapshot do agente. Depois de rodar, conferir que não sobrou nada com `[e2e]`.
 - **Pendência fora de `pwa-instalavel-responsivo` (registrada em 2026-11-09)**: login com credencial errada mostra "Sessao expirada. Faca login novamente." porque o `apps/web/src/lib/api.ts` trata todo 401 igual (já era assim antes da feature). Corrigir numa feature própria: o `POST /auth/login` com 401 deve mostrar a mensagem da API (credencial inválida) e não encerrar sessão.
@@ -132,4 +140,4 @@
 - **Blockers**: none.
 - **Uncommitted files**: conferir `git status`. Fora da feature, nunca commitar junto: `CLAUDE.md`, `migration_lock.toml` (só metadado).
 - **Dados de teste no banco local**: o usuário fez testes manuais do agente depois da análise `53f2bf02-…`; conferir o estado antes de uma demonstração. Seed (obras `3333…`, `4444…`, `5555…`, `7777…`) e a obra "Moldura - Bairro Centro" (`45fb510c-…`, do usuário).
-- **Branch**: feat/pwa-instalavel-responsivo (a `obras-transicoes-status` está em `feat/obras-transicoes-status`)
+- **Branch**: feat/obras-transicoes-status
