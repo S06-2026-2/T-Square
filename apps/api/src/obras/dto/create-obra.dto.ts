@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { FormaPagamento, StatusObra } from '@prisma/client';
+import { FormaPagamento } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
@@ -55,6 +55,10 @@ export class AlocacaoGesseiroDto {
   funcao?: string;
 }
 
+/**
+ * Sem `status` (AD-007, TRN-06): a obra nasce ORCAMENTO pelo default do schema e so muda de
+ * status pelas rotas de transicao. Com `forbidNonWhitelisted`, mandar `status` da 400.
+ */
 export class CreateObraDto {
   @ApiProperty({ example: 'Forro de gesso - Residencia Silva' })
   @IsString()
@@ -80,11 +84,6 @@ export class CreateObraDto {
   @IsOptional()
   @IsString()
   endereco?: string;
-
-  @ApiPropertyOptional({ enum: StatusObra, default: StatusObra.ORCAMENTO })
-  @IsOptional()
-  @IsEnum(StatusObra)
-  status?: StatusObra;
 
   @ApiProperty({ example: 8500 })
   @IsNumber()

@@ -16,16 +16,42 @@ describe('ObrasService', () => {
     obra: { findUnique: jest.Mock; update: jest.Mock; create: jest.Mock };
     material: { findMany: jest.Mock };
     lancamento: { createMany: jest.Mock };
+    obraGesseiro: { findUnique: jest.Mock; delete: jest.Mock };
     $transaction: jest.Mock;
+  };
+  /**
+   * Cliente da transacao, SEPARADO do prisma (AD-012): uma escrita feita fora da transacao cai
+   * no prisma e o teste percebe.
+   */
+  let tx: {
+    obra: { findUnique: jest.Mock; updateMany: jest.Mock; findUniqueOrThrow: jest.Mock };
+    obraGesseiro: { findMany: jest.Mock };
+    lancamento: Record<'create' | 'createMany' | 'update' | 'updateMany' | 'delete' | 'deleteMany', jest.Mock>;
   };
 
   beforeEach(async () => {
+    tx = {
+      obra: {
+        findUnique: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: jest.fn(),
+      },
+      obraGesseiro: { findMany: jest.fn().mockResolvedValue([]) },
+      lancamento: {
+        create: jest.fn(),
+        createMany: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+        delete: jest.fn(),
+        deleteMany: jest.fn(),
+      },
+    };
     prisma = {
       obra: { findUnique: jest.fn(), update: jest.fn(), create: jest.fn() },
       material: { findMany: jest.fn() },
       lancamento: { createMany: jest.fn() },
-      // Executa o callback da transacao passando o proprio mock como "tx".
-      $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
+      obraGesseiro: { findUnique: jest.fn(), delete: jest.fn() },
+      $transaction: jest.fn((callback: (t: unknown) => unknown) => callback(tx)),
     };
 
     // MateriaisPrevistosService real (validarItens), sobre o mesmo Prisma mockado.
@@ -95,6 +121,16 @@ describe('ObrasService', () => {
       });
     });
 
+    // TRN-06 (Atalhos AC1): sem status no DTO, a obra nasce ORCAMENTO pelo default do schema.
+    it('create nao grava status explicito: vale o default ORCAMENTO do schema', async () => {
+      prisma.obra.create.mockResolvedValue({ id: 'obra-nova', status: StatusObra.ORCAMENTO });
+
+      await service.create(dadosObra);
+
+      const { data } = prisma.obra.create.mock.calls[0][0];
+      expect(Object.keys(data)).not.toContain('status');
+    });
+
     it('material repetido rejeita com 400 antes de criar a obra', async () => {
       prisma.material.findMany.mockResolvedValue([{ id: 'mat-cal' }]);
 
@@ -127,76 +163,358 @@ describe('ObrasService', () => {
     });
   });
 
-  describe('concluir', () => {
-    it('credita automaticamente cada gesseiro alocado ao concluir a obra', async () => {
-      prisma.obra.findUnique.mockResolvedValue({
-        id: 'obra-1',
-        titulo: 'Forro Residencia Silva',
-        status: StatusObra.ANDAMENTO,
-        gesseiros: [
-          { gesseiroId: 'g-1', valorCombinado: 2500 },
-          { gesseiroId: 'g-2', valorCombinado: 1500 },
-        ],
+  /**
+   * TRN-01..04, TRN-07 (lado unitario), TRN-08, TRN-09 e TRN-12 de
+   * .claude/specs/features/obras-transicoes-status/spec.md.
+   */
+  describe('transicoes de status', () => {
+    const AGORA = new Date('2026-11-19T15:00:00.000Z');
+    const equipe = [
+      { obraId: 'obra-1', gesseiroId: 'g-1', valorCombinado: 2500 },
+      { obraId: 'obra-1', gesseiroId: 'g-2', valorCombinado: 1500 },
+    ];
+
+    /** Obra lida no inicio da transacao. */
+    const obraEm = (status: StatusObra, gesseiros: unknown[] = []) => ({
+      id: 'obra-1',
+      titulo: 'Forro Residencia Silva',
+      status,
+      gesseiros,
+    });
+
+    /** Prepara a leitura e a obra devolvida no fim da transicao. */
+    const prepararObra = (status: StatusObra, gesseiros: unknown[] = [], depois?: StatusObra) => {
+      tx.obra.findUnique.mockResolvedValueOnce(obraEm(status, gesseiros));
+      tx.obra.findUniqueOrThrow.mockResolvedValue({ id: 'obra-1', status: depois ?? status });
+    };
+
+    beforeEach(() => {
+      jest.useFakeTimers().setSystemTime(AGORA);
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    const naoTocouLancamentos = () => {
+      for (const metodo of Object.values(tx.lancamento)) {
+        expect(metodo).not.toHaveBeenCalled();
+      }
+      expect(prisma.lancamento.createMany).not.toHaveBeenCalled();
+    };
+
+    describe('concluir (TRN-03, TRN-04, TRN-07)', () => {
+      it('ANDAMENTO com 2 gesseiros: update condicional, dataConclusao e um CREDITO por gesseiro', async () => {
+        prepararObra(StatusObra.ANDAMENTO, equipe, StatusObra.CONCLUIDA);
+        tx.obraGesseiro.findMany.mockResolvedValue(equipe);
+
+        const resultado = await service.concluir('obra-1');
+
+        expect(tx.obra.updateMany).toHaveBeenCalledWith({
+          where: { id: 'obra-1', status: { in: [StatusObra.ANDAMENTO] } },
+          data: { dataConclusao: AGORA, status: StatusObra.CONCLUIDA },
+        });
+        expect(tx.obraGesseiro.findMany).toHaveBeenCalledWith({ where: { obraId: 'obra-1' } });
+        expect(tx.lancamento.createMany).toHaveBeenCalledWith({
+          data: [
+            {
+              gesseiroId: 'g-1',
+              obraId: 'obra-1',
+              tipo: TipoLancamento.CREDITO,
+              valor: 2500,
+              descricao: 'Credito automatico pela conclusao da obra "Forro Residencia Silva"',
+            },
+            {
+              gesseiroId: 'g-2',
+              obraId: 'obra-1',
+              tipo: TipoLancamento.CREDITO,
+              valor: 1500,
+              descricao: 'Credito automatico pela conclusao da obra "Forro Residencia Silva"',
+            },
+          ],
+        });
+        // A equipe e lida depois da troca de status, dentro da transacao.
+        expect(tx.obra.updateMany.mock.invocationCallOrder[0]).toBeLessThan(
+          tx.obraGesseiro.findMany.mock.invocationCallOrder[0],
+        );
+        expect(prisma.lancamento.createMany).not.toHaveBeenCalled();
+        expect(resultado).toEqual({ id: 'obra-1', status: StatusObra.CONCLUIDA });
       });
-      prisma.obra.update.mockResolvedValue({ id: 'obra-1', status: StatusObra.CONCLUIDA });
 
-      const resultado = await service.concluir('obra-1');
+      it.each([StatusObra.ORCAMENTO, StatusObra.FECHADA, StatusObra.CONCLUIDA, StatusObra.CANCELADA])(
+        'a partir de %s: 400 com a mensagem exata, sem update e sem credito',
+        async (status) => {
+          prepararObra(status, equipe);
 
-      expect(prisma.obra.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'obra-1' },
-          data: expect.objectContaining({ status: StatusObra.CONCLUIDA }),
-        }),
+          const promessa = service.concluir('obra-1');
+
+          await expect(promessa).rejects.toBeInstanceOf(BadRequestException);
+          await expect(promessa).rejects.toThrow(
+            `Não é possível concluir uma obra com status ${status}`,
+          );
+          expect(tx.obra.updateMany).not.toHaveBeenCalled();
+          naoTocouLancamentos();
+        },
       );
 
-      expect(prisma.lancamento.createMany).toHaveBeenCalledWith({
-        data: [
-          expect.objectContaining({
-            gesseiroId: 'g-1',
-            obraId: 'obra-1',
-            tipo: TipoLancamento.CREDITO,
-            valor: 2500,
-          }),
-          expect.objectContaining({
-            gesseiroId: 'g-2',
-            tipo: TipoLancamento.CREDITO,
-            valor: 1500,
-          }),
-        ],
+      it('nao credita duas vezes se a obra ja estiver concluida', async () => {
+        prepararObra(StatusObra.CONCLUIDA);
+
+        await expect(service.concluir('obra-1')).rejects.toThrow(
+          'Não é possível concluir uma obra com status CONCLUIDA',
+        );
+        naoTocouLancamentos();
       });
 
-      expect(resultado.status).toBe(StatusObra.CONCLUIDA);
+      it('corrida: updateMany com count 0 rele o status e responde 400, sem credito', async () => {
+        tx.obra.findUnique
+          .mockResolvedValueOnce(obraEm(StatusObra.ANDAMENTO, equipe))
+          .mockResolvedValueOnce({ status: StatusObra.CONCLUIDA });
+        tx.obra.updateMany.mockResolvedValue({ count: 0 });
+        tx.obraGesseiro.findMany.mockResolvedValue(equipe);
+
+        const promessa = service.concluir('obra-1');
+
+        await expect(promessa).rejects.toBeInstanceOf(BadRequestException);
+        await expect(promessa).rejects.toThrow(
+          'Não é possível concluir uma obra com status CONCLUIDA',
+        );
+        expect(tx.obra.findUnique).toHaveBeenLastCalledWith({
+          where: { id: 'obra-1' },
+          select: { status: true },
+        });
+        naoTocouLancamentos();
+      });
+
+      it('corrida em que a obra foi apagada no meio: 404', async () => {
+        tx.obra.findUnique
+          .mockResolvedValueOnce(obraEm(StatusObra.ANDAMENTO, equipe))
+          .mockResolvedValueOnce(null);
+        tx.obra.updateMany.mockResolvedValue({ count: 0 });
+
+        await expect(service.concluir('obra-1')).rejects.toThrow('Obra obra-1 nao encontrada');
+        naoTocouLancamentos();
+      });
+
+      it('falha ao criar os creditos propaga o erro pela transacao (rollback)', async () => {
+        prepararObra(StatusObra.ANDAMENTO, equipe);
+        tx.obraGesseiro.findMany.mockResolvedValue(equipe);
+        const erro = new Error('falha no banco');
+        tx.lancamento.createMany.mockRejectedValue(erro);
+
+        await expect(service.concluir('obra-1')).rejects.toBe(erro);
+        // Tudo aconteceu dentro do callback da $transaction: o erro desfaz a troca de status.
+        expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+        expect(tx.obra.findUniqueOrThrow).not.toHaveBeenCalled();
+      });
+
+      it('ANDAMENTO sem equipe (todos removidos depois de iniciar): conclui sem lancamento', async () => {
+        prepararObra(StatusObra.ANDAMENTO, [], StatusObra.CONCLUIDA);
+        tx.obraGesseiro.findMany.mockResolvedValue([]);
+
+        const resultado = await service.concluir('obra-1');
+
+        expect(tx.obra.updateMany).toHaveBeenCalledTimes(1);
+        naoTocouLancamentos();
+        expect(resultado).toEqual({ id: 'obra-1', status: StatusObra.CONCLUIDA });
+      });
+
+      it('obra inexistente: 404 com a mensagem atual', async () => {
+        tx.obra.findUnique.mockResolvedValue(null);
+
+        const promessa = service.concluir('nao-existe');
+
+        await expect(promessa).rejects.toBeInstanceOf(NotFoundException);
+        await expect(promessa).rejects.toThrow('Obra nao-existe nao encontrada');
+        expect(tx.obra.updateMany).not.toHaveBeenCalled();
+      });
     });
 
-    it('nao gera lancamento quando a obra nao tem gesseiro alocado', async () => {
+    describe('fechar (TRN-01)', () => {
+      it('ORCAMENTO: updateMany condicional para FECHADA e devolve a obra atualizada', async () => {
+        prepararObra(StatusObra.ORCAMENTO, [], StatusObra.FECHADA);
+
+        const resultado = await service.fechar('obra-1');
+
+        expect(tx.obra.updateMany).toHaveBeenCalledWith({
+          where: { id: 'obra-1', status: { in: [StatusObra.ORCAMENTO] } },
+          data: { status: StatusObra.FECHADA },
+        });
+        // A leitura inicial traz a equipe: o iniciar e o concluir dependem dela.
+        expect(tx.obra.findUnique).toHaveBeenNthCalledWith(1, {
+          where: { id: 'obra-1' },
+          include: { gesseiros: true },
+        });
+        expect(tx.obra.findUniqueOrThrow).toHaveBeenCalledWith({
+          where: { id: 'obra-1' },
+          include: { pagamento: true, gesseiros: { include: { gesseiro: true } } },
+        });
+        expect(resultado).toEqual({ id: 'obra-1', status: StatusObra.FECHADA });
+      });
+
+      it.each([StatusObra.FECHADA, StatusObra.ANDAMENTO, StatusObra.CONCLUIDA, StatusObra.CANCELADA])(
+        'a partir de %s: 400 com a mensagem exata, sem update',
+        async (status) => {
+          prepararObra(status);
+
+          await expect(service.fechar('obra-1')).rejects.toThrow(
+            `Não é possível fechar uma obra com status ${status}`,
+          );
+          expect(tx.obra.updateMany).not.toHaveBeenCalled();
+        },
+      );
+
+      it('obra inexistente: 404', async () => {
+        tx.obra.findUnique.mockResolvedValue(null);
+
+        await expect(service.fechar('nao-existe')).rejects.toThrow('Obra nao-existe nao encontrada');
+      });
+    });
+
+    describe('iniciar (TRN-02)', () => {
+      it('FECHADA com 1 gesseiro: ANDAMENTO com dataInicio igual ao instante da chamada', async () => {
+        prepararObra(StatusObra.FECHADA, [equipe[0]], StatusObra.ANDAMENTO);
+
+        const resultado = await service.iniciar('obra-1');
+
+        expect(tx.obra.updateMany).toHaveBeenCalledWith({
+          where: { id: 'obra-1', status: { in: [StatusObra.FECHADA] } },
+          data: { dataInicio: AGORA, status: StatusObra.ANDAMENTO },
+        });
+        expect(resultado).toEqual({ id: 'obra-1', status: StatusObra.ANDAMENTO });
+        naoTocouLancamentos();
+      });
+
+      it('FECHADA sem gesseiro: 400 com a mensagem exata, sem update', async () => {
+        prepararObra(StatusObra.FECHADA, []);
+
+        const promessa = service.iniciar('obra-1');
+
+        await expect(promessa).rejects.toBeInstanceOf(BadRequestException);
+        await expect(promessa).rejects.toThrow(
+          'A obra precisa de pelo menos um gesseiro alocado para ser iniciada',
+        );
+        expect(tx.obra.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('ORCAMENTO sem gesseiro: a origem e checada antes da equipe', async () => {
+        prepararObra(StatusObra.ORCAMENTO, []);
+
+        await expect(service.iniciar('obra-1')).rejects.toThrow(
+          'Não é possível iniciar uma obra com status ORCAMENTO',
+        );
+        expect(tx.obra.updateMany).not.toHaveBeenCalled();
+      });
+
+      it.each([StatusObra.ANDAMENTO, StatusObra.CONCLUIDA, StatusObra.CANCELADA])(
+        'a partir de %s: 400 com a mensagem exata',
+        async (status) => {
+          prepararObra(status, [equipe[0]]);
+
+          await expect(service.iniciar('obra-1')).rejects.toThrow(
+            `Não é possível iniciar uma obra com status ${status}`,
+          );
+          expect(tx.obra.updateMany).not.toHaveBeenCalled();
+        },
+      );
+    });
+
+    describe('cancelar (TRN-09)', () => {
+      it.each([StatusObra.ORCAMENTO, StatusObra.FECHADA, StatusObra.ANDAMENTO])(
+        'a partir de %s: CANCELADA com o motivo gravado e nenhum lancamento',
+        async (status) => {
+          prepararObra(status, equipe, StatusObra.CANCELADA);
+
+          const resultado = await service.cancelar('obra-1', 'Cliente desistiu');
+
+          expect(tx.obra.updateMany).toHaveBeenCalledWith({
+            where: {
+              id: 'obra-1',
+              status: { in: [StatusObra.ORCAMENTO, StatusObra.FECHADA, StatusObra.ANDAMENTO] },
+            },
+            data: { motivoCancelamento: 'Cliente desistiu', status: StatusObra.CANCELADA },
+          });
+          naoTocouLancamentos();
+          expect(resultado).toEqual({ id: 'obra-1', status: StatusObra.CANCELADA });
+        },
+      );
+
+      it.each([StatusObra.CONCLUIDA, StatusObra.CANCELADA])(
+        'a partir de %s: 400 com a mensagem exata',
+        async (status) => {
+          prepararObra(status);
+
+          await expect(service.cancelar('obra-1', 'Cliente desistiu')).rejects.toThrow(
+            `Não é possível cancelar uma obra com status ${status}`,
+          );
+          expect(tx.obra.updateMany).not.toHaveBeenCalled();
+          naoTocouLancamentos();
+        },
+      );
+    });
+  });
+
+  describe('removerGesseiro (TRN-08, TRN-12)', () => {
+    const alocacao = { obraId: 'obra-1', gesseiroId: 'g-1', valorCombinado: 2500 };
+
+    it.each([StatusObra.ORCAMENTO, StatusObra.FECHADA, StatusObra.ANDAMENTO])(
+      'remove a alocacao em obra %s',
+      async (status) => {
+        prisma.obra.findUnique.mockResolvedValue({ id: 'obra-1', status });
+        prisma.obraGesseiro.findUnique.mockResolvedValue(alocacao);
+
+        const resultado = await service.removerGesseiro('obra-1', 'g-1');
+
+        expect(prisma.obraGesseiro.delete).toHaveBeenCalledWith({
+          where: { obraId_gesseiroId: { obraId: 'obra-1', gesseiroId: 'g-1' } },
+        });
+        expect(resultado).toEqual({ removido: true, obraId: 'obra-1', gesseiroId: 'g-1' });
+      },
+    );
+
+    it('remove o ultimo gesseiro de uma obra ANDAMENTO (decisao do usuario)', async () => {
       prisma.obra.findUnique.mockResolvedValue({
-        id: 'obra-2',
-        titulo: 'Obra sem equipe',
-        status: StatusObra.FECHADA,
-        gesseiros: [],
+        id: 'obra-1',
+        status: StatusObra.ANDAMENTO,
+        gesseiros: [alocacao],
       });
-      prisma.obra.update.mockResolvedValue({ id: 'obra-2', status: StatusObra.CONCLUIDA });
+      prisma.obraGesseiro.findUnique.mockResolvedValue(alocacao);
 
-      await service.concluir('obra-2');
+      await service.removerGesseiro('obra-1', 'g-1');
 
-      expect(prisma.lancamento.createMany).not.toHaveBeenCalled();
+      expect(prisma.obraGesseiro.delete).toHaveBeenCalledTimes(1);
     });
 
-    it('nao credita duas vezes se a obra ja estiver concluida', async () => {
-      prisma.obra.findUnique.mockResolvedValue({
-        id: 'obra-3',
-        status: StatusObra.CONCLUIDA,
-        gesseiros: [],
-      });
+    it('falha no delete propaga o erro (a remocao espera o banco)', async () => {
+      prisma.obra.findUnique.mockResolvedValue({ id: 'obra-1', status: StatusObra.FECHADA });
+      prisma.obraGesseiro.findUnique.mockResolvedValue(alocacao);
+      const erro = new Error('falha no banco');
+      prisma.obraGesseiro.delete.mockRejectedValue(erro);
 
-      await expect(service.concluir('obra-3')).rejects.toBeInstanceOf(BadRequestException);
-      expect(prisma.lancamento.createMany).not.toHaveBeenCalled();
+      await expect(service.removerGesseiro('obra-1', 'g-1')).rejects.toBe(erro);
     });
 
-    it('erro 404 quando a obra nao existe', async () => {
+    it('gesseiro nao alocado: 404 com a mensagem exata, sem delete', async () => {
+      prisma.obra.findUnique.mockResolvedValue({ id: 'obra-1', status: StatusObra.FECHADA });
+      prisma.obraGesseiro.findUnique.mockResolvedValue(null);
+
+      const promessa = service.removerGesseiro('obra-1', 'g-9');
+
+      await expect(promessa).rejects.toBeInstanceOf(NotFoundException);
+      await expect(promessa).rejects.toThrow('Gesseiro g-9 não está alocado nesta obra');
+      expect(prisma.obraGesseiro.findUnique).toHaveBeenCalledWith({
+        where: { obraId_gesseiroId: { obraId: 'obra-1', gesseiroId: 'g-9' } },
+      });
+      expect(prisma.obraGesseiro.delete).not.toHaveBeenCalled();
+    });
+
+    it('obra inexistente: 404 Obra <id> nao encontrada, sem delete', async () => {
       prisma.obra.findUnique.mockResolvedValue(null);
 
-      await expect(service.concluir('nao-existe')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.removerGesseiro('nao-existe', 'g-1')).rejects.toThrow(
+        'Obra nao-existe nao encontrada',
+      );
+      expect(prisma.obraGesseiro.delete).not.toHaveBeenCalled();
     });
   });
 

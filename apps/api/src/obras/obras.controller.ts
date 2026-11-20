@@ -4,6 +4,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiIdempotencia } from '../idempotencia/api-idempotencia.decorator';
 import { ContextoIdempotencia } from '../idempotencia/contexto-idempotencia.decorator';
 import { IdempotenciaService } from '../idempotencia/idempotencia.service';
+import { CancelarObraDto } from './dto/cancelar-obra.dto';
 import { AlocacaoGesseiroDto, CreateObraDto } from './dto/create-obra.dto';
 import { SubstituirMateriaisPrevistosDto } from './dto/materiais-previstos.dto';
 import { QueryObraDto } from './dto/query-obra.dto';
@@ -85,11 +86,33 @@ export class ObrasController {
     return this.materiaisPrevistosService.substituir(id, dto.itens);
   }
 
+  // Transicoes de status (AD-007): o status so muda por estas rotas.
+
+  @Patch(':id/fechar')
+  @ApiOperation({ summary: 'Cliente aprovou: ORCAMENTO -> FECHADA' })
+  fechar(@Param('id') id: string) {
+    return this.obrasService.fechar(id);
+  }
+
+  @Patch(':id/iniciar')
+  @ApiOperation({
+    summary: 'Inicia a obra: FECHADA -> ANDAMENTO (exige pelo menos um gesseiro alocado)',
+  })
+  iniciar(@Param('id') id: string) {
+    return this.obrasService.iniciar(id);
+  }
+
   @Patch(':id/concluir')
   @ApiOperation({
-    summary: 'Conclui a obra e credita automaticamente os gesseiros alocados',
+    summary: 'Conclui a obra (ANDAMENTO -> CONCLUIDA) e credita automaticamente os gesseiros alocados',
   })
   concluir(@Param('id') id: string) {
     return this.obrasService.concluir(id);
+  }
+
+  @Patch(':id/cancelar')
+  @ApiOperation({ summary: 'Cancela a obra em aberto com motivo, sem gerar lancamento' })
+  cancelar(@Param('id') id: string, @Body() dto: CancelarObraDto) {
+    return this.obrasService.cancelar(id, dto.motivo);
   }
 }
