@@ -67,3 +67,11 @@ Verifier do fluxo `tlc-spec-driven`.
   registrada como aceita com o motivo.
 - O veredito e a tabela do auditor vão numa seção `## Auditoria de testes` do `validation.md` da
   feature.
+
+No GitHub isso vale para quem não usa o Claude (AD-016):
+
+- Todo PR para a `main` que mexe em `apps/*/src` roda o auditor sozinho (workflow
+  `.github/workflows/auditoria-testes.yml`) e o relatório aparece como comentário no PR. É um
+  parecer para quem revisa: não bloqueia o merge.
+- O job "Specs (auditoria registrada)" do CI bloqueia: uma spec com requisito `Verified` e sem a
+  seção no `validation.md` derruba o build (`.github/scripts/checar-auditoria.mjs`).
