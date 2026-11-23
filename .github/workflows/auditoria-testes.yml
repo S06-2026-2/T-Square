@@ -1,0 +1,103 @@
+name: Auditoria de testes
+
+# Roda o sub-agente `auditor-de-testes` em todo PR para a main que mexe em codigo, sem depender
+# de quem abriu o PR usar o Claude (AD-016). O auditor so le o codigo; um passo comum, sem IA,
+# comenta o relatorio no PR. Nao bloqueia o merge: o resultado de um LLM varia entre execucoes.
+# O que bloqueia e o job "Specs (auditoria registrada)" do CI, que nao usa IA.
+#
+# Precisa do segredo ANTHROPIC_API_KEY no repositorio (Settings > Secrets and variables >
+# Actions). Sem ele, o job avisa e termina verde.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/*/src/**'
+      - 'apps/api/test/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# Um push novo no mesmo PR cancela a auditoria anterior (e o gasto dela).
+concurrency:
+  group: auditoria-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auditor:
+    name: Auditor de testes
+    # PR de fork nao recebe segredos; rascunho espera ficar pronto para revisao.
+    if: github.event.pull_request.head.repo.full_name == github.repository && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      BASE: ${{ github.base_ref }}
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sem a chave, avisar e parar
+        if: env.ANTHROPIC_API_KEY == ''
+        run: echo "::warning::Segredo ANTHROPIC_API_KEY nao configurado; auditoria de testes pulada."
+
+      - name: Listar o código alterado
+        id: alterados
+        if: env.ANTHROPIC_API_KEY != ''
+        run: |
+          git diff --name-only --diff-filter=AM "origin/$BASE...HEAD" -- 'apps/*/src/**' 'apps/api/test/**' > alterados.txt
+          cat alterados.txt
+          echo "quantos=$(wc -l < alterados.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Montar as instruções e o pedido
+        if: env.ANTHROPIC_API_KEY != '' && steps.alterados.outputs.quantos != '0'
+        run: |
+          # As instrucoes sao o corpo de .claude/agents/auditor-de-testes.md, sem o frontmatter:
+          # o mesmo agente que roda no Claude Code, sem uma copia que possa divergir.
+          awk 'f >= 2; /^---$/ { f++ }' .claude/agents/auditor-de-testes.md > instrucoes.md
+          test -s instrucoes.md
+          {
+            echo "Audite os testes do PR #$PR deste repositorio. Arquivos alterados:"
+            sed 's/^/- /' alterados.txt
+            echo
+            echo "Para cada service, componente ou DTO alterado, leia tambem o teste correspondente"
+            echo "e a spec da feature em .claude/specs/features/ (descubra qual pelo assunto). Se so"
+            echo "testes mudaram, audite se eles provam o que dizem. Responda so com o relatorio, no"
+            echo "formato das suas instrucoes, em portugues."
+          } > pedido.md
+
+      # So leitura: Read, Grep e Glob. Shell, edicao e web ficam bloqueados. O conteudo do PR e
+      # entrada nao confiavel para o modelo; por isso ele nao recebe nenhuma ferramenta que escreva
+      # ou publique, e quem comenta e o passo seguinte.
+      - name: Rodar o auditor (só leitura)
+        if: env.ANTHROPIC_API_KEY != '' && steps.alterados.outputs.quantos != '0'
+        run: |
+          npx -y @anthropic-ai/claude-code@2.1.319 -p "$(cat pedido.md)" \
+            --append-system-prompt-file instrucoes.md \
+            --allowedTools "Read,Grep,Glob" \
+            --disallowedTools "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch" \
+            --model sonnet \
+            --max-turns 40 \
+            --max-budget-usd 1 \
+            --output-format text < /dev/null > relatorio.md
+          test -s relatorio.md
+
+      - name: Comentar o relatório no PR
+        if: env.ANTHROPIC_API_KEY != '' && steps.alterados.outputs.quantos != '0'
+        run: |
+          {
+            echo "## Auditoria de testes (automática)"
+            echo
+            echo "> Relatório do \`auditor-de-testes\` sobre os arquivos deste PR. É um parecer para quem"
+            echo "> revisa, não bloqueia o merge, e pode variar entre execuções. Antes de marcar um"
+            echo "> requisito como \`Verified\`, registre a auditoria no \`validation.md\` da feature (AD-012)."
+            echo
+            cat relatorio.md
+          } > comentario.md
+          # Atualiza o comentario anterior do bot no mesmo PR; se nao houver, cria um.
+          gh pr comment "$PR" --edit-last --body-file comentario.md || gh pr comment "$PR" --body-file comentario.md

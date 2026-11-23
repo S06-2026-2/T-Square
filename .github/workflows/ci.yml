@@ -173,3 +173,23 @@ jobs:
           echo "A API não respondeu em /api/health em 60 s. Logs do container:"
           docker logs gesso-api
           exit 1
+
+  # AD-012: requisito `Verified` exige a auditoria de testes registrada no validation.md da
+  # feature. Checagem sem IA, igual para todo mundo; o relatorio do auditor em si vem do workflow
+  # "Auditoria de testes", que comenta nos PRs.
+  auditoria-registrada:
+    name: Specs (auditoria registrada)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Conferir a seção de auditoria das specs
+        run: node .github/scripts/checar-auditoria.mjs
