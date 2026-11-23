@@ -260,15 +260,26 @@ describe('AlertasEstoque', () => {
     expect(screen.queryAllByRole('listitem')).toHaveLength(0);
   });
 
-  it.each(['FALHA', 'PARCIAL'] as const)(
+  it.each([
+    [
+      'FALHA',
+      'o agente não respondeu; os alertas abaixo vêm das análises anteriores e da regra básica.',
+    ],
+    [
+      'PARCIAL',
+      'o agente parou no limite de tempo ou de chamadas; os alertas abaixo podem estar incompletos.',
+    ],
+  ] as const)(
     'última análise %s mostra o aviso com o status junto dos alertas ATIVO (EAP-33)',
-    async (status) => {
+    async (status, mensagem) => {
       responder({
         ultimaAnalise: analise(status),
         alertas: [alerta('cal', { origemTexto: 'PADRAO' })],
       });
 
-      expect(await screen.findByTestId('aviso-analise')).toHaveTextContent(status);
+      expect(await screen.findByTestId('aviso-analise')).toHaveTextContent(
+        `A última análise terminou com status ${status}: ${mensagem}`,
+      );
       expect(screen.getAllByRole('listitem')).toHaveLength(1);
     },
   );
@@ -349,6 +360,22 @@ describe('AlertasEstoque: ações', () => {
     },
   );
 
+  it('analise com sucesso depois de um 429 apaga a mensagem de erro', async () => {
+    responder({ ultimaAnalise: analise(), alertas: [alerta('cal')] });
+    post
+      .mockRejectedValueOnce(erroApi(429, 'Aguarde 1 minuto entre análises manuais'))
+      .mockResolvedValueOnce(analise());
+    await card('Material cal');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rodar análise agora' }));
+    await screen.findByText('Aguarde 1 minuto entre análises manuais');
+    fireEvent.click(screen.getByRole('button', { name: 'Rodar análise agora' }));
+
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    await screen.findByRole('button', { name: 'Rodar análise agora' });
+    expect(screen.queryByText('Aguarde 1 minuto entre análises manuais')).not.toBeInTheDocument();
+  });
+
   // Resolver só fecha direto o INFORMATIVO; o REPOSICAO vai para a entrada (EAP-68).
   const informativo: Partial<AlertaEstoque> = {
     tipo: 'INFORMATIVO',
@@ -409,6 +436,38 @@ describe('AlertasEstoque: ações', () => {
       expect(cal.getByRole('button', { name: botao })).toBeEnabled();
     },
   );
+
+  it('"Dispensar" com sucesso depois de uma falha apaga a mensagem de erro', async () => {
+    responder({ ultimaAnalise: analise(), alertas: [alerta('cal'), alerta('gesso')] });
+    patch
+      .mockRejectedValueOnce(erroApi(400, 'Alerta cal não está ativo'))
+      .mockResolvedValueOnce({ id: 'gesso' });
+
+    fireEvent.click((await card('Material cal')).getByRole('button', { name: 'Dispensar' }));
+    await screen.findByText('Alerta cal não está ativo');
+    fireEvent.click((await card('Material gesso')).getByRole('button', { name: 'Dispensar' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: /Material gesso/ })).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByText('Alerta cal não está ativo')).not.toBeInTheDocument();
+  });
+
+  it('com o PATCH pendente, desabilita os botoes so daquele card e nao chama de novo', async () => {
+    responder({ ultimaAnalise: analise(), alertas: [alerta('cal'), alerta('gesso')] });
+    patch.mockReturnValue(new Promise(() => {}));
+
+    const cal = await card('Material cal');
+    fireEvent.click(cal.getByRole('button', { name: 'Dispensar' }));
+    fireEvent.click(cal.getByRole('button', { name: 'Dispensar' }));
+
+    expect(patch).toHaveBeenCalledTimes(1);
+    expect(cal.getByRole('button', { name: 'Dispensar' })).toBeDisabled();
+    expect(cal.getByRole('button', { name: 'Resolver' })).toBeDisabled();
+    const gesso = await card('Material gesso');
+    expect(gesso.getByRole('button', { name: 'Dispensar' })).toBeEnabled();
+    expect(gesso.getByRole('button', { name: 'Resolver' })).toBeEnabled();
+  });
 });
 
 describe('AlertasEstoque: conexão de volta (OFF-15)', () => {

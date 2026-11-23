@@ -7,7 +7,10 @@ import { GesseirosService } from './gesseiros.service';
 
 /**
  * Cobre a spec .claude/specs/features/gesseiros-crud-financeiro/spec.md
- * (GES-01 a GES-08). Mesmo padrao de obras.service.spec.ts: Prisma mockado, sem banco real.
+ * (GES-01, GES-03 a GES-07 e GES-09; mais o extrato). GES-02 (nome curto) e validado pelo DTO,
+ * em dto/create-gesseiro.dto.spec.ts. GES-08, GES-10 e GES-11 (desativar) sairam com a
+ * arquivar-e-limpar-registros; o arquivamento fica em gesseiros-arquivamento.spec.ts.
+ * Mesmo padrao de obras.service.spec.ts: Prisma mockado, sem banco real.
  */
 describe('GesseirosService', () => {
   let service: GesseirosService;
@@ -16,7 +19,6 @@ describe('GesseirosService', () => {
       findUnique: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
-      delete: jest.Mock;
     };
     lancamento: { create: jest.Mock; groupBy: jest.Mock };
     obra: { findUnique: jest.Mock };
@@ -28,7 +30,6 @@ describe('GesseirosService', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
-        delete: jest.fn(),
       },
       lancamento: { create: jest.fn(), groupBy: jest.fn() },
       obra: { findUnique: jest.fn() },
@@ -111,6 +112,27 @@ describe('GesseirosService', () => {
       expect(prisma.lancamento.create).not.toHaveBeenCalled();
     });
 
+    it('rejeita valor negativo', async () => {
+      // o 0 sozinho nao separa `<= 0` de `=== 0`; o negativo tambem tem que ser barrado aqui
+      await expect(
+        service.registrarLancamento('g-1', { tipo: TipoLancamento.VALE, valor: -10 }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(prisma.lancamento.create).not.toHaveBeenCalled();
+    });
+
+    it('aceita lancamento para gesseiro inativo', async () => {
+      // edge case da spec: desativar nao bloqueia o acerto de contas pendente
+      prisma.gesseiro.findUnique.mockResolvedValue({ id: 'g-1', ativo: false, lancamentos: [] });
+      prisma.lancamento.create.mockResolvedValue({ id: 'l-3', tipo: TipoLancamento.VALE });
+
+      await service.registrarLancamento('g-1', { tipo: TipoLancamento.VALE, valor: 100 });
+
+      expect(prisma.lancamento.create).toHaveBeenCalledWith({
+        data: { gesseiroId: 'g-1', tipo: TipoLancamento.VALE, valor: 100 },
+      });
+    });
+
     it('lanca 404 quando o gesseiro nao existe', async () => {
       prisma.gesseiro.findUnique.mockResolvedValue(null);
 
@@ -137,7 +159,7 @@ describe('GesseirosService', () => {
     });
   });
 
-  // GES-07 ------------------------------------------------------------------
+  // GES-07 e GES-09 (PATCH vazio) ------------------------------------------
 
   describe('update', () => {
     it('rejeita PATCH sem nenhum campo, antes de consultar o banco', async () => {
@@ -186,7 +208,7 @@ describe('GesseirosService', () => {
     });
   });
 
-  // GES-08 ------------------------------------------------------------------
+  // GES-03 AC5 (o extrato reflete os lancamentos) ---------------------------
 
   describe('extrato', () => {
     it('calcula creditos, vales, pagamentos e o saldo a receber', async () => {

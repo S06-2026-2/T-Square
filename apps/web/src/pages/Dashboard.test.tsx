@@ -75,6 +75,19 @@ describe('Dashboard', () => {
     expect(orcamento.getByTestId('valor')).toHaveTextContent(/^R\$\s14\.200,00$/);
 
     expect(get).toHaveBeenCalledWith('/obras/resumo');
+    expect(screen.queryByText('Carregando...')).not.toBeInTheDocument();
+  });
+
+  it('mostra a quantidade devolvida pela API, nao so se o status tem obra (DSH-01)', async () => {
+    porCaminho(async () => [{ status: 'FECHADA', quantidade: 3, valorTotal: 30000 }]);
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+
+    const fechadas = await card('Fechadas');
+    expect(fechadas.getByTestId('quantidade')).toHaveTextContent(/^3$/);
   });
 
   it('mostra os status ausentes na resposta com 0 e R$ 0,00, na ordem do funil (DSH-02)', async () => {
@@ -145,6 +158,7 @@ describe('Dashboard', () => {
     const erro = await screen.findByText('Erro ao comunicar com a API');
     expect(erro).toHaveClass('erro');
     expect(screen.queryAllByRole('article')).toHaveLength(0);
+    expect(screen.queryByText('Carregando...')).not.toBeInTheDocument();
   });
 
   describe('seção de alertas do agente de estoque (EAP-34)', () => {

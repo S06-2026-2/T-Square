@@ -59,6 +59,40 @@ describe('SilenciadosEstoque', () => {
     expect(
       painel.getByText('Em 29/10/2026 13:48 · volta a ser analisado em 01/11/2026 13:48'),
     ).toBeInTheDocument();
+    // abrangencia TUDO: nada de aviso de "só observações".
+    expect(painel.queryByText(/Só observações ficam de fora/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['REPOSICAO', 'DISPENSADO', 'Reposição dispensada'],
+    ['REPOSICAO', 'RESOLVIDO', 'Reposição resolvida'],
+    ['INFORMATIVO', 'DISPENSADO', 'Observação dispensada'],
+    ['INFORMATIVO', 'RESOLVIDO', 'Observação resolvida'],
+  ] as const)('%s %s aparece como "%s"', async (tipo, acao, rotulo) => {
+    get.mockResolvedValue([silenciado({ tipo, acao })]);
+    render(<SilenciadosEstoque />);
+
+    abrir();
+
+    expect(await screen.findByText(rotulo)).toBeInTheDocument();
+  });
+
+  it('mantem a ordem da API, o silencio que termina primeiro no topo (EAP-74)', async () => {
+    get.mockResolvedValue([
+      silenciado({ alertaId: 'a1', ate }),
+      silenciado({
+        alertaId: 'a2',
+        material: { nome: 'Fita telada', unidade: 'rolo' },
+        ate: new Date(2026, 10, 2, 9, 0).toISOString(),
+      }),
+    ]);
+    render(<SilenciadosEstoque />);
+
+    abrir();
+
+    await screen.findByText('Gesso cola');
+    const nomes = screen.getAllByRole('listitem').map((li) => li.querySelector('strong')?.textContent);
+    expect(nomes).toEqual(['Gesso cola', 'Fita telada']);
   });
 
   it('avisa quando só observações estão silenciadas', async () => {
@@ -101,6 +135,23 @@ describe('SilenciadosEstoque', () => {
     abrir();
     await screen.findByText('Gesso cola');
     expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  it('ao reabrir, a lista nova substitui a antiga', async () => {
+    get
+      .mockResolvedValueOnce([silenciado()])
+      .mockResolvedValueOnce([
+        silenciado({ alertaId: 'a2', material: { nome: 'Fita telada', unidade: 'rolo' } }),
+      ]);
+    render(<SilenciadosEstoque />);
+
+    abrir();
+    await screen.findByText('Gesso cola');
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar silenciados' }));
+    abrir();
+
+    expect(await screen.findByText('Fita telada')).toBeInTheDocument();
+    expect(screen.queryByText('Gesso cola')).not.toBeInTheDocument();
   });
 
   it('exibe a mensagem da API no padrão erro quando a busca falha', async () => {

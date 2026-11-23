@@ -323,6 +323,91 @@ Os testes e a spec da rodada 2 ainda não foram commitados. O Verified vale para
 
 ---
 
+## Auditoria de testes
+
+Feita em 2026-11-23, depois do fechamento, para aplicar a AD-012 às features fechadas antes dela. Cada mutação marcada "nenhum" foi aplicada no código, a suíte rodou e o teste novo falhou; o arquivo foi restaurado em seguida. Suítes depois da rodada (as três features juntas): API 516 testes, web 449, todos passando.
+
+Três `auditor-de-testes` independentes, um por parte: núcleo do agente (service, ferramentas,
+cliente da Claude API, controller), cálculo e alertas (cálculo determinístico, previsão, alertas,
+agendador, marcadores, materiais previstos) e telas.
+
+**Veredito do auditor (antes)**: cobertura parcial nas três partes. Os pontos centrais estavam bem
+cobertos: a faixa de 50% a 200%, a rede de segurança sem chave, nunca alterar saldo nem criar
+movimentação, e os marcadores no lugar dos dados de cliente. Faltavam três coisas: o mock de
+`$transaction` passava o próprio `prisma` como `tx` (`agente-estoque.service.spec.ts` e
+`materiais-previstos.service.spec.ts`), o controller não tinha teste, e as consultas do snapshot
+não tinham o `where`/`select` conferidos.
+
+**Bug encontrado e corrigido (EAP-16).** Numa análise `FALHA`, a rede de segurança atualizava o
+alerta ATIVO que já existia, trocando o texto, a quantidade e a origem escritos pelo agente pelos
+valores padrão. O critério 16 exige "manter inalterados os alertas ATIVO que já existiam". O EAP-16
+estava `Verified` porque o teste só conferia que nada era fechado. Correção em
+`agente-estoque.service.ts:323-324`: numa `FALHA`, o material que já tem ATIVO é pulado.
+
+| # | Arquivo:linha | Mutação | Antes | Teste que pega agora |
+|---|---|---|---|---|
+| 1 | `agente-estoque.service.ts:243` | checar o limite depois de executar a ferramenta (50 chamadas viram PARCIAL) | nenhum | `agente-estoque.service.spec.ts:376` (exatamente 50 → SUCESSO) |
+| 2 | `agente-estoque.service.ts:32` | prazo diferente de 2 min | nenhum (o teste usava a constante) | `:438` (120000 ms escrito no teste) |
+| 3 | `agente-estoque.service.ts:346` | `alertados.push` só no `create` | nenhum | `:699` (o alerta atualizado não é fechado) |
+| 4 | `agente-estoque.service.ts:320-345` | escritas de alerta fora da transação | nenhum (`tx` era o `prisma`) | mock com `tx` próprio e escritas preguiçosas, a partir de `:275` |
+| 5 | `agente-estoque.service.ts:323` | **bug**: FALHA reescreve o ATIVO existente | nenhum | `:527` (falhava com o código antigo); corrigido |
+| 6 | `agente-estoque.service.ts:112-126` | `updateMany` das análises travadas depois do `findFirst`, ou sem `await` | nenhum | `:1153` |
+| 7 | `agente-estoque.service.ts:135` | `<` por `<=` no intervalo de 60 s | nenhum | `:1178` (exatamente 60 s) |
+| 8 | `agente-estoque.controller.ts:22` | `MANUAL` por `AGENDADA` | nenhum (sem teste) | `agente-estoque.controller.spec.ts` (novo, as 5 rotas) |
+| 9 | `cliente-llm.ts:49` | `max_tokens` 16000 → 4096 | nenhum | `cliente-llm.spec.ts:89` |
+| 10 | `calculo-estoque.ts:83` | sem `.ceil()` ou com `.floor()` | nenhum (os valores eram inteiros) | `calculo-estoque.spec.ts:238` e `:251` |
+| 11 | `previsao-estoque.service.ts:93` | sem `obraId: { not: null }` no `OR` | nenhum (o mock ignorava o `where`) | `previsao-estoque.service.spec.ts:134` |
+| 12 | `previsao-estoque.service.ts:105-106` | `orderBy` asc ou sem `distinct` | nenhum | `:147` |
+| 13 | `previsao-estoque.service.ts:131` | `>=` por `>` na janela de 30 dias | nenhum | `:248` |
+| 14 | `previsao-estoque.service.ts:183` | sem `pendente.gt(0)` | nenhum | `:381` |
+| 15 | `previsao-estoque.service.ts:89, :100` | `select` da obra trocado por `obra: true` (dados de cliente no snapshot) | nenhum | `:157` |
+| 16 | `materiais-previstos.service.ts:82-85` | escritas fora da transação, ou sem `await` | nenhum (`tx` era o `prisma`) | `materiais-previstos.service.spec.ts:91` e `:130` |
+| 17 | `alertas-estoque.service.ts:102` | agrupar por alerta em vez de material | nenhum | `alertas-estoque.service.spec.ts:133` |
+| 18 | `agendador-agente.service.ts:68-72` | sem o try/catch do disparo do cron | nenhum | `agendador-agente.service.spec.ts:173` |
+| 19 | `agendador-agente.service.ts:53, :61` | sem o try/catch do catch-up | nenhum | `:192` |
+| 20 | `CardAlertaEstoque.tsx:61, :67` | sem `disabled` durante o PATCH | nenhum | `AlertasEstoque.test.tsx:456` |
+| 21 | `SilenciadosEstoque.tsx:72` | aviso "só observações" em todo item | nenhum | `SilenciadosEstoque.test.tsx:62` |
+| 22 | `SilenciadosEstoque.tsx:9, :12` | rótulos de tipo×ação trocados | nenhum | `:71` |
+| 23 | `SilenciadosEstoque.tsx:63` | lista reordenada (EAP-74) | nenhum | `:80` |
+| 24 | `SilenciadosEstoque.tsx:33` | ao reabrir, mantém a lista antiga | nenhum | `:140` |
+| 25 | `AlertasEstoque.tsx:67, :81` | sem `setErro(null)` | nenhum | `AlertasEstoque.test.tsx:363` e `:440` |
+
+Testes que o auditor apontou como fracos, todos reforçados:
+
+- `agendador-agente.service.spec.ts`, EAP-24: repetia o cenário anterior com o mesmo mock. Foi
+  reescrito (`:138`) para provar a parte do agendador: um tick que chega durante o catch-up recebe
+  `null` sem erro e sem nova tentativa. A regra de pular fica em `AgenteEstoqueService.analisar`, que
+  já tem teste próprio.
+- `AlertasEstoque.test.tsx`, aviso de FALHA/PARCIAL (EAP-33): só conferia o nome do status. Agora
+  confere a frase de cada um.
+- `SilenciadosEstoque.test.tsx`, "busca outra vez ao reabrir": as duas respostas eram iguais. O
+  item 24 cobre a troca de lista.
+
+Defasagens encontradas e corrigidas na documentação: o edge case da spec dizia "limite de 20"
+(o limite é 50 desde a AD-008). Este arquivo ainda cita a "21ª chamada" e "Aguarde 5 minutos" em
+seções anteriores; valem os números da spec atual.
+
+
+### Segunda rodada: pendente
+
+Uma segunda execução do auditor sobre `agente-estoque.service.ts`, feita para testar o workflow
+"Auditoria de testes" (2026-11-23), apontou 15 mutações que a primeira não listou. **Estão
+pendentes**: o requisito continua `Verified` pelo que a primeira rodada provou, mas estas lacunas
+ainda não têm teste.
+
+- Registro dos passos do agente: `await` em `create`/reabertura (`:333`, `:344`); `count` antes das
+  gravações (`:362`); `is_error` sempre verdadeiro (`:263`); sem o corte de 500 caracteres (`:256`);
+  `erro` do passo fixo (`:257`); passos `limite`/`erro` não gravados (`:187`, `:222`); texto vazio
+  gerando passo (`:228`).
+- Cálculo e texto do alerta: reabertura pegando o alerta mais antigo (`:431`); sem `ROUND_DOWN`
+  (`:414`); sem `duasCasas` (`:395`, `:408`); ramos do `textoPadrao` além de `ABAIXO_DO_MINIMO`
+  (`:462-470`); `REPOSICAO` fixo no lugar de `sugestao.tipo` (`:300`).
+- Resiliência e requisição: `montarSnapshot` rejeitando fora do `try` (`:146`); `system`, `tools` e
+  data do prompt sem asserção (`:199`, `:213-218`); sem o `?? modelo` (`:226`).
+
+Teste fraco apontado: o da EAP-10 olha `prisma.material.*`, mas o `tx` do mock não tem `material`.
+Uma escrita indevida em `tx.material` vira `TypeError`, a análise cai em `FALHA` e o teste passa.
+
 ## Summary
 
 **Overall**: ✅ Ready

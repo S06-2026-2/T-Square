@@ -139,6 +139,27 @@ Isolamento: `git status --porcelain` gravado antes. Cópia nova de `apps/web` (s
 
 ---
 
+## Auditoria de testes
+
+Feita em 2026-11-23, depois do fechamento, para aplicar a AD-012 às features fechadas antes dela. Cada mutação marcada "nenhum" foi aplicada no código, a suíte rodou e o teste novo falhou; o arquivo foi restaurado em seguida. Suítes depois da rodada (as três features juntas): API 516 testes, web 449, todos passando.
+
+**Veredito do auditor (antes)**: DSH-02 e DSH-03 com cobertura real; DSH-01 parcial, porque o seed
+só tinha status com quantidade 1.
+
+| # | Arquivo:linha | Mutação | Antes | Teste que pega agora |
+|---|---|---|---|---|
+| 1 | `pages/Dashboard.tsx:36, :59` | o card mostra 1/0 pela presença do status, em vez da `quantidade` | nenhum | `Dashboard.test.tsx:81` (FECHADA com 3) |
+| 2 | `pages/Dashboard.tsx:48` | "Carregando..." sempre visível | nenhum | `Dashboard.test.tsx:78` e `:161` (some depois dos cards e depois do erro) |
+
+As outras 12 mutações listadas pelo auditor (endpoint, preenchimento com zero, `moeda()`, cards
+junto com o erro, ordem e rótulos dos status, rotas, aba ativa, navegação depois do login, 401) já
+eram pegas.
+
+Defasagens deste arquivo: o M16 dado como sobrevivente na rodada 1 hoje é pego por
+`Dashboard.test.tsx:122-134`, e as linhas de código citadas acima mudaram com as features
+seguintes. A assumption do login (`spec.md:31`) continua como "n", sem confirmação do time.
+
+
 ## Summary
 
 **Overall**: ✅ Ready

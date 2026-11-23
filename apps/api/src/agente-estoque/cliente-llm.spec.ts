@@ -85,5 +85,13 @@ describe('AnthropicClienteLlm', () => {
       expect(opcoes.signal).toBe(controle.signal);
       expect(resposta).toEqual({ id: 'msg-1', stop_reason: 'end_turn', content: [] });
     });
+
+    it('envia max_tokens 16000 (o raciocinio do Haiku conta no limite)', async () => {
+      const cliente = new AnthropicClienteLlm(config({ ANTHROPIC_API_KEY: 'sk-teste' }));
+
+      await cliente.enviar(requisicao());
+
+      expect(mockCreate.mock.calls[0][0]).toEqual(expect.objectContaining({ max_tokens: 16000 }));
+    });
   });
 });

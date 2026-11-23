@@ -130,6 +130,50 @@ describe('PrevisaoEstoqueService', () => {
     });
   });
 
+  describe('consultas ao banco', () => {
+    it('le as movimentacoes de obra de todo o historico e as demais so na janela maxima (30 dias)', async () => {
+      // O utilizado das obras soma todo o historico; sem o filtro de obraId, uma SAIDA de obra
+      // com mais de 30 dias sumiria do utilizado e o pendente (reservado) ficaria maior.
+      dados({});
+
+      await service.montarSnapshot(agora);
+
+      expect(prisma.movimentacaoEstoque.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.movimentacaoEstoque.findMany.mock.calls[0][0].where).toEqual({
+        OR: [{ obraId: { not: null } }, { criadoEm: { gte: diasAtras(30) } }],
+      });
+    });
+
+    it('ultimosAlertas: um por material e tipo, o mais recente (distinct + atualizadoEm desc)', async () => {
+      dados({});
+
+      await service.montarSnapshot(agora);
+
+      const consulta = prisma.alertaEstoque.findMany.mock.calls[0][0];
+      expect(consulta.distinct).toEqual(['materialId', 'tipo']);
+      expect(consulta.orderBy).toEqual({ atualizadoEm: 'desc' });
+    });
+
+    it('carrega a obra so com id, titulo e status: nenhum dado de cliente entra no snapshot (privacidade)', async () => {
+      // Spec, Assumptions "Privacidade": clienteNome, clienteTelefone e endereco nunca vao a LLM.
+      dados({});
+
+      await service.montarSnapshot(agora);
+
+      expect(prisma.materialPrevistoObra.findMany).toHaveBeenCalledWith({
+        include: { obra: { select: { id: true, titulo: true, status: true } } },
+      });
+      expect(prisma.movimentacaoEstoque.findMany.mock.calls[0][0].select).toEqual({
+        materialId: true,
+        obraId: true,
+        tipo: true,
+        quantidade: true,
+        criadoEm: true,
+        obra: { select: { titulo: true, status: true } },
+      });
+    });
+  });
+
   describe('consumo solto (EAP-02)', () => {
     it('SAIDA sem obra dentro da janela conta no ritmo', async () => {
       dados({ materiais: [material('cal', 40, 10)], movimentacoes: [saida('cal', 30, 5)] });
@@ -199,6 +243,18 @@ describe('PrevisaoEstoqueService', () => {
 
       expect(cal.diasJanela).toBe(30);
       expect(cal.consumoSolto.toString()).toBe('3');
+    });
+
+    it('SAIDA exatamente no inicio da janela (agora - 30 dias) conta', async () => {
+      dados({
+        materiais: [material('cal', 100, 10)],
+        movimentacoes: [saida('cal', 7, 30), saida('cal', 2, 1)],
+      });
+
+      const cal = await snapshotDe('cal');
+
+      expect(cal.diasJanela).toBe(30);
+      expect(cal.consumoSolto.toString()).toBe('9');
     });
 
     it('SAIDA para obra sem previsao continua no consumo solto e aparece em usoSemPrevisao (EAP-71)', async () => {
@@ -320,6 +376,22 @@ describe('PrevisaoEstoqueService', () => {
 
       expect(cal.indicador.reservado.toString()).toBe('12');
       expect(cal.indicador.saldoLivre.toString()).toBe('5');
+    });
+
+    it('obra FECHADA/ANDAMENTO que ja usou todo o previsto (pendente 0) nao aparece em obrasQueReservam', async () => {
+      const fechada = obra('f', StatusObra.FECHADA); // utilizado = previsto
+      const andamento = obra('a', StatusObra.ANDAMENTO); // utilizado > previsto
+      dados({
+        materiais: [material('cal', 50, 10)],
+        previstos: [previsto(fechada, 'cal', 20), previsto(andamento, 'cal', 5)],
+        movimentacoes: [saida('cal', 20, 3, fechada), saida('cal', 8, 2, andamento)],
+      });
+
+      const cal = await snapshotDe('cal');
+
+      expect(cal.obrasQueReservam).toEqual([]);
+      expect(cal.indicador.reservado.toString()).toBe('0');
+      expect(cal.previstoVsUtilizado.map((l) => l.obraId).sort()).toEqual(['a', 'f']);
     });
   });
 

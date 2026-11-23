@@ -235,6 +235,32 @@ describe('calculo-estoque', () => {
       expect(ind.calculado.toString()).toBe('50');
     });
 
+    it('ceil arredonda para cima a falta fracionaria do saldo: 9,5 de 10 sugere 1', () => {
+      // Sem consumo: ceil(0 + 10 - 9,5) = ceil(0,5) = 1 (floor daria 0 e o material ficaria sem reposicao).
+      const ind = calcularIndicador({
+        saldoAtual: dec('9.5'),
+        estoqueMinimo: dec(10),
+        pendentes: [],
+        consumoSolto: dec(0),
+        diasJanela: 30,
+      });
+
+      expect(ind.calculado.toString()).toBe('1');
+    });
+
+    it('ceil arredonda para cima a fracao que vem do ritmo: 10 em 7 dias sugere 33', () => {
+      // 10 x 30 / 7 = 42,857...; ceil(42,857... + 10 - 20) = ceil(32,857...) = 33.
+      const ind = calcularIndicador({
+        saldoAtual: dec(20),
+        estoqueMinimo: dec(10),
+        pendentes: [],
+        consumoSolto: dec(10),
+        diasJanela: 7,
+      });
+
+      expect(ind.calculado.toString()).toBe('33');
+    });
+
     // EAP-69: PREVISAO quando cruza o mínimo em até 7 dias (diasAteMinimo <= 7), com ritmo > 0.
     it('cruza o mínimo em exatamente 7 dias: PREVISAO, sem ser obrigatório (EAP-69)', () => {
       // ritmo 1/dia; (17 - 10) x 30 / 30 = 7 dias

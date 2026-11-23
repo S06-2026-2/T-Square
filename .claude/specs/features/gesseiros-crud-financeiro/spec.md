@@ -141,16 +141,16 @@ uso inicial do sistema.
 | GES-05 | P1: Registrar vale/pagamento (404 gesseiro) | Implementing | Verified |
 | GES-06 | P1: Registrar vale/pagamento (404 obra) | Implementing | Verified |
 | GES-07 | P2: Editar gesseiro | Implementing | Verified |
-| GES-08 | P2: Desativar gesseiro (soft delete) | Implementing | Verified |
+| GES-08 | P2: Desativar gesseiro (soft delete) | Implementing | Superseded |
 | GES-09 | P2: Editar gesseiro (PATCH vazio → 400) | Implementing | Verified |
-| GES-10 | P2: Desativar gesseiro (idempotência) | Implementing | Verified |
-| GES-11 | P2: Desativar gesseiro (bloqueio por obra em aberto) | Implementing | Verified |
+| GES-10 | P2: Desativar gesseiro (idempotência) | Implementing | Superseded |
+| GES-11 | P2: Desativar gesseiro (bloqueio por obra em aberto) | Implementing | Superseded |
 
 **ID format:** `GES-NN`
 
-**Status values:** Pending → In Design → In Tasks → Implementing → Verified
+**Status values:** Pending → In Design → In Tasks → Implementing → Verified; `Superseded` = substituído por outra feature, sem código próprio
 
-**Coverage:** 11 total, 11 mapped e verificados (`gesseiros.service.spec.ts`, 15 testes). Nenhum requisito pendente.
+**Coverage:** 11 total: 8 Verified e 3 Superseded. GES-08, GES-10 e GES-11 foram substituídos em 2026-11-20 pela ARQ-09 (`arquivar-e-limpar-registros`, AD-015): o `DELETE /gesseiros/:id` saiu e a desativação virou arquivamento. O bloqueio por obra em aberto (GES-11) continua dentro da ARQ-09; a idempotência (GES-10) virou o contrário, porque arquivar de novo responde 400. Auditoria de testes em `validation.md`.
 
 ---
 

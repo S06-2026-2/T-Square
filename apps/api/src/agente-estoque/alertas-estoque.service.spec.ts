@@ -130,6 +130,34 @@ describe('AlertasEstoqueService', () => {
       expect(item.abrangencia).toBe('INFORMATIVO');
     });
 
+    it('REPOSICAO e INFORMATIVO dispensados do mesmo material geram uma linha so, com abrangencia TUDO', async () => {
+      // Os dois ultimos alertas do material sao avaliados juntos: o REPOSICAO dispensado
+      // silencia tudo e engloba o silencio do INFORMATIVO.
+      prisma.alertaEstoque.findMany.mockResolvedValue([
+        fechado('a-info', 'Cal', TipoAlertaEstoque.INFORMATIVO, {
+          status: 'DISPENSADO',
+          em: haDias(1),
+        }),
+        fechado('a-repo', 'Cal', TipoAlertaEstoque.REPOSICAO, {
+          status: 'DISPENSADO',
+          em: haDias(2),
+        }),
+      ]);
+
+      const resultado = await service.listarSilenciados();
+
+      expect(resultado).toHaveLength(1);
+      expect(resultado[0]).toEqual(
+        expect.objectContaining({
+          alertaId: 'a-repo',
+          materialId: 'Cal',
+          tipo: TipoAlertaEstoque.REPOSICAO,
+          ate: haDias(-3),
+          abrangencia: 'TUDO',
+        }),
+      );
+    });
+
     it('não lista silêncio vencido nem alerta fechado pelo agente', async () => {
       prisma.alertaEstoque.findMany.mockResolvedValue([
         fechado('a-vencido', 'Cal', TipoAlertaEstoque.REPOSICAO, {

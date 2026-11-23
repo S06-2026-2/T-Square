@@ -269,7 +269,7 @@ sugere quanto repor e mostra isso no Dashboard. O agente nunca compra nem movime
 - WHEN uma obra com previsão é concluída ou cancelada THEN the system SHALL deixar de contar o pendente dela no reservado já na próxima análise, sem nenhuma gravação extra.
 - IF o reservado é maior que o `saldoAtual` (saldo livre negativo) THEN the system SHALL criar o alerta obrigatório com `sugerido = ceil(ritmoDiario × 30 + estoqueMinimo − saldoLivre)`.
 - IF o agente chama `sugerirReposicao` duas vezes para o mesmo material na mesma análise THEN the system SHALL manter 1 alerta, com o tipo e os valores da última chamada aceita.
-- IF o agente chama uma ferramenta inexistente ou com argumentos inválidos THEN the system SHALL devolver um resultado de ferramenta com erro, contar a chamada no limite de 20 e continuar o loop.
+- IF o agente chama uma ferramenta inexistente ou com argumentos inválidos THEN the system SHALL devolver um resultado de ferramenta com erro, contar a chamada no limite de 50 (AD-008) e continuar o loop.
 - IF a Claude API recusa a resposta (`stop_reason = refusal`) THEN the system SHALL tratar a análise como `FALHA` (rede de segurança, sem fechar alertas).
 - IF qualquer chamada do Dashboard ou de `Obras.tsx` retornar 401 THEN the system SHALL seguir o comportamento existente de `lib/api.ts` (logout automático).
 

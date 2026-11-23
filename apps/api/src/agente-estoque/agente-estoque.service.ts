@@ -320,6 +320,8 @@ export class AgenteEstoqueService {
         const ativo = await tx.alertaEstoque.findFirst({
           where: { materialId: material.id, status: StatusAlertaEstoque.ATIVO },
         });
+        // EAP-16: analise FALHA mantem inalterados os alertas ATIVO que ja existiam.
+        if (ativo && loop.status === StatusAnaliseEstoque.FALHA) continue;
         const reabrir = ativo ? null : alertaReabrivel(material.ultimosAlertas, dados.tipo, agora);
 
         if (ativo) {

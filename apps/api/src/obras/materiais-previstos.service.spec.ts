@@ -20,6 +20,25 @@ describe('MateriaisPrevistosService', () => {
     movimentacaoEstoque: { findMany: jest.Mock };
     $transaction: jest.Mock;
   };
+  // Cliente da transacao: um objeto DIFERENTE do prisma, para o teste distinguir uma escrita
+  // feita dentro da transacao (tx.*) de uma feita fora dela (this.prisma.*).
+  let tx: {
+    materialPrevistoObra: { deleteMany: jest.Mock; createMany: jest.Mock; findMany: jest.Mock };
+  };
+  // Escritas da transacao que foram de fato aguardadas, na ordem em que rodaram.
+  let executadas: string[];
+
+  /**
+   * O Prisma real devolve promessas "preguicosas": a query so roda quando alguem da await nela.
+   * Esta imitacao so registra a escrita em `executadas` quando ela e aguardada, entao um `await`
+   * esquecido no service faz o teste falhar em vez de passar despercebido.
+   */
+  const preguicosa = (nome: string, valor: unknown) => ({
+    then(resolve?: (v: unknown) => unknown, reject?: (e: unknown) => unknown) {
+      executadas.push(nome);
+      return Promise.resolve(valor).then(resolve, reject);
+    },
+  });
 
   const materiaisExistentes = (...ids: string[]) =>
     prisma.material.findMany.mockResolvedValue(ids.map((id) => ({ id })));
@@ -28,9 +47,25 @@ describe('MateriaisPrevistosService', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(prisma.materialPrevistoObra.deleteMany).not.toHaveBeenCalled();
     expect(prisma.materialPrevistoObra.createMany).not.toHaveBeenCalled();
+    expect(tx.materialPrevistoObra.deleteMany).not.toHaveBeenCalled();
+    expect(tx.materialPrevistoObra.createMany).not.toHaveBeenCalled();
+  };
+
+  /** As escritas da substituicao acontecem so no tx, nunca no prisma fora da transacao. */
+  const expectNadaGravadoForaDaTransacao = () => {
+    expect(prisma.materialPrevistoObra.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.materialPrevistoObra.createMany).not.toHaveBeenCalled();
   };
 
   beforeEach(async () => {
+    executadas = [];
+    tx = {
+      materialPrevistoObra: {
+        deleteMany: jest.fn(() => preguicosa('materialPrevistoObra.deleteMany', { count: 0 })),
+        createMany: jest.fn(() => preguicosa('materialPrevistoObra.createMany', { count: 0 })),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    };
     prisma = {
       obra: { findUnique: jest.fn() },
       material: { findMany: jest.fn() },
@@ -40,8 +75,8 @@ describe('MateriaisPrevistosService', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
       movimentacaoEstoque: { findMany: jest.fn() },
-      // Executa o callback da transacao passando o proprio mock como "tx".
-      $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
+      // Executa o callback da transacao com o tx proprio, nunca com o prisma.
+      $transaction: jest.fn((callback: (cliente: unknown) => unknown) => callback(tx)),
     };
 
     const modulo: TestingModule = await Test.createTestingModule({
@@ -61,7 +96,7 @@ describe('MateriaisPrevistosService', () => {
           { obraId: 'obra-1', materialId: 'mat-cal', quantidade: D(20) },
           { obraId: 'obra-1', materialId: 'mat-gesso', quantidade: D('7.5') },
         ];
-        prisma.materialPrevistoObra.findMany.mockResolvedValue(gravada);
+        tx.materialPrevistoObra.findMany.mockResolvedValue(gravada);
 
         const resultado = await service.substituir('obra-1', [
           { materialId: 'mat-cal', quantidade: 20 },
@@ -69,20 +104,23 @@ describe('MateriaisPrevistosService', () => {
         ]);
 
         expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-        expect(prisma.materialPrevistoObra.deleteMany).toHaveBeenCalledWith({
+        expect(tx.materialPrevistoObra.deleteMany).toHaveBeenCalledWith({
           where: { obraId: 'obra-1' },
         });
-        expect(prisma.materialPrevistoObra.createMany).toHaveBeenCalledWith({
+        expect(tx.materialPrevistoObra.createMany).toHaveBeenCalledWith({
           data: [
             { obraId: 'obra-1', materialId: 'mat-cal', quantidade: 20 },
             { obraId: 'obra-1', materialId: 'mat-gesso', quantidade: 7.5 },
           ],
         });
-        // Remove antes de criar: a lista enviada substitui a antiga.
-        expect(prisma.materialPrevistoObra.deleteMany.mock.invocationCallOrder[0]).toBeLessThan(
-          prisma.materialPrevistoObra.createMany.mock.invocationCallOrder[0],
-        );
-        expect(prisma.materialPrevistoObra.findMany).toHaveBeenCalledWith(
+        // Remove antes de criar (a lista enviada substitui a antiga), e as duas foram aguardadas.
+        expect(executadas).toEqual([
+          'materialPrevistoObra.deleteMany',
+          'materialPrevistoObra.createMany',
+        ]);
+        expectNadaGravadoForaDaTransacao();
+        // A lista devolvida e lida dentro da mesma transacao, ja com a substituicao.
+        expect(tx.materialPrevistoObra.findMany).toHaveBeenCalledWith(
           expect.objectContaining({ where: { obraId: 'obra-1' } }),
         );
         expect(resultado).toBe(gravada);
@@ -91,14 +129,17 @@ describe('MateriaisPrevistosService', () => {
 
     it('lista vazia remove todos os previstos da obra', async () => {
       prisma.obra.findUnique.mockResolvedValue({ id: 'obra-1', status: StatusObra.FECHADA });
-      prisma.materialPrevistoObra.findMany.mockResolvedValue([]);
+      tx.materialPrevistoObra.findMany.mockResolvedValue([]);
 
       const resultado = await service.substituir('obra-1', []);
 
-      expect(prisma.materialPrevistoObra.deleteMany).toHaveBeenCalledWith({
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(tx.materialPrevistoObra.deleteMany).toHaveBeenCalledWith({
         where: { obraId: 'obra-1' },
       });
-      expect(prisma.materialPrevistoObra.createMany).not.toHaveBeenCalled();
+      expect(executadas).toEqual(['materialPrevistoObra.deleteMany']);
+      expect(tx.materialPrevistoObra.createMany).not.toHaveBeenCalled();
+      expectNadaGravadoForaDaTransacao();
       expect(resultado).toEqual([]);
     });
 

@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -23,6 +24,8 @@ describe('AgendadorAgenteService', () => {
   let agente: { analisar: jest.Mock };
   let prisma: { analiseEstoque: { findFirst: jest.Mock } };
   let jobs: CronJob[];
+  let logErro: jest.SpyInstance;
+  let consoleErro: jest.SpyInstance;
 
   /** O catch-up roda sem await no boot; espera as promessas pendentes terminarem. */
   const esperarCatchUp = () => new Promise((resolve) => setImmediate(resolve));
@@ -31,6 +34,9 @@ describe('AgendadorAgenteService', () => {
 
   beforeEach(async () => {
     jest.useFakeTimers({ now: AGORA, doNotFake: ['setImmediate'] });
+    // Logger do service e o console.error que o cron usa quando o onTick rejeita.
+    logErro = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    consoleErro = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     env = { AGENTE_AUTOMATICO: 'true' };
     jobs = [];
     registro = {
@@ -55,6 +61,7 @@ describe('AgendadorAgenteService', () => {
   afterEach(async () => {
     await Promise.all(jobs.map((job) => job.stop()));
     jest.useRealTimers();
+    jest.restoreAllMocks();
   });
 
   describe('AGENTE_AUTOMATICO=true', () => {
@@ -128,13 +135,74 @@ describe('AgendadorAgenteService', () => {
       expect(agente.analisar).not.toHaveBeenCalled();
     });
 
-    it('catch-up pulado por análise em andamento (analisar → null) não lança erro (EAP-24)', async () => {
-      agente.analisar.mockResolvedValue(null);
+    it('tick do cron durante o catch-up em andamento e pulado (analisar → null) sem erro nem log de falha (EAP-24)', async () => {
+      // Imita o contrato do AgenteEstoqueService: com uma analise rodando, o disparo automatico
+      // devolve null sem criar registro (a regra em si e testada em agente-estoque.service.spec).
+      let liberar!: () => void;
+      let emExecucao = false;
+      agente.analisar.mockImplementation(async () => {
+        if (emExecucao) return null;
+        emExecucao = true;
+        await new Promise<void>((resolve) => (liberar = resolve));
+        emExecucao = false;
+        return { id: 'an-catch-up' };
+      });
+
+      expect(() => service.onApplicationBootstrap()).not.toThrow();
+      await esperarCatchUp();
+      expect(agente.analisar).toHaveBeenCalledWith(OrigemAnaliseEstoque.CATCH_UP);
+
+      await cronRegistrado().fireOnTick();
+      await esperarCatchUp();
+
+      expect(agente.analisar).toHaveBeenCalledTimes(2);
+      expect(agente.analisar).toHaveBeenLastCalledWith(OrigemAnaliseEstoque.AGENDADA);
+      await expect(agente.analisar.mock.results[1].value).resolves.toBeNull();
+      // O pulo nao e falha: nada vai para o log de erro nem escapa do onTick para o cron.
+      expect(logErro).not.toHaveBeenCalled();
+      expect(consoleErro).not.toHaveBeenCalled();
+
+      liberar();
+      await esperarCatchUp();
+      await expect(agente.analisar.mock.results[0].value).resolves.toEqual({ id: 'an-catch-up' });
+      // Nao tenta de novo o disparo pulado: ele so volta no proximo tick.
+      expect(agente.analisar).toHaveBeenCalledTimes(2);
+      expect(logErro).not.toHaveBeenCalled();
+    });
+
+    it('erro na analise agendada nao rejeita o tick do cron e vai para o log', async () => {
+      prisma.analiseEstoque.findFirst.mockResolvedValue({
+        iniciadoEm: new Date(AGORA.getTime() - HORA_MS),
+      });
+      service.onApplicationBootstrap();
+      await esperarCatchUp();
+      agente.analisar.mockRejectedValue(new Error('llm fora'));
+
+      await expect(cronRegistrado().fireOnTick()).resolves.toBeUndefined();
+      await esperarCatchUp();
+
+      expect(agente.analisar).toHaveBeenCalledWith(OrigemAnaliseEstoque.AGENDADA);
+      expect(logErro).toHaveBeenCalledTimes(1);
+      expect(logErro).toHaveBeenCalledWith(expect.stringContaining('AGENDADA'));
+      expect(logErro).toHaveBeenCalledWith(expect.stringContaining('llm fora'));
+      // O erro foi tratado pelo service: o onTick nao rejeitou (o cron so loga quando rejeita).
+      expect(consoleErro).not.toHaveBeenCalled();
+    });
+
+    it('falha ao consultar a ultima analise no boot nao rejeita: o catch-up registra o erro e o cron segue', async () => {
+      prisma.analiseEstoque.findFirst.mockRejectedValue(new Error('banco fora'));
 
       expect(() => service.onApplicationBootstrap()).not.toThrow();
       await esperarCatchUp();
 
-      expect(agente.analisar).toHaveBeenCalledWith(OrigemAnaliseEstoque.CATCH_UP);
+      // O catch-up roda sem await: so o try/catch dele impede uma rejeicao nao tratada.
+      // A prova de que o erro foi capturado e o registro no log do service.
+      expect(logErro).toHaveBeenCalledTimes(1);
+      expect(logErro).toHaveBeenCalledWith(expect.stringContaining('catch-up'));
+      expect(logErro).toHaveBeenCalledWith(expect.stringContaining('banco fora'));
+      expect(agente.analisar).not.toHaveBeenCalled();
+      expect(registro.addCronJob).toHaveBeenCalledTimes(1);
+      expect(cronRegistrado().isActive).toBe(true);
     });
 
     it('erro no catch-up não derruba o boot', async () => {

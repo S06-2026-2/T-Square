@@ -371,6 +371,29 @@ Nenhum bloqueante. Pendência não bloqueante:
 
 ---
 
+## Auditoria de testes
+
+Feita em 2026-11-23, depois do fechamento, para aplicar a AD-012 às features fechadas antes dela. Cada mutação marcada "nenhum" foi aplicada no código, a suíte rodou e o teste novo falhou; o arquivo foi restaurado em seguida. Suítes depois da rodada (as três features juntas): API 516 testes, web 449, todos passando.
+
+**Veredito do auditor (antes)**: cobertura real, com uma lacuna no FRM-04 (equipe da nova obra).
+Os seis formulários usam o `useEnvio`; cinco mandam `idempotencyKey` e o de alocação não manda,
+coerente com o upsert.
+
+| # | Arquivo:linha | Mutação | Antes | Teste que pega agora |
+|---|---|---|---|---|
+| 1 | `forms/NovaObraForm.tsx:260` | `!==` por `<` (só exclui o gesseiro escolhido em linhas anteriores, e a equipe sai duplicada) | nenhum | `NovaObraForm.test.tsx:172` |
+| 2 | `forms/NovaObraForm.tsx:141` | remover sempre a última linha, e não a clicada | nenhum | `NovaObraForm.test.tsx:186` |
+| 3 | `forms/NovaObraForm.tsx:164, :173` | sem `minLength={3}` em Título e Cliente | nenhum | `NovaObraForm.test.tsx:62` |
+| — | `forms/MovimentacaoForm.tsx:44` | mandar `obraId` sem checar o tipo | **aceita**: equivalente. O `trocarTipo` já zera a obra ao voltar para ENTRADA; tirar as duas proteções juntas é pego | — |
+
+O teste "mostra o erro da API sem perder o que foi preenchido" usava o título "Fo", que um navegador
+real bloquearia antes do envio. Agora usa um título válido e prova o mesmo.
+
+Correção a este arquivo: o jsdom executa, sim, a validação do formulário no envio
+(`reportValidity()`), então `required`, `min` e `type="url"` valem nos testes. Só o `minLength` não
+é aplicado, por isso o item 3 confere o atributo.
+
+
 ## Summary
 
 **Overall**: ✅ Ready (Fases 1–2)

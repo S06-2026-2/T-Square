@@ -59,6 +59,13 @@ describe('NovaObraForm', () => {
     expect(screen.getByLabelText('Valor total')).toBeRequired();
   });
 
+  it('exige titulo e cliente com pelo menos 3 caracteres', () => {
+    render(<NovaObraForm gesseiros={gesseiros} onSalvo={jest.fn()} />);
+
+    expect(screen.getByLabelText('Titulo')).toHaveAttribute('minLength', '3');
+    expect(screen.getByLabelText('Cliente')).toHaveAttribute('minLength', '3');
+  });
+
   it('cria a obra so com os obrigatorios, valor numerico, e limpa o formulario', async () => {
     post.mockResolvedValue({ id: 'o1' });
     const onSalvo = jest.fn();
@@ -162,6 +169,47 @@ describe('NovaObraForm', () => {
     ]);
   });
 
+  it('nao oferece em nenhuma linha o gesseiro ja escolhido em outra, antes ou depois dela', () => {
+    render(<NovaObraForm gesseiros={gesseiros} onSalvo={jest.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar gesseiro' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar gesseiro' }));
+    const [primeiro, segundo] = screen.getAllByLabelText('Gesseiro');
+    fireEvent.change(primeiro, { target: { value: 'g-ana' } });
+    fireEvent.change(segundo, { target: { value: 'g-beto' } });
+
+    // A linha 1 nao pode trocar para o gesseiro da linha 2 (evita equipe duplicada).
+    expect(opcoes(primeiro)).toEqual(['g-ana']);
+    expect(opcoes(segundo)).toEqual(['g-beto']);
+  });
+
+  it('remove a linha clicada, e nao sempre a ultima', async () => {
+    post.mockResolvedValue({ id: 'o1' });
+    render(<NovaObraForm gesseiros={gesseiros} onSalvo={jest.fn()} />);
+
+    preencherObrigatorios();
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar gesseiro' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar gesseiro' }));
+    fireEvent.change(screen.getAllByLabelText('Gesseiro')[0], { target: { value: 'g-ana' } });
+    fireEvent.change(screen.getAllByLabelText('Valor combinado')[0], {
+      target: { value: '500' },
+    });
+    fireEvent.change(screen.getAllByLabelText('Gesseiro')[1], { target: { value: 'g-beto' } });
+    fireEvent.change(screen.getAllByLabelText('Valor combinado')[1], {
+      target: { value: '300' },
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Remover' })[0]);
+    expect(screen.getAllByLabelText('Gesseiro')).toHaveLength(1);
+    expect(screen.getByLabelText('Gesseiro')).toHaveValue('g-beto');
+    salvar();
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    expect(post.mock.calls[0][1].gesseiros).toEqual([
+      { gesseiroId: 'g-beto', valorCombinado: 300 },
+    ]);
+  });
+
   it('remove uma linha de gesseiro e nao envia equipe vazia', async () => {
     post.mockResolvedValue({ id: 'o1' });
     render(<NovaObraForm gesseiros={gesseiros} onSalvo={jest.fn()} />);
@@ -177,19 +225,17 @@ describe('NovaObraForm', () => {
   });
 
   it('mostra o erro da API sem perder o que foi preenchido', async () => {
-    post.mockRejectedValue(new Error('titulo must be longer than or equal to 3 characters'));
+    post.mockRejectedValue(new Error('Erro ao comunicar com a API'));
     const onSalvo = jest.fn();
     render(<NovaObraForm gesseiros={gesseiros} onSalvo={onSalvo} />);
 
     preencherObrigatorios();
-    preencher('Titulo', 'Fo');
+    preencher('Titulo', 'Forro quarto');
     salvar();
 
-    expect(
-      await screen.findByText('titulo must be longer than or equal to 3 characters'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Erro ao comunicar com a API')).toBeInTheDocument();
     expect(onSalvo).not.toHaveBeenCalled();
-    expect(screen.getByLabelText('Titulo')).toHaveValue('Fo');
+    expect(screen.getByLabelText('Titulo')).toHaveValue('Forro quarto');
     expect(screen.getByLabelText('Cliente')).toHaveValue('Maria Silva');
     expect(screen.getByLabelText('Valor total')).toHaveValue(8500);
   });

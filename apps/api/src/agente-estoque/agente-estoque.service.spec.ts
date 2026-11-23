@@ -155,6 +155,14 @@ describe('AgenteEstoqueService', () => {
       updateMany: jest.Mock;
       findFirst: jest.Mock;
     };
+    alertaEstoque: { create: jest.Mock; update: jest.Mock; updateMany: jest.Mock };
+    material: { update: jest.Mock; updateMany: jest.Mock };
+    movimentacaoEstoque: { create: jest.Mock; createMany: jest.Mock };
+    $transaction: jest.Mock;
+  };
+  // Cliente da transacao: um objeto DIFERENTE do prisma, para o teste distinguir uma escrita
+  // feita dentro da transacao (tx.*) de uma feita fora dela (this.prisma.*).
+  let tx: {
     alertaEstoque: {
       findFirst: jest.Mock;
       create: jest.Mock;
@@ -162,11 +170,27 @@ describe('AgenteEstoqueService', () => {
       updateMany: jest.Mock;
       count: jest.Mock;
     };
-    material: { update: jest.Mock; updateMany: jest.Mock };
-    movimentacaoEstoque: { create: jest.Mock; createMany: jest.Mock };
-    $transaction: jest.Mock;
+    analiseEstoque: { update: jest.Mock };
   };
+  // Escritas que foram de fato aguardadas, na ordem em que rodaram.
+  let executadas: string[];
   let previsao: { montarSnapshot: jest.Mock };
+
+  /**
+   * O Prisma real devolve promessas "preguicosas": a query so roda quando alguem da await nela.
+   * Esta imitacao so registra a escrita em `executadas` quando ela e aguardada, entao um `await`
+   * esquecido no service faz o teste falhar em vez de passar despercebido.
+   */
+  const preguicosa = (nome: string, valor: unknown) => ({
+    then(resolve?: (v: unknown) => unknown, reject?: (e: unknown) => unknown) {
+      executadas.push(nome);
+      return Promise.resolve(valor).then(resolve, reject);
+    },
+  });
+
+  /** Troca o valor que uma escrita devolve, mantendo-a preguicosa. */
+  const devolve = (mock: jest.Mock, nome: string, valor: unknown) =>
+    mock.mockImplementation(() => preguicosa(nome, valor));
 
   const snapshot = (...materiais: MaterialSnapshot[]): SnapshotEstoque => ({
     geradoEm: agora,
@@ -174,6 +198,25 @@ describe('AgenteEstoqueService', () => {
   });
 
   beforeEach(() => {
+    executadas = [];
+    tx = {
+      alertaEstoque: {
+        findFirst: jest.fn(async () => null),
+        create: jest.fn(({ data }) =>
+          preguicosa('alertaEstoque.create', { id: 'al-novo', ...data }),
+        ),
+        update: jest.fn(({ where, data }) =>
+          preguicosa('alertaEstoque.update', { id: where.id, ...data }),
+        ),
+        updateMany: jest.fn(() => preguicosa('alertaEstoque.updateMany', { count: 0 })),
+        count: jest.fn(async () => 0),
+      },
+      analiseEstoque: {
+        update: jest.fn(({ where, data }) =>
+          preguicosa('analiseEstoque.update', { id: where.id, ...data }),
+        ),
+      },
+    };
     prisma = {
       analiseEstoque: {
         create: jest.fn(async ({ data }) => ({
@@ -185,17 +228,11 @@ describe('AgenteEstoqueService', () => {
         updateMany: jest.fn(async () => ({ count: 0 })),
         findFirst: jest.fn(async () => null),
       },
-      alertaEstoque: {
-        findFirst: jest.fn(async () => null),
-        create: jest.fn(async ({ data }) => ({ id: 'al-novo', ...data })),
-        update: jest.fn(async ({ where, data }) => ({ id: where.id, ...data })),
-        updateMany: jest.fn(async () => ({ count: 0 })),
-        count: jest.fn(async () => 0),
-      },
+      alertaEstoque: { create: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
       material: { update: jest.fn(), updateMany: jest.fn() },
       movimentacaoEstoque: { create: jest.fn(), createMany: jest.fn() },
-      // Executa o callback da transacao passando o proprio mock como "tx".
-      $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
+      // Executa o callback da transacao com o tx proprio, nunca com o prisma.
+      $transaction: jest.fn((callback: (cliente: unknown) => unknown) => callback(tx)),
     };
     previsao = { montarSnapshot: jest.fn(async () => snapshot(calAbaixo(), gessoSobrando())) };
   });
@@ -223,16 +260,24 @@ describe('AgenteEstoqueService', () => {
   const loop = (service: AgenteEstoqueService, ctx: ContextoFerramentas): Promise<ResultadoLoop> =>
     service['executarLoop'](ctx, Date.now() + PRAZO_ANALISE_MS);
 
-  const dadosCriados = () => prisma.alertaEstoque.create.mock.calls.map(([arg]) => arg.data);
+  const dadosCriados = () => tx.alertaEstoque.create.mock.calls.map(([arg]) => arg.data);
   const numeros = (d: Record<string, unknown>) =>
     Object.fromEntries(
       Object.entries(d).map(([k, v]) => [k, v instanceof Prisma.Decimal ? Number(v) : v]),
     );
   const fechamentos = () =>
-    prisma.alertaEstoque.updateMany.mock.calls.filter(
+    tx.alertaEstoque.updateMany.mock.calls.filter(
       ([arg]) => arg.data.status === StatusAlertaEstoque.RESOLVIDO,
     );
-  const finalizacao = () => prisma.analiseEstoque.update.mock.calls.slice(-1)[0]?.[0];
+  const finalizacao = (cliente: { analiseEstoque: { update: jest.Mock } } = tx) =>
+    cliente.analiseEstoque.update.mock.calls.slice(-1)[0]?.[0];
+  /** Nenhuma escrita do resultado saiu da transacao (EAP-10, "gravacoes em $transaction"). */
+  const nadaForaDaTransacao = () => {
+    expect(prisma.alertaEstoque.create).not.toHaveBeenCalled();
+    expect(prisma.alertaEstoque.update).not.toHaveBeenCalled();
+    expect(prisma.alertaEstoque.updateMany).not.toHaveBeenCalled();
+    expect(prisma.analiseEstoque.update).not.toHaveBeenCalled();
+  };
 
   // -------------------------------------------------------------------------------------------
   describe('T7 — loop do agente (EAP-08, EAP-09, EAP-17)', () => {
@@ -328,6 +373,18 @@ describe('AgenteEstoqueService', () => {
       expect(roteiro.requisicoes).toHaveLength(1);
     });
 
+    it('exatamente 50 chamadas e depois end_turn: SUCESSO, sem cortar a 50ª (EAP-09)', async () => {
+      const blocos = Array.from({ length: 50 }, () => ferramenta('listarMateriais'));
+      const roteiro = new Roteiro([usar(...blocos), terminar()]);
+      const service = await criar(roteiro);
+
+      const r = await loop(service, contexto(calAbaixo()));
+
+      expect(r.status).toBe(StatusAnaliseEstoque.SUCESSO);
+      expect(r.chamadas).toBe(50);
+      expect(roteiro.requisicoes).toHaveLength(2);
+    });
+
     describe('prazo de 2 minutos (relógio fake)', () => {
       beforeEach(() => jest.useFakeTimers({ now: agora }));
       afterEach(() => jest.useRealTimers());
@@ -376,6 +433,26 @@ describe('AgenteEstoqueService', () => {
 
         expect(r.status).toBe(StatusAnaliseEstoque.PARCIAL);
         expect(r.chamadas).toBe(0);
+      });
+
+      it('o prazo é 120000 ms: não aborta em 119999 e aborta em 120000 com PARCIAL', async () => {
+        // Prazo escrito como numero literal: o analisar calcula o prazo com a constante.
+        const abortadaEm: boolean[] = [];
+        const lenta = (req: RequisicaoLlm) =>
+          new Promise<Anthropic.Message>((resolver, rejeitar) => {
+            req.signal.addEventListener('abort', () => rejeitar(new Error('Request was aborted.')));
+            jest.advanceTimersByTime(119999);
+            abortadaEm.push(req.signal.aborted);
+            jest.advanceTimersByTime(1);
+            abortadaEm.push(req.signal.aborted);
+            if (!req.signal.aborted) resolver(terminar());
+          });
+        const service = await criar(new Roteiro([lenta]));
+
+        const analise = await service.analisar(OrigemAnaliseEstoque.MANUAL);
+
+        expect(abortadaEm).toEqual([false, true]);
+        expect(analise?.status).toBe(StatusAnaliseEstoque.PARCIAL);
       });
     });
 
@@ -432,6 +509,7 @@ describe('AgenteEstoqueService', () => {
           analiseId: 'an-1',
         },
       ]);
+      nadaForaDaTransacao();
     });
 
     it('sem chave: FALHA, rede de segurança cria o obrigatório e nada é fechado (EAP-08, EAP-16)', async () => {
@@ -443,6 +521,21 @@ describe('AgenteEstoqueService', () => {
       expect(dadosCriados()).toEqual([
         expect.objectContaining({ materialId: 'cal', origemTexto: OrigemTextoAlerta.PADRAO }),
       ]);
+      expect(fechamentos()).toEqual([]);
+    });
+
+    it('sem chave: FALHA mantém inalterado o ATIVO do agente de um material obrigatório (EAP-16)', async () => {
+      tx.alertaEstoque.findFirst.mockResolvedValue({
+        ...ativoNoBanco,
+        origemTexto: OrigemTextoAlerta.AGENTE,
+      });
+      const service = await criar(new Roteiro([], false));
+
+      const analise = await service.analisar(OrigemAnaliseEstoque.MANUAL);
+
+      expect(analise?.status).toBe(StatusAnaliseEstoque.FALHA);
+      expect(tx.alertaEstoque.update).not.toHaveBeenCalled();
+      expect(tx.alertaEstoque.create).not.toHaveBeenCalled();
       expect(fechamentos()).toEqual([]);
     });
 
@@ -505,8 +598,8 @@ describe('AgenteEstoqueService', () => {
       const analise = await service.analisar(OrigemAnaliseEstoque.MANUAL);
 
       expect(analise?.status).toBe(StatusAnaliseEstoque.SUCESSO);
-      expect(prisma.alertaEstoque.create).not.toHaveBeenCalled();
-      expect(prisma.alertaEstoque.update).not.toHaveBeenCalled();
+      expect(tx.alertaEstoque.create).not.toHaveBeenCalled();
+      expect(tx.alertaEstoque.update).not.toHaveBeenCalled();
       expect(finalizacao()?.data).toEqual(
         expect.objectContaining({ status: StatusAnaliseEstoque.SUCESSO, totalAlertas: 0 }),
       );
@@ -583,17 +676,17 @@ describe('AgenteEstoqueService', () => {
     });
 
     it('reexecução atualiza o ATIVO existente em vez de criar outro (EAP-14)', async () => {
-      prisma.alertaEstoque.findFirst.mockResolvedValue(ativoNoBanco);
+      tx.alertaEstoque.findFirst.mockResolvedValue(ativoNoBanco);
       const service = await criar(new Roteiro([terminar()]));
 
       await service.analisar(OrigemAnaliseEstoque.MANUAL);
 
-      expect(prisma.alertaEstoque.findFirst).toHaveBeenCalledWith({
+      expect(tx.alertaEstoque.findFirst).toHaveBeenCalledWith({
         where: { materialId: 'cal', status: StatusAlertaEstoque.ATIVO },
       });
-      expect(prisma.alertaEstoque.create).not.toHaveBeenCalled();
-      expect(prisma.alertaEstoque.update).toHaveBeenCalledTimes(1);
-      const [{ where, data }] = prisma.alertaEstoque.update.mock.calls[0];
+      expect(tx.alertaEstoque.create).not.toHaveBeenCalled();
+      expect(tx.alertaEstoque.update).toHaveBeenCalledTimes(1);
+      const [{ where, data }] = tx.alertaEstoque.update.mock.calls[0];
       expect(where).toEqual({ id: 'al-ativo' });
       expect(numeros(data)).toEqual(
         expect.objectContaining({
@@ -602,6 +695,14 @@ describe('AgenteEstoqueService', () => {
           justificativa: TEXTO_PADRAO_CAL,
         }),
       );
+      // O alerta atualizado conta como alertado: o fechamento nao o resolve.
+      expect(fechamentos()[0][0].where.materialId).toEqual({ notIn: ['cal'] });
+      expect(executadas).toEqual([
+        'alertaEstoque.update',
+        'alertaEstoque.updateMany',
+        'analiseEstoque.update',
+      ]);
+      nadaForaDaTransacao();
     });
 
     it('SUCESSO fecha como RESOLVIDO/AGENTE todo ATIVO não repetido (EAP-15)', async () => {
@@ -621,6 +722,7 @@ describe('AgenteEstoqueService', () => {
           },
         ],
       ]);
+      nadaForaDaTransacao();
     });
 
     it('PARCIAL também fecha os não repetidos e mantém as aceitas (EAP-09, EAP-15)', async () => {
@@ -681,8 +783,8 @@ describe('AgenteEstoqueService', () => {
 
         await service.analisar(OrigemAnaliseEstoque.MANUAL);
 
-        expect(prisma.alertaEstoque.create).not.toHaveBeenCalled();
-        expect(prisma.alertaEstoque.update).not.toHaveBeenCalled();
+        expect(tx.alertaEstoque.create).not.toHaveBeenCalled();
+        expect(tx.alertaEstoque.update).not.toHaveBeenCalled();
       });
 
       it('INFORMATIVO resolvido pelo operador há 1 dia: a rede de segurança cria o REPOSICAO obrigatório', async () => {
@@ -725,7 +827,7 @@ describe('AgenteEstoqueService', () => {
 
         await service.analisar(OrigemAnaliseEstoque.MANUAL);
 
-        expect(prisma.alertaEstoque.update).not.toHaveBeenCalledWith(
+        expect(tx.alertaEstoque.update).not.toHaveBeenCalledWith(
           expect.objectContaining({ where: { id: 'al-info' } }),
         );
         expect(dadosCriados()).toEqual([
@@ -765,7 +867,7 @@ describe('AgenteEstoqueService', () => {
 
         await service.analisar(OrigemAnaliseEstoque.MANUAL);
 
-        expect(prisma.alertaEstoque.update).not.toHaveBeenCalledWith(
+        expect(tx.alertaEstoque.update).not.toHaveBeenCalledWith(
           expect.objectContaining({ where: { id: 'al-agente' } }),
         );
         expect(dadosCriados()).toEqual([
@@ -790,8 +892,8 @@ describe('AgenteEstoqueService', () => {
 
         await service.analisar(OrigemAnaliseEstoque.MANUAL);
 
-        expect(prisma.alertaEstoque.create).not.toHaveBeenCalled();
-        const [{ where, data }] = prisma.alertaEstoque.update.mock.calls[0];
+        expect(tx.alertaEstoque.create).not.toHaveBeenCalled();
+        const [{ where, data }] = tx.alertaEstoque.update.mock.calls[0];
         expect(where).toEqual({ id: 'al-velho' });
         expect(numeros(data)).toEqual(
           expect.objectContaining({
@@ -803,6 +905,7 @@ describe('AgenteEstoqueService', () => {
             analiseId: 'an-1',
           }),
         );
+        nadaForaDaTransacao();
       });
     });
 
@@ -894,7 +997,7 @@ describe('AgenteEstoqueService', () => {
 
     it('finaliza a AnaliseEstoque com status, nº de ATIVO, passos e marcadores (EAP-17)', async () => {
       previsao.montarSnapshot.mockResolvedValue(snapshot(calReservada()));
-      prisma.alertaEstoque.count.mockResolvedValue(3);
+      tx.alertaEstoque.count.mockResolvedValue(3);
       const service = await criar(
         new Roteiro([
           usar(ferramenta('reservadoPorObras', { materialId: 'cal' })),
@@ -904,7 +1007,7 @@ describe('AgenteEstoqueService', () => {
 
       const analise = await service.analisar(OrigemAnaliseEstoque.MANUAL);
 
-      expect(prisma.alertaEstoque.count).toHaveBeenCalledWith({
+      expect(tx.alertaEstoque.count).toHaveBeenCalledWith({
         where: { status: StatusAlertaEstoque.ATIVO },
       });
       expect(finalizacao()).toEqual({
@@ -1047,13 +1150,53 @@ describe('AgenteEstoqueService', () => {
       });
     });
 
+    it('a travada vira FALHA antes de procurar EM_ANDAMENTO: a nova análise roda (EAP-25)', async () => {
+      devolve(prisma.analiseEstoque.updateMany, 'analiseEstoque.updateMany', { count: 1 });
+      // Enquanto o updateMany nao rodou (com await), a analise de 6 min atras segue EM_ANDAMENTO.
+      prisma.analiseEstoque.findFirst.mockImplementation(async ({ where }) =>
+        where.status === StatusAnaliseEstoque.EM_ANDAMENTO &&
+        !executadas.includes('analiseEstoque.updateMany')
+          ? {
+              id: 'an-0',
+              status: StatusAnaliseEstoque.EM_ANDAMENTO,
+              iniciadoEm: new Date(Date.now() - 6 * MIN),
+            }
+          : null,
+      );
+      const service = await criar(new Roteiro([terminar()]));
+
+      const analise = await service.analisar(OrigemAnaliseEstoque.MANUAL);
+
+      expect(prisma.analiseEstoque.create).toHaveBeenCalledTimes(1);
+      expect(analise?.status).toBe(StatusAnaliseEstoque.SUCESSO);
+    });
+
+    describe('intervalo manual na fronteira (relógio fake)', () => {
+      beforeEach(() => jest.useFakeTimers({ now: agora }));
+      afterEach(() => jest.useRealTimers());
+
+      it('última manual exatamente 60000 ms antes: a análise roda (EAP-23)', async () => {
+        prisma.analiseEstoque.findFirst.mockImplementation(async ({ where }) =>
+          where.origem === OrigemAnaliseEstoque.MANUAL
+            ? { id: 'an-0', iniciadoEm: new Date(agora.getTime() - 60000) }
+            : null,
+        );
+        const service = await criar(new Roteiro([terminar()]));
+
+        const analise = await service.analisar(OrigemAnaliseEstoque.MANUAL);
+
+        expect(analise?.status).toBe(StatusAnaliseEstoque.SUCESSO);
+        expect(prisma.analiseEstoque.create).toHaveBeenCalledTimes(1);
+      });
+    });
+
     it('falha na persistência grava FALHA à parte', async () => {
       prisma.$transaction.mockRejectedValue(new Error('banco caiu'));
       const service = await criar(new Roteiro([terminar()]));
 
       const analise = await service.analisar(OrigemAnaliseEstoque.MANUAL);
 
-      expect(finalizacao()).toEqual({
+      expect(finalizacao(prisma)).toEqual({
         where: { id: 'an-1' },
         data: {
           status: StatusAnaliseEstoque.FALHA,
