@@ -104,6 +104,13 @@ API **sem `/api`** e sem barra no final (o front acrescenta `/api`). Ela entra n
 precisa de redeploy. O `vercel.json` reescreve todas as rotas para `index.html` — sem isso, dar F5
 em `/obras` retorna 404 na Vercel.
 
+**Como o front está publicado hoje (2026-11-23):** pela CLI da Vercel, no projeto `t-square` da
+conta pessoal do André (`https://t-square-five.vercel.app`), porque o app da Vercel ainda espera a
+aprovação de um dono da organização S06-2026-2 no GitHub. Por isso **não há deploy automático**:
+para publicar uma mudança no front, quem tem acesso ao projeto roda, dentro de `apps/web`,
+`npx vercel --prod`. Quando o app for aprovado, `npx vercel git connect` (também em `apps/web`)
+liga o projeto ao repositório e cada push na `main` passa a publicar sozinho.
+
 **Primeiro usuário:** o banco de produção nasce vazio e não roda seed (a senha do seed está neste
 repositório). Criar pelo Swagger: `https://<api>/docs` → `POST /api/auth/register`. Enquanto a
 AD-002 valer, essa rota fica aberta: qualquer pessoa com a URL consegue criar conta.

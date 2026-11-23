@@ -3,6 +3,17 @@
 Sistema de gestão para firma de gesso: obras, gesseiros e estoque em um só lugar.
 Projeto da disciplina de Engenharia de Produto de Software (S06 — INATEL).
 
+## No ar
+
+| | Endereço |
+| --- | --- |
+| Sistema | https://t-square-five.vercel.app |
+| API | https://gesso-api.onrender.com/api |
+| Documentação da API (Swagger) | https://gesso-api.onrender.com/docs |
+
+Plano gratuito: a API dorme depois de 15 min sem acesso e leva cerca de 1 min para acordar.
+Como publicar e atualizar: `docs/ARQUITETURA.md`, seção Deploy.
+
 ## O que o sistema faz
 
 | Módulo        | Responsabilidade                                                                 |
