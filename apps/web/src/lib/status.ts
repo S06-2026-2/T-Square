@@ -2,7 +2,13 @@ import type { Obra, StatusObra } from '../types';
 import { moeda } from './formato';
 
 /** Status de obra na ordem do funil, do orcamento ao fim. */
-export const STATUS_FUNIL: StatusObra[] = ['ORCAMENTO', 'FECHADA', 'ANDAMENTO', 'CONCLUIDA', 'CANCELADA'];
+export const STATUS_FUNIL: StatusObra[] = [
+  'ORCAMENTO',
+  'FECHADA',
+  'ANDAMENTO',
+  'CONCLUIDA',
+  'CANCELADA',
+];
 
 /** Rotulo de um grupo de obras no status (filtros de Obras, cards do Dashboard). */
 export const rotuloPlural: Record<StatusObra, string> = {

@@ -152,7 +152,11 @@ describe('EstoqueService', () => {
     });
 
     it('ENTRADA cria a movimentacao e incrementa o saldo na mesma transacao (EST-03)', async () => {
-      await service.movimentar({ materialId: 'm-1', tipo: TipoMovimentacao.ENTRADA, quantidade: 5 });
+      await service.movimentar({
+        materialId: 'm-1',
+        tipo: TipoMovimentacao.ENTRADA,
+        quantidade: 5,
+      });
 
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
       expect(tx.material.update).toHaveBeenCalledWith({
@@ -257,7 +261,11 @@ describe('EstoqueService', () => {
       prisma.material.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.movimentar({ materialId: 'nao-existe', tipo: TipoMovimentacao.ENTRADA, quantidade: 1 }),
+        service.movimentar({
+          materialId: 'nao-existe',
+          tipo: TipoMovimentacao.ENTRADA,
+          quantidade: 1,
+        }),
       ).rejects.toBeInstanceOf(NotFoundException);
 
       expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -327,7 +335,11 @@ describe('EstoqueService', () => {
     });
 
     it('nao consulta obra quando obraId nao e informado', async () => {
-      await service.movimentar({ materialId: 'm-1', tipo: TipoMovimentacao.ENTRADA, quantidade: 1 });
+      await service.movimentar({
+        materialId: 'm-1',
+        tipo: TipoMovimentacao.ENTRADA,
+        quantidade: 1,
+      });
 
       expect(prisma.obra.findUnique).not.toHaveBeenCalled();
     });
@@ -387,7 +399,12 @@ describe('EstoqueService', () => {
   describe('com tx externo', () => {
     const material = { id: 'm-1', nome: 'Cal', saldoAtual: dec(10), estoqueMinimo: dec(5) };
     let tx: {
-      material: { findUnique: jest.Mock; create: jest.Mock; update: jest.Mock; updateMany: jest.Mock };
+      material: {
+        findUnique: jest.Mock;
+        create: jest.Mock;
+        update: jest.Mock;
+        updateMany: jest.Mock;
+      };
       obra: { findUnique: jest.Mock };
       movimentacaoEstoque: { create: jest.Mock };
     };
@@ -429,7 +446,11 @@ describe('EstoqueService', () => {
       });
       expect(tx.movimentacaoEstoque.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ materialId: 'm-1', tipo: TipoMovimentacao.ENTRADA, quantidade: 5 }),
+          data: expect.objectContaining({
+            materialId: 'm-1',
+            tipo: TipoMovimentacao.ENTRADA,
+            quantidade: 5,
+          }),
         }),
       );
       expect(resultado).toEqual({ id: 'mov-1' });

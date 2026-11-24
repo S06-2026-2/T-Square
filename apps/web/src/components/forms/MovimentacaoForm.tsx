@@ -95,11 +95,13 @@ export default function MovimentacaoForm({ materiais, obras, onSalvo, inicial }:
           Obra
           <select value={obraId} onChange={(e) => setObraId(e.target.value)}>
             <option value="">Nenhuma</option>
-            {obras.filter((obra) => !obraEncerrada.includes(obra.status)).map((obra) => (
-              <option key={obra.id} value={obra.id}>
-                {obra.titulo}
-              </option>
-            ))}
+            {obras
+              .filter((obra) => !obraEncerrada.includes(obra.status))
+              .map((obra) => (
+                <option key={obra.id} value={obra.id}>
+                  {obra.titulo}
+                </option>
+              ))}
           </select>
         </label>
       )}

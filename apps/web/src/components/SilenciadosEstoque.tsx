@@ -51,7 +51,12 @@ export default function SilenciadosEstoque() {
       </button>
 
       {aberto && (
-        <div id="painel-silenciados" className="painel-silenciados" role="region" aria-label="Silenciados pelo operador">
+        <div
+          id="painel-silenciados"
+          className="painel-silenciados"
+          role="region"
+          aria-label="Silenciados pelo operador"
+        >
           <h4>Silenciados pelo operador</h4>
           {erro && <p className="erro">{erro}</p>}
           {!erro && silenciados === null && <p className="carregando">Carregando...</p>}

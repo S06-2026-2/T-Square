@@ -91,7 +91,9 @@ describe('SilenciadosEstoque', () => {
     abrir();
 
     await screen.findByText('Gesso cola');
-    const nomes = screen.getAllByRole('listitem').map((li) => li.querySelector('strong')?.textContent);
+    const nomes = screen
+      .getAllByRole('listitem')
+      .map((li) => li.querySelector('strong')?.textContent);
     expect(nomes).toEqual(['Gesso cola', 'Fita telada']);
   });
 

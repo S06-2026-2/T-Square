@@ -55,11 +55,15 @@ describe('LancamentoForm', () => {
     registrar();
 
     await waitFor(() => expect(onSalvo).toHaveBeenCalled());
-    expect(post).toHaveBeenCalledWith('/gesseiros/g1/lancamentos', {
-      tipo: 'PAGAMENTO',
-      valor: 100,
-      descricao: 'Acerto da semana',
-    }, { idempotencyKey: expect.any(String) });
+    expect(post).toHaveBeenCalledWith(
+      '/gesseiros/g1/lancamentos',
+      {
+        tipo: 'PAGAMENTO',
+        valor: 100,
+        descricao: 'Acerto da semana',
+      },
+      { idempotencyKey: expect.any(String) },
+    );
     expect(screen.getByLabelText('Valor')).toHaveValue(null);
     expect(screen.getByLabelText('Descricao')).toHaveValue('');
   });

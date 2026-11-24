@@ -29,7 +29,9 @@ describe('App', () => {
   it('abre o dashboard ao acessar a pagina inicial', async () => {
     renderEm('/');
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Visao geral' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Visao geral' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Visao geral' })).toHaveClass('ativo');
   });
 

@@ -41,11 +41,15 @@ describe('NovoMaterialForm', () => {
     salvar();
 
     await waitFor(() => expect(onSalvo).toHaveBeenCalled());
-    expect(post).toHaveBeenCalledWith('/estoque/materiais', {
-      nome: 'Placa de gesso',
-      unidade: 'un',
-      estoqueMinimo: 10,
-    }, { idempotencyKey: expect.any(String) });
+    expect(post).toHaveBeenCalledWith(
+      '/estoque/materiais',
+      {
+        nome: 'Placa de gesso',
+        unidade: 'un',
+        estoqueMinimo: 10,
+      },
+      { idempotencyKey: expect.any(String) },
+    );
     expect(screen.getByLabelText('Nome')).toHaveValue('');
     expect(screen.getByLabelText('Unidade')).toHaveValue('');
     expect(screen.getByLabelText('Estoque minimo')).toHaveValue(null);
@@ -73,7 +77,9 @@ describe('NovoMaterialForm', () => {
     preencher('Estoque minimo', '10');
     salvar();
 
-    expect(await screen.findByText('Ja existe um material chamado "Placa de gesso"')).toHaveClass('erro');
+    expect(await screen.findByText('Ja existe um material chamado "Placa de gesso"')).toHaveClass(
+      'erro',
+    );
     expect(onSalvo).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Nome')).toHaveValue('Placa de gesso');
     expect(screen.getByLabelText('Unidade')).toHaveValue('un');
@@ -91,7 +97,9 @@ describe('NovoMaterialForm', () => {
 
     expect(screen.getByRole('button', { name: 'Salvar material' })).toBeDisabled();
     terminar({ id: 'm1' });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Salvar material' })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Salvar material' })).toBeEnabled(),
+    );
   });
 });
 
@@ -122,13 +130,19 @@ describe('NovoMaterialForm: 409 de nome duplicado vindo do api.ts', () => {
     preencher('Unidade', 'un');
     salvar();
 
-    expect(await screen.findByText('Ja existe um material chamado "Placa de gesso"')).toHaveClass('erro');
+    expect(await screen.findByText('Ja existe um material chamado "Placa de gesso"')).toHaveClass(
+      'erro',
+    );
     expect(
-      screen.queryByText('Este envio ainda está sendo processado. Aguarde alguns segundos e tente de novo.'),
+      screen.queryByText(
+        'Este envio ainda está sendo processado. Aguarde alguns segundos e tente de novo.',
+      ),
     ).not.toBeInTheDocument();
     expect(screen.getByLabelText('Nome')).toHaveValue('Placa de gesso');
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Salvar material' })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Salvar material' })).toBeEnabled(),
+    );
     salvar();
     await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
     expect(chaveDoEnvio(post, 1)).toBe(chaveDoEnvio(post, 0));

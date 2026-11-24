@@ -8,7 +8,10 @@ export class MaterialPrevistoDto {
   @IsString()
   materialId!: string;
 
-  @ApiProperty({ example: 20, description: 'Quantidade prevista (> 0, no máximo 2 casas decimais)' })
+  @ApiProperty({
+    example: 20,
+    description: 'Quantidade prevista (> 0, no máximo 2 casas decimais)',
+  })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
   quantidade!: number;

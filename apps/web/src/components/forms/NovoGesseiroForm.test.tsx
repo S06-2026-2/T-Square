@@ -41,11 +41,15 @@ describe('NovoGesseiroForm', () => {
     salvar();
 
     await waitFor(() => expect(onSalvo).toHaveBeenCalled());
-    expect(post).toHaveBeenCalledWith('/gesseiros', {
-      nome: 'Joao Ferreira',
-      telefone: '(35) 99999-0001',
-      chavePix: 'joao@pix.com',
-    }, { idempotencyKey: expect.any(String) });
+    expect(post).toHaveBeenCalledWith(
+      '/gesseiros',
+      {
+        nome: 'Joao Ferreira',
+        telefone: '(35) 99999-0001',
+        chavePix: 'joao@pix.com',
+      },
+      { idempotencyKey: expect.any(String) },
+    );
     expect(screen.getByLabelText('Nome')).toHaveValue('');
     expect(screen.getByLabelText('Telefone')).toHaveValue('');
     expect(screen.getByLabelText('Chave Pix')).toHaveValue('');
@@ -72,7 +76,9 @@ describe('NovoGesseiroForm', () => {
     preencher('Telefone', '(35) 99999-0001');
     salvar();
 
-    expect(await screen.findByText('nome must be longer than or equal to 3 characters')).toHaveClass('erro');
+    expect(
+      await screen.findByText('nome must be longer than or equal to 3 characters'),
+    ).toHaveClass('erro');
     expect(onSalvo).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Nome')).toHaveValue('Joao Ferreira');
     expect(screen.getByLabelText('Telefone')).toHaveValue('(35) 99999-0001');
@@ -88,7 +94,9 @@ describe('NovoGesseiroForm', () => {
 
     expect(screen.getByRole('button', { name: 'Salvar gesseiro' })).toBeDisabled();
     terminar({ id: 'g1' });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Salvar gesseiro' })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Salvar gesseiro' })).toBeEnabled(),
+    );
   });
 });
 
