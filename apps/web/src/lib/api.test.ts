@@ -89,7 +89,10 @@ describe('api: falha de rede (fetch rejeita com TypeError) vira status 0', () =>
 describe('api: codigo do corpo de erro', () => {
   it('409 com codigo EM_PROCESSAMENTO: ApiError leva o código e a mensagem da API', async () => {
     fetchMock.mockResolvedValue(
-      resposta(409, { message: 'Este envio ainda está sendo processado.', codigo: 'EM_PROCESSAMENTO' }),
+      resposta(409, {
+        message: 'Este envio ainda está sendo processado.',
+        codigo: 'EM_PROCESSAMENTO',
+      }),
     );
 
     const erro = await erroDe(api.post('/gesseiros/g1/lancamentos', { valor: 1 }));
@@ -101,7 +104,9 @@ describe('api: codigo do corpo de erro', () => {
   });
 
   it('409 de negócio sem codigo: ApiError sem código', async () => {
-    fetchMock.mockResolvedValue(resposta(409, { message: 'Ja existe um material chamado "Placa"' }));
+    fetchMock.mockResolvedValue(
+      resposta(409, { message: 'Ja existe um material chamado "Placa"' }),
+    );
 
     const erro = await erroDe(api.post('/estoque/materiais', { nome: 'Placa' }));
 
@@ -112,9 +117,21 @@ describe('api: codigo do corpo de erro', () => {
 
 describe('api: resposta HTTP de erro mantém a mensagem da API', () => {
   it.each([
-    [400, { message: ['valor must not be less than 0', 'tipo must be a valid enum value'] }, 'valor must not be less than 0, tipo must be a valid enum value'],
-    [409, { message: 'Este envio ainda está em processamento' }, 'Este envio ainda está em processamento'],
-    [422, { message: 'Idempotency-Key reutilizada com outro corpo' }, 'Idempotency-Key reutilizada com outro corpo'],
+    [
+      400,
+      { message: ['valor must not be less than 0', 'tipo must be a valid enum value'] },
+      'valor must not be less than 0, tipo must be a valid enum value',
+    ],
+    [
+      409,
+      { message: 'Este envio ainda está em processamento' },
+      'Este envio ainda está em processamento',
+    ],
+    [
+      422,
+      { message: 'Idempotency-Key reutilizada com outro corpo' },
+      'Idempotency-Key reutilizada com outro corpo',
+    ],
     [500, {}, 'Erro ao comunicar com a API'],
   ])('%i: ApiError com o status e a mensagem da API', async (status, corpo, mensagem) => {
     fetchMock.mockResolvedValue(resposta(status, corpo));

@@ -205,10 +205,7 @@ export default function NovaObraForm({ gesseiros, onSalvo }: Props) {
       </label>
       <label>
         Descricao
-        <textarea
-          value={estado.descricao}
-          onChange={(e) => alterar('descricao', e.target.value)}
-        />
+        <textarea value={estado.descricao} onChange={(e) => alterar('descricao', e.target.value)} />
       </label>
 
       <fieldset>

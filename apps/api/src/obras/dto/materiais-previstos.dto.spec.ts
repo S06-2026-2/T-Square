@@ -45,9 +45,7 @@ describe('SubstituirMateriaisPrevistosDto', () => {
     expect(semItens.map((e) => e.property)).toEqual(['itens']);
 
     const semMaterial = await errosDe({ itens: [{ quantidade: 3 }] });
-    expect(semMaterial[0].children?.[0]?.children?.map((e) => e.property)).toEqual([
-      'materialId',
-    ]);
+    expect(semMaterial[0].children?.[0]?.children?.map((e) => e.property)).toEqual(['materialId']);
   });
 });
 

@@ -33,7 +33,8 @@ export default function Dashboard() {
 
   // A API so devolve status com pelo menos uma obra; os demais aparecem zerados.
   const linhas = STATUS_FUNIL.map(
-    (status) => resumo.find((linha) => linha.status === status) ?? { status, quantidade: 0, valorTotal: 0 },
+    (status) =>
+      resumo.find((linha) => linha.status === status) ?? { status, quantidade: 0, valorTotal: 0 },
   );
 
   return (

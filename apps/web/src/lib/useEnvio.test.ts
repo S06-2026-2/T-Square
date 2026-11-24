@@ -166,9 +166,17 @@ describe('useEnvio: chave de idempotência (IDP-01, IDP-07, IDP-08, OFF-08)', ()
   it.each([
     ['400', erroApi('valor must not be less than 0', 400), 'valor must not be less than 0'],
     // 409 de negócio (não é o da idempotência): mensagem da API, como hoje (FRM-08 AC3).
-    ['409 de negócio', erroApi('Ja existe um material chamado "Placa"', 409), 'Ja existe um material chamado "Placa"'],
+    [
+      '409 de negócio',
+      erroApi('Ja existe um material chamado "Placa"', 409),
+      'Ja existe um material chamado "Placa"',
+    ],
     // Mesmo texto da API, mas sem o código: a decisão é pelo `codigo`, nunca pelo texto.
-    ['409 com o texto da idempotência e sem código', erroApi('Este envio ainda está sendo processado.', 409), 'Este envio ainda está sendo processado.'],
+    [
+      '409 com o texto da idempotência e sem código',
+      erroApi('Este envio ainda está sendo processado.', 409),
+      'Este envio ainda está sendo processado.',
+    ],
     ['409 com outro código', erroApi('Conflito', 409, 'OUTRO'), 'Conflito'],
     ['500', erroApi('Erro ao comunicar com a API', 500), 'Erro ao comunicar com a API'],
     ['Error sem status', new Error('falhou'), 'falhou'],

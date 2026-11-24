@@ -30,8 +30,18 @@ describe('textoConfirmacaoConclusao (TRN-11)', () => {
   it('uma linha "<nome> — <valor em BRL>" por gesseiro alocado', () => {
     const texto = textoConfirmacaoConclusao(
       obra([
-        { id: 'a1', gesseiroId: 'g1', valorCombinado: '2500.00', gesseiro: { id: 'g1', nome: 'João', ativo: true } },
-        { id: 'a2', gesseiroId: 'g2', valorCombinado: 1500.5, gesseiro: { id: 'g2', nome: 'Pedro', ativo: true } },
+        {
+          id: 'a1',
+          gesseiroId: 'g1',
+          valorCombinado: '2500.00',
+          gesseiro: { id: 'g1', nome: 'João', ativo: true },
+        },
+        {
+          id: 'a2',
+          gesseiroId: 'g2',
+          valorCombinado: 1500.5,
+          gesseiro: { id: 'g2', nome: 'Pedro', ativo: true },
+        },
       ]),
     );
 
@@ -42,7 +52,9 @@ describe('textoConfirmacaoConclusao (TRN-11)', () => {
   });
 
   it('alocação sem o gesseiro embutido usa o gesseiroId na linha', () => {
-    const texto = textoConfirmacaoConclusao(obra([{ id: 'a1', gesseiroId: 'g-77', valorCombinado: 100 }]));
+    const texto = textoConfirmacaoConclusao(
+      obra([{ id: 'a1', gesseiroId: 'g-77', valorCombinado: 100 }]),
+    );
 
     expect(nbsp(texto).split('\n')).toContain('g-77 — R$ 100,00');
   });

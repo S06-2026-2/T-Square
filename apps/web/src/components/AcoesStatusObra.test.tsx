@@ -47,16 +47,19 @@ describe('AcoesStatusObra: avanço (TRN-05)', () => {
   it.each([
     ['ORCAMENTO', 'Cliente aprovou', 'fechar'],
     ['FECHADA', 'Iniciar obra', 'iniciar'],
-  ] as const)('%s: "%s" chama PATCH /obras/:id/%s e avisa a página', async (status, rotulo, acao) => {
-    patch.mockResolvedValue({});
-    const { onAlterada, onErro } = montar(obra(status));
+  ] as const)(
+    '%s: "%s" chama PATCH /obras/:id/%s e avisa a página',
+    async (status, rotulo, acao) => {
+      patch.mockResolvedValue({});
+      const { onAlterada, onErro } = montar(obra(status));
 
-    fireEvent.click(botao(rotulo));
+      fireEvent.click(botao(rotulo));
 
-    await waitFor(() => expect(onAlterada).toHaveBeenCalledTimes(1));
-    expect(patch).toHaveBeenCalledWith(`/obras/o1/${acao}`);
-    expect(onErro).not.toHaveBeenCalled();
-  });
+      await waitFor(() => expect(onAlterada).toHaveBeenCalledTimes(1));
+      expect(patch).toHaveBeenCalledWith(`/obras/o1/${acao}`);
+      expect(onErro).not.toHaveBeenCalled();
+    },
+  );
 
   it('mostra só o botão de avanço do status atual, mais o Cancelar', () => {
     montar(obra('ORCAMENTO'));
@@ -179,7 +182,10 @@ describe('AcoesStatusObra: erros do avanço (P1 AC9/AC11, AD-014)', () => {
     fireEvent.click(botao('Cliente aprovou'));
 
     await waitFor(() =>
-      expect(onErro).toHaveBeenCalledWith('Não é possível fechar uma obra com status FECHADA', true),
+      expect(onErro).toHaveBeenCalledWith(
+        'Não é possível fechar uma obra com status FECHADA',
+        true,
+      ),
     );
     expect(onAlterada).not.toHaveBeenCalled();
     expect(botao('Cliente aprovou')).toBeEnabled();
@@ -206,11 +212,14 @@ describe('AcoesStatusObra: cancelar com motivo (TRN-10, TRN-13)', () => {
     fireEvent.change(screen.getByLabelText('Motivo'), { target: { value: valor } });
   const confirmar = () => fireEvent.click(botao('Confirmar cancelamento'));
 
-  it.each(['ORCAMENTO', 'FECHADA', 'ANDAMENTO'] as const)('%s oferece "Cancelar obra"', (status) => {
-    montar(obra(status));
+  it.each(['ORCAMENTO', 'FECHADA', 'ANDAMENTO'] as const)(
+    '%s oferece "Cancelar obra"',
+    (status) => {
+      montar(obra(status));
 
-    expect(botao('Cancelar obra')).toBeEnabled();
-  });
+      expect(botao('Cancelar obra')).toBeEnabled();
+    },
+  );
 
   it('o campo Motivo é obrigatório, de 3 a 500 caracteres', () => {
     montar(obra('FECHADA'));

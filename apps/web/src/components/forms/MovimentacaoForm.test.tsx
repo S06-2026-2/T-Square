@@ -19,9 +19,27 @@ const materiais: Material[] = [
   { id: 'm-placa', nome: 'Placa de gesso', unidade: 'un', saldoAtual: 50, estoqueMinimo: 10 },
 ];
 const obras: Obra[] = [
-  { id: 'o-forro', titulo: 'Forro sala', clienteNome: 'Maria', status: 'ANDAMENTO', valorTotal: 8500 },
-  { id: 'o-sanca', titulo: 'Sanca quarto', clienteNome: 'Joao', status: 'CONCLUIDA', valorTotal: 3000 },
-  { id: 'o-divisoria', titulo: 'Divisoria loja', clienteNome: 'Ana', status: 'CANCELADA', valorTotal: 5000 },
+  {
+    id: 'o-forro',
+    titulo: 'Forro sala',
+    clienteNome: 'Maria',
+    status: 'ANDAMENTO',
+    valorTotal: 8500,
+  },
+  {
+    id: 'o-sanca',
+    titulo: 'Sanca quarto',
+    clienteNome: 'Joao',
+    status: 'CONCLUIDA',
+    valorTotal: 3000,
+  },
+  {
+    id: 'o-divisoria',
+    titulo: 'Divisoria loja',
+    clienteNome: 'Ana',
+    status: 'CANCELADA',
+    valorTotal: 5000,
+  },
 ];
 
 function preencher(rotulo: string, valor: string) {
@@ -66,12 +84,16 @@ describe('MovimentacaoForm', () => {
     registrar();
 
     await waitFor(() => expect(onSalvo).toHaveBeenCalled());
-    expect(post).toHaveBeenCalledWith('/estoque/movimentacoes', {
-      materialId: 'm-placa',
-      tipo: 'ENTRADA',
-      quantidade: 20,
-      observacao: 'Compra da semana',
-    }, { idempotencyKey: expect.any(String) });
+    expect(post).toHaveBeenCalledWith(
+      '/estoque/movimentacoes',
+      {
+        materialId: 'm-placa',
+        tipo: 'ENTRADA',
+        quantidade: 20,
+        observacao: 'Compra da semana',
+      },
+      { idempotencyKey: expect.any(String) },
+    );
   });
 
   it('so oferece a obra na SAIDA e envia o obraId escolhido (FRM-09 AC2)', async () => {
@@ -118,11 +140,17 @@ describe('MovimentacaoForm', () => {
     registrar();
 
     await waitFor(() => expect(post).toHaveBeenCalled());
-    expect(post.mock.calls[0][1]).toEqual({ materialId: 'm-placa', tipo: 'ENTRADA', quantidade: 5 });
+    expect(post.mock.calls[0][1]).toEqual({
+      materialId: 'm-placa',
+      tipo: 'ENTRADA',
+      quantidade: 5,
+    });
   });
 
   it('mostra o 400 de saldo insuficiente sem avisar a pagina e sem perder os dados (FRM-09 AC3)', async () => {
-    post.mockRejectedValue(new Error('Saldo insuficiente de "Placa de gesso": disponivel 50, pedido 80'));
+    post.mockRejectedValue(
+      new Error('Saldo insuficiente de "Placa de gesso": disponivel 50, pedido 80'),
+    );
     const onSalvo = renderForm();
 
     preencher('Tipo', 'SAIDA');

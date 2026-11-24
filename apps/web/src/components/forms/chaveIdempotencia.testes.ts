@@ -63,7 +63,11 @@ export function testarChaveDeIdempotencia(form: Formulario) {
     });
 
     it('409: mensagem do IDP-08 e o reenvio leva a mesma chave', async () => {
-      post.mockRejectedValueOnce(erroApi('Este envio ainda está sendo processado.', 409, 'EM_PROCESSAMENTO')).mockResolvedValueOnce({ id: 'x' });
+      post
+        .mockRejectedValueOnce(
+          erroApi('Este envio ainda está sendo processado.', 409, 'EM_PROCESSAMENTO'),
+        )
+        .mockResolvedValueOnce({ id: 'x' });
       form.renderizar();
 
       form.preencher();
@@ -92,7 +96,9 @@ export function testarChaveDeIdempotencia(form: Formulario) {
     });
 
     it('422: mensagem do IDP-07, campos mantidos e o próximo envio leva outra chave', async () => {
-      post.mockRejectedValueOnce(erroApi('Idempotency-Key reutilizada', 422)).mockResolvedValueOnce({ id: 'x' });
+      post
+        .mockRejectedValueOnce(erroApi('Idempotency-Key reutilizada', 422))
+        .mockResolvedValueOnce({ id: 'x' });
       form.renderizar();
 
       form.preencher();

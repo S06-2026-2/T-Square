@@ -8,7 +8,8 @@ export class CancelarObraDto {
     example: 'Cliente desistiu',
     minLength: 3,
     maxLength: 500,
-    description: 'Motivo do cancelamento, de 3 a 500 caracteres depois de tirar os espaços das pontas',
+    description:
+      'Motivo do cancelamento, de 3 a 500 caracteres depois de tirar os espaços das pontas',
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()

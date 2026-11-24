@@ -17,6 +17,27 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  formatacao:
+    name: Formatação (Prettier)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar o Prettier
+        run: npm ci --workspaces=false --ignore-scripts
+
+      - name: Conferir a formatação
+        run: npm run format:check
+
   api:
     name: API (testes, e2e, build)
     runs-on: ubuntu-latest
@@ -71,8 +92,8 @@ jobs:
       - name: Popular o banco (seed)
         run: npm run db:seed --workspace apps/api
 
-      # TODO(lint): nenhum workspace tem script `lint` nem config de ESLint, entao o antigo
-      # `npm run lint --if-present` passava sem executar nada. Reativar aqui quando existir.
+      # ESLint: nenhum workspace tem script `lint`. A formatacao e conferida no job `formatacao`
+      # e a checagem de tipos ja acontece no build.
 
       - name: Testes unitários
         run: npm run test --workspace apps/api
@@ -101,8 +122,6 @@ jobs:
 
       - name: Instalar dependências
         run: npm ci
-
-      # TODO(lint): igual ao job da API, ainda nao ha script `lint` no web.
 
       - name: Testes
         run: npm run test --workspace apps/web

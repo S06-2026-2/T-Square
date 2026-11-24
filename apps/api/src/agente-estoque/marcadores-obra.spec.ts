@@ -87,7 +87,12 @@ describe('marcadores-obra', () => {
     });
 
     it('sem marcador das obras que reservam: mantem o texto e acrescenta "Reservado para: A, B"', () => {
-      const r = finalizarJustificativa('Consumo acelerou na última semana.', mapa, [silva, loja], PADRAO);
+      const r = finalizarJustificativa(
+        'Consumo acelerou na última semana.',
+        mapa,
+        [silva, loja],
+        PADRAO,
+      );
 
       expect(r).toEqual({
         texto:
@@ -97,7 +102,12 @@ describe('marcadores-obra', () => {
     });
 
     it('texto do agente sem ponto final: acrescenta ". " antes de "Reservado para:"', () => {
-      const r = finalizarJustificativa('Consumo acelerou na última semana', mapa, [silva, loja], PADRAO);
+      const r = finalizarJustificativa(
+        'Consumo acelerou na última semana',
+        mapa,
+        [silva, loja],
+        PADRAO,
+      );
 
       expect(r).toEqual({
         texto:

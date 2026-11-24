@@ -110,9 +110,9 @@ describe('Login: sessão limpa e sem conexão (OFF-12, OFF-13)', () => {
 
     preencherEEntrar('bia@gesso.com', 'segredo1');
 
-    expect(
-      await screen.findByText('Sem conexão. Conecte-se à internet para entrar.'),
-    ).toHaveClass('erro');
+    expect(await screen.findByText('Sem conexão. Conecte-se à internet para entrar.')).toHaveClass(
+      'erro',
+    );
     expect(screen.getByLabelText('E-mail')).toHaveValue('bia@gesso.com');
     expect(screen.getByLabelText('Senha')).toHaveValue('');
     expect(screen.queryByText('pagina inicial')).not.toBeInTheDocument();
@@ -130,7 +130,9 @@ describe('Login: sessão limpa e sem conexão (OFF-12, OFF-13)', () => {
     preencherEEntrar('bia@gesso.com', 'errada');
 
     expect(await screen.findByText(erro.message)).toHaveClass('erro');
-    expect(screen.queryByText('Sem conexão. Conecte-se à internet para entrar.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Sem conexão. Conecte-se à internet para entrar.'),
+    ).not.toBeInTheDocument();
     expect(screen.getByLabelText('E-mail')).toHaveValue('bia@gesso.com');
     expect(screen.getByLabelText('Senha')).toHaveValue('errada');
     expect(authMock.setToken).not.toHaveBeenCalled();

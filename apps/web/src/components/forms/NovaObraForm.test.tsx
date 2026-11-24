@@ -75,11 +75,15 @@ describe('NovaObraForm', () => {
     salvar();
 
     await waitFor(() => expect(onSalvo).toHaveBeenCalled());
-    expect(post).toHaveBeenCalledWith('/obras', {
-      titulo: 'Forro sala',
-      clienteNome: 'Maria Silva',
-      valorTotal: 8500,
-    }, { idempotencyKey: expect.any(String) });
+    expect(post).toHaveBeenCalledWith(
+      '/obras',
+      {
+        titulo: 'Forro sala',
+        clienteNome: 'Maria Silva',
+        valorTotal: 8500,
+      },
+      { idempotencyKey: expect.any(String) },
+    );
     expect(screen.getByLabelText('Titulo')).toHaveValue('');
     expect(screen.getByLabelText('Cliente')).toHaveValue('');
     expect(screen.getByLabelText('Valor total')).toHaveValue(null);
@@ -111,16 +115,20 @@ describe('NovaObraForm', () => {
     salvar();
 
     await waitFor(() => expect(post).toHaveBeenCalled());
-    expect(post).toHaveBeenCalledWith('/obras', {
-      titulo: 'Forro sala',
-      clienteNome: 'Maria Silva',
-      valorTotal: 8500,
-      descricao: 'Forro com sanca',
-      clienteTelefone: '(35) 98888-0001',
-      endereco: 'Rua A, 10',
-      plantaBaixaUrl: 'https://drive.example.com/planta.pdf',
-      pagamento: { forma: 'CARTAO_CREDITO', parcelas: 3, valorEntrada: 1000 },
-    }, { idempotencyKey: expect.any(String) });
+    expect(post).toHaveBeenCalledWith(
+      '/obras',
+      {
+        titulo: 'Forro sala',
+        clienteNome: 'Maria Silva',
+        valorTotal: 8500,
+        descricao: 'Forro com sanca',
+        clienteTelefone: '(35) 98888-0001',
+        endereco: 'Rua A, 10',
+        plantaBaixaUrl: 'https://drive.example.com/planta.pdf',
+        pagamento: { forma: 'CARTAO_CREDITO', parcelas: 3, valorEntrada: 1000 },
+      },
+      { idempotencyKey: expect.any(String) },
+    );
   });
 
   it('omite parcelas e entrada vazias do pagamento', async () => {
@@ -250,9 +258,7 @@ describe('NovaObraForm', () => {
 
     expect(screen.getByRole('button', { name: 'Salvar obra' })).toBeDisabled();
     terminar({ id: 'o1' });
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Salvar obra' })).toBeEnabled(),
-    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Salvar obra' })).toBeEnabled());
   });
   describe('materiais previstos (EAP-37)', () => {
     it('carrega os materiais da API para a seção "Materiais previstos"', async () => {
@@ -284,15 +290,19 @@ describe('NovaObraForm', () => {
       salvar();
 
       await waitFor(() => expect(onSalvo).toHaveBeenCalled());
-      expect(post).toHaveBeenCalledWith('/obras', {
-        titulo: 'Forro sala',
-        clienteNome: 'Maria Silva',
-        valorTotal: 8500,
-        materiaisPrevistos: [
-          { materialId: 'm-cal', quantidade: 20 },
-          { materialId: 'm-gesso', quantidade: 7.5 },
-        ],
-      }, { idempotencyKey: expect.any(String) });
+      expect(post).toHaveBeenCalledWith(
+        '/obras',
+        {
+          titulo: 'Forro sala',
+          clienteNome: 'Maria Silva',
+          valorTotal: 8500,
+          materiaisPrevistos: [
+            { materialId: 'm-cal', quantidade: 20 },
+            { materialId: 'm-gesso', quantidade: 7.5 },
+          ],
+        },
+        { idempotencyKey: expect.any(String) },
+      );
       // O formulário volta vazio, inclusive a seção de materiais.
       expect(screen.queryByLabelText('Material')).not.toBeInTheDocument();
     });

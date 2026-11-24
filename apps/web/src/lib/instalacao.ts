@@ -57,7 +57,8 @@ function emStandalone(): boolean {
 function ehSafariIos(): boolean {
   const ua = navigator.userAgent;
   const ios =
-    /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    /iPhone|iPad|iPod/.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   // Chrome, Firefox e Edge do iOS não instalam pelo "Adicionar à Tela de Início" do Safari.
   return ios && !/CriOS|FxiOS|EdgiOS/.test(ua);
 }
