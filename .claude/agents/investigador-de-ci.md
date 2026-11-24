@@ -92,6 +92,11 @@ Coisas que você não descobre lendo só o log:
   `RUN apk add --no-cache openssl` nos Dockerfiles não pode sair.
 - Um push novo no mesmo PR cancela a execução anterior. Um run "cancelled" não é
   falha. Olhe o mais recente.
+- Job com 0 passos e poucos segundos nunca recebeu runner, e `--log-failed`
+  responde "log not found". O motivo está nas anotações do check run:
+  `gh api repos/S06-2026-2/T-Square/check-runs/<job id>/annotations`. Já aconteceu
+  por cobrança do Actions bloqueada na organização (run 39254257053): é "Ambiente",
+  e o código nem foi testado.
 - Dinheiro é `Decimal(12,2)` e chega como string. Um teste que compara número
   com string costuma ser esse o problema.
 
