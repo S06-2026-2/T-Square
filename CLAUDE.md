@@ -75,3 +75,10 @@ No GitHub isso vale para quem não usa o Claude (AD-016):
   parecer para quem revisa: não bloqueia o merge.
 - O job "Specs (auditoria registrada)" do CI bloqueia: uma spec com requisito `Verified` e sem a
   seção no `validation.md` derruba o build (`.github/scripts/checar-auditoria.mjs`).
+
+### CI vermelho
+
+Os 5 jobs do `ci.yml` são obrigatórios pela proteção da `main`. Quando um falhar, rode o
+sub-agente `investigador-de-ci` (`.claude/agents/investigador-de-ci.md`) antes de mexer no código:
+ele lê o log, reproduz localmente e diz a causa e a correção. Ele não edita nada. A correção é
+feita depois, num commit próprio. Nunca deixe o CI verde pulando teste ou tirando job.
